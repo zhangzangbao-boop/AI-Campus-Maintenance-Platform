@@ -1,0 +1,453 @@
+import React, { useRef, useState } from 'react';
+import {
+  Alert,
+  Card,
+  Form,
+  Input,
+  Select,
+  Button,
+  Upload,
+  message,
+  List,
+  Space,
+  Tag
+} from 'antd';
+import {
+  BulbOutlined,
+  ThunderboltOutlined,
+  UploadOutlined
+} from '@ant-design/icons';
+import { repairService } from '../services/repairService';
+import api from '../services/api';
+
+const { Option } = Select;
+const { TextArea } = Input;
+
+const CATEGORY_OPTIONS = [
+  { value: "waterAndElectricity", label: "水电维修", id: 1 },
+  { value: "networkIssues", label: "网络故障", id: 2 },
+  { value: "furnitureRepair", label: "家具维修", id: 3 },
+  { value: "applianceIssues", label: "电器故障", id: 4 },
+  { value: "publicFacilities", label: "公共设施", id: 5 },
+  { value: "doorWindowRepair", label: "门窗维修", id: 6 },
+  { value: "cleaning", label: "卫生清洁", id: 7 },
+  { value: "fireSafety", label: "消防安全", id: 8 },
+  { value: "airConditioning", label: "空调维修", id: 9 },
+  { value: "other", label: "其他", id: 10 },
+];
+
+const categoryLabelToValue = CATEGORY_OPTIONS.reduce((map, item) => {
+  map[item.label] = item.value;
+  return map;
+}, {});
+
+const CreateRepairPage = ({ currentUser, onSubmitSuccess }) => {
+  const [form] = Form.useForm();
+  const [fileList, setFileList] = useState([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [aiText, setAiText] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResult, setAiResult] = useState(null);
+  const [similarTickets, setSimilarTickets] = useState([]);
+  const [knowledgeRecommendations, setKnowledgeRecommendations] = useState([]);
+  const similarTicketTimerRef = useRef(null);
+
+  // 处理文件上传
+  const handleUploadChange = ({ fileList: newFileList }) => {
+    setFileList(newFileList);
+  };
+
+  const handleAiAnalyze = async () => {
+    if (!aiText.trim()) {
+      message.warning('请先输入一段报修描述');
+      return;
+    }
+    setAiLoading(true);
+    try {
+      const response = await api.ai.analyzeTicket({ text: aiText });
+      const result = response?.data || response;
+      const categoryValue = categoryLabelToValue[result.categoryKey] || categoryLabelToValue[result.categoryName] || 'other';
+
+      form.setFieldsValue({
+        title: result.title,
+        category: categoryValue,
+        location: result.locationText?.startsWith('请补充') ? undefined : result.locationText,
+        description: result.summary || aiText,
+        priority: result.priority || 'medium',
+      });
+      setAiResult(result);
+      setSimilarTickets(Array.isArray(result.similarTickets) ? result.similarTickets : []);
+      setKnowledgeRecommendations(Array.isArray(result.knowledgeRecommendations) ? result.knowledgeRecommendations : []);
+      message.success('智能识别完成，已自动填写报修表单');
+    } catch (error) {
+      console.error('智能识别失败:', error);
+      message.error(`智能识别失败：${error.message}`);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const refreshSimilarTickets = async () => {
+    const values = form.getFieldsValue();
+    const categoryLabel = CATEGORY_OPTIONS.find(item => item.value === values.category)?.label;
+    if (!values.description && !values.location && !categoryLabel) {
+      return;
+    }
+    try {
+      const response = await api.ai.findSimilarTickets({
+        description: values.description,
+        locationText: values.location,
+        categoryKey: categoryLabel,
+        limit: 5,
+      });
+      setSimilarTickets(Array.isArray(response?.data) ? response.data : []);
+    } catch (error) {
+      console.warn('相似工单检索失败:', error);
+    }
+  };
+
+  // 处理文件删除
+  const handleRemove = (file) => {
+    const newFileList = fileList.filter(item => item.uid !== file.uid);
+    setFileList(newFileList);
+  };
+
+  // 处理表单提交
+  const handleFormSubmit = async (values) => {
+    setSubmitting(true);
+    try {
+      // 创建一个包含所有字段的对象
+      const orderData = {
+        ...values,
+        studentId: currentUser?.studentID,
+        locationText: values.location,
+        categoryId: getCategoryID(values.category)
+      };
+
+      console.log('提交的报修数据:', orderData);
+      
+      // 调用服务创建报修
+      const newOrder = await repairService.createRepairOrder(orderData, fileList);
+      console.log('创建报修成功:', newOrder);
+      
+      message.success('报修申请提交成功！');
+      
+      // 重置表单
+      form.resetFields();
+      setFileList([]);
+      setAiText('');
+      setAiResult(null);
+      setSimilarTickets([]);
+      setKnowledgeRecommendations([]);
+      
+      // 通知父组件刷新数据
+      if (onSubmitSuccess) {
+        onSubmitSuccess();
+      }
+    } catch (error) {
+      console.error('提交报修申请失败:', error);
+      message.error('提交报修申请失败，请重试！');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // 获取分类ID
+  const getCategoryID = (category) => {
+    const match = CATEGORY_OPTIONS.find(item => item.value === category);
+    return match?.id || 1;
+  };
+
+  // 上传组件配置
+  const uploadProps = {
+    beforeUpload: (file) => {
+      if (fileList.length >= 5) {
+        message.error('最多上传5张图片');
+        return Upload.LIST_IGNORE;
+      }
+      const isImage = file.type.startsWith('image/');
+      if (!isImage) {
+        message.error('只能上传图片文件!');
+        return Upload.LIST_IGNORE;
+      }
+      
+      const isLt5M = file.size / 1024 / 1024 < 5;
+      if (!isLt5M) {
+        message.error('图片大小不能超过5MB!');
+        return Upload.LIST_IGNORE;
+      }
+      
+      return false;
+    },
+    fileList,
+    onChange: handleUploadChange,
+    onRemove: handleRemove,
+    multiple: true,
+    accept: 'image/*',
+  };
+
+  return (
+    <div
+      style={{
+        padding: "20px 0",
+      }}
+    >
+      <Card
+        title={<span style={{ fontSize: "16px", fontWeight: "600", color: "#1f1f1f" }}>创建报修申请</span>}
+        style={{
+          width: "100%",
+          maxWidth: "800px",
+          margin: "0 auto",
+          boxShadow: "0 2px 8px rgba(15, 82, 186, 0.06)",
+          borderRadius: "8px",
+          border: "none",
+          background: "#FFFFFF",
+        }}
+        headStyle={{
+          background: "#FFFFFF",
+          borderBottom: "1px solid #e8e8e8",
+          padding: "16px 20px",
+        }}
+        styles={{ body: {
+          padding: "20px",
+          background: "#F8FAFC",
+        }}}
+      >
+        <Card
+          size="small"
+          title={
+            <Space>
+              <BulbOutlined />
+              <span>AI 智能填写</span>
+            </Space>
+          }
+          style={{ marginBottom: 16, borderRadius: 8 }}
+        >
+          <Space direction="vertical" style={{ width: "100%" }} size={12}>
+            <TextArea
+              rows={4}
+              value={aiText}
+              onChange={(event) => setAiText(event.target.value)}
+              placeholder="例如：三号宿舍楼 6-612 的照明灯一直频闪，晚上学习很受影响，担心线路有问题。"
+              maxLength={500}
+              showCount
+            />
+            <Space wrap>
+              <Button
+                type="primary"
+                icon={<ThunderboltOutlined />}
+                loading={aiLoading}
+                onClick={handleAiAnalyze}
+              >
+                智能识别并填写
+              </Button>
+              <Button onClick={() => setAiText('宿舍 3 楼卫生间水一直漏，地面很滑。')}>
+                快速示例
+              </Button>
+            </Space>
+            {aiResult?.safetyTips && (
+              <Alert
+                type="warning"
+                showIcon
+                message="安全提醒"
+                description={aiResult.safetyTips}
+              />
+            )}
+            {aiResult?.source && (
+              <div style={{ color: "#64748b", fontSize: 12 }}>
+                识别来源：{aiResult.source}
+              </div>
+            )}
+          </Space>
+        </Card>
+
+        {(similarTickets.length > 0 || knowledgeRecommendations.length > 0) && (
+          <Card size="small" title="智能参考" style={{ marginBottom: 16, borderRadius: 8 }}>
+            {similarTickets.length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontWeight: 600, marginBottom: 8 }}>附近或同类相似工单</div>
+                <List
+                  size="small"
+                  dataSource={similarTickets}
+                  renderItem={(item) => (
+                    <List.Item>
+                      <List.Item.Meta
+                        title={
+                          <Space wrap>
+                            <span>#{item.ticketId} {item.categoryName}</span>
+                            <Tag color={item.similarity >= 0.5 ? "red" : "blue"}>
+                              相似度 {Math.round((item.similarity || 0) * 100)}%
+                            </Tag>
+                          </Space>
+                        }
+                        description={`${item.locationText || '未知位置'}｜${item.description || ''}`}
+                      />
+                    </List.Item>
+                  )}
+                />
+              </div>
+            )}
+            {knowledgeRecommendations.length > 0 && (
+              <div>
+                <div style={{ fontWeight: 600, marginBottom: 8 }}>相关维修知识库建议</div>
+                <List
+                  size="small"
+                  dataSource={knowledgeRecommendations}
+                  renderItem={(item) => (
+                    <List.Item>
+                      <List.Item.Meta
+                        title={
+                          <Space wrap>
+                            <span>{item.title}</span>
+                            {item.estimatedMinutes && <Tag>{item.estimatedMinutes} 分钟</Tag>}
+                          </Space>
+                        }
+                        description={item.safetyNotes || item.solutionSteps}
+                      />
+                    </List.Item>
+                  )}
+                />
+              </div>
+            )}
+          </Card>
+        )}
+
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleFormSubmit}
+          onValuesChange={(_, allValues) => {
+            const shouldSearch = allValues.description || allValues.location || allValues.category;
+            if (shouldSearch) {
+              window.clearTimeout(similarTicketTimerRef.current);
+              similarTicketTimerRef.current = window.setTimeout(refreshSimilarTickets, 600);
+            }
+          }}
+          autoComplete="off"
+          style={{
+            minHeight: "min-content",
+          }}
+        >
+          <Form.Item
+            label={<span style={{ fontSize: "15px", fontWeight: "500", color: "#1f1f1f" }}>报修标题</span>}
+            name="title"
+            rules={[
+              { required: true, message: "请输入报修标题!" },
+              { min: 4, message: "标题至少4个字符" },
+              { max: 80, message: "标题不能超过80个字符" },
+              { whitespace: true, message: "标题不能只包含空格" },
+            ]}
+          >
+            <Input placeholder="请输入报修标题" />
+          </Form.Item>
+
+          <Form.Item
+            label={<span style={{ fontSize: "15px", fontWeight: "500", color: "#1f1f1f" }}>报修分类</span>}
+            name="category"
+            rules={[{ required: true, message: "请选择报修分类!" }]}
+          >
+            <Select placeholder="请选择报修分类">
+              {CATEGORY_OPTIONS.map(item => (
+                <Option key={item.value} value={item.value}>{item.label}</Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Form.Item
+            label={<span style={{ fontSize: "15px", fontWeight: "500", color: "#1f1f1f" }}>具体位置</span>}
+            name="location"
+            rules={[
+              { required: true, message: "请输入具体位置!" },
+              { min: 4, message: "位置至少4个字符，建议包含楼栋和房间号" },
+              { max: 100, message: "位置不能超过100个字符" },
+              { whitespace: true, message: "位置不能只包含空格" },
+            ]}
+          >
+            <Input placeholder="例如：3栋502寝室" />
+          </Form.Item>
+
+          <Form.Item
+            label={<span style={{ fontSize: "15px", fontWeight: "500", color: "#1f1f1f" }}>问题描述</span>}
+            name="description"
+            rules={[
+              { required: true, message: "请输入问题描述!" },
+              { min: 10, message: "请至少填写10个字符，便于维修人员判断问题" },
+              { max: 500, message: "问题描述不能超过500个字符" },
+              { whitespace: true, message: "问题描述不能只包含空格" },
+            ]}
+          >
+            <TextArea
+              rows={6}
+              placeholder="请详细描述您遇到的问题..."
+              maxLength={500}
+              showCount
+            />
+          </Form.Item>
+
+          <Form.Item
+            label={<span style={{ fontSize: "15px", fontWeight: "500", color: "#1f1f1f" }}>紧急程度</span>}
+            name="priority"
+            rules={[{ required: true, message: '请选择紧急程度!' }]}
+            initialValue="low"
+          >
+            <Select placeholder="请选择紧急程度">
+              <Option value="low">低</Option>
+              <Option value="medium">中</Option>
+              <Option value="high">高</Option>
+            </Select>
+          </Form.Item>
+
+          <Form.Item
+            label={<span style={{ fontSize: "15px", fontWeight: "500", color: "#1f1f1f" }}>上传相关图片</span>}
+            extra={<span style={{ fontSize: "13px", color: "#8c8c8c" }}>支持上传多张图片，每张图片大小不超过5MB</span>}
+          >
+            <Upload
+              {...uploadProps}
+              listType="picture"
+              showUploadList={{
+                showPreviewIcon: true,
+                showRemoveIcon: true,
+              }}
+            >
+              <Button icon={<UploadOutlined />}>选择图片</Button>
+            </Upload>
+          </Form.Item>
+
+          <Form.Item
+            style={{
+              textAlign: "center",
+              marginTop: "24px",
+              marginBottom: 0,
+              flexShrink: 0,
+            }}
+          >
+            <Button
+              type="primary"
+              htmlType="submit"
+              loading={submitting}
+              style={{
+                width: "140px",
+                marginRight: "16px",
+              }}
+            >
+              提交报修申请
+            </Button>
+            <Button
+              style={{
+                width: "100px",
+              }}
+              onClick={() => {
+                form.resetFields();
+                setFileList([]);
+              }}
+            >
+              重置
+            </Button>
+          </Form.Item>
+        </Form>
+      </Card>
+    </div>
+  );
+};
+
+export default CreateRepairPage;

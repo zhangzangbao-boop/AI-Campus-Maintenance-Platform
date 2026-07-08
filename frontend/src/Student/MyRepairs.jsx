@@ -1,0 +1,1269 @@
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  Table,
+  Tag,
+  Button,
+  Modal,
+  Descriptions,
+  Image,
+  Space,
+  Spin,
+  Card,
+  Select,
+  Row,
+  Col,
+  Statistic,
+  Popconfirm,
+  message,
+  Rate,
+  Input,
+  Checkbox,
+} from "antd";
+import {
+  EyeOutlined,
+  ClockCircleOutlined,
+  UserOutlined,
+  DeleteOutlined,
+  FilterOutlined,
+  CheckCircleOutlined,
+  StarOutlined,
+  SearchOutlined,
+  ReloadOutlined,
+} from "@ant-design/icons";
+import { repairUtils, repairService } from "../services/repairService";
+import RepairTimeline from "../components/RepairTimeline";
+import TicketComments from "../components/TicketComments";
+import RepairProcessRecords from "../components/RepairProcessRecords";
+
+// 状态映射函数：将后端枚举值转换为前端状态值
+const mapStatusToFrontend = (backendStatus) => {
+  if (!backendStatus) return 'pending';
+  
+  const statusMap = {
+    'WAITING_ACCEPT': 'pending',
+    'IN_PROGRESS': 'processing',
+    'RESOLVED': 'completed',
+    'WAITING_FEEDBACK': 'to_be_evaluated',
+    'FEEDBACKED': 'closed',
+    'CLOSED': 'closed',
+    'REJECTED': 'rejected',
+  };
+  
+  // 如果已经是前端格式，直接返回
+  if (statusMap[backendStatus]) {
+    return statusMap[backendStatus];
+  }
+  
+  // 如果已经是小写格式（前端格式），直接返回
+  if (['pending', 'processing', 'completed', 'to_be_evaluated', 'closed', 'rejected'].includes(backendStatus.toLowerCase())) {
+    return backendStatus.toLowerCase();
+  }
+  
+  return 'pending'; // 默认值
+};
+
+const { Option } = Select;
+const { TextArea } = Input;
+
+const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilters }) => {
+  const [repairOrders, setRepairOrders] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [filteredOrders, setFilteredOrders] = useState([]);
+  const [filters, setFilters] = useState({
+    status: "all",
+    category: "all",
+    priority: "all",
+    keyword: "",
+  });
+
+  // 新增：评价模态框状态
+  const [evaluateModalVisible, setEvaluateModalVisible] = useState(false);
+  const [evaluatingOrder, setEvaluatingOrder] = useState(null);
+  const [rating, setRating] = useState(0);
+  const [speedRating, setSpeedRating] = useState(5);
+  const [qualityRating, setQualityRating] = useState(5);
+  const [attitudeRating, setAttitudeRating] = useState(5);
+  const [resolved, setResolved] = useState(true);
+  const [anonymous, setAnonymous] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const [evaluating, setEvaluating] = useState(false);
+
+  // 分类选项配置 - 使用 repairService 中的变量名
+  const categoryOptions = [
+    { value: "waterAndElectricity", label: "水电维修", backendValue: "水电维修" },
+    { value: "networkIssues", label: "网络故障", backendValue: "网络故障" },
+    { value: "furnitureRepair", label: "家具维修", backendValue: "家具维修" },
+    { value: "applianceIssues", label: "电器故障", backendValue: "电器故障" },
+    { value: "publicFacilities", label: "公共设施", backendValue: "公共设施" },
+  ];
+
+  // 分类值映射：前端值 -> 后端值
+  const categoryValueMap = {
+    "waterAndElectricity": "水电维修",
+    "networkIssues": "网络故障",
+    "furnitureRepair": "家具维修",
+    "applianceIssues": "电器故障",
+    "publicFacilities": "公共设施",
+  };
+
+  // 紧急程度值映射：前端值 -> 后端值
+  const priorityValueMap = {
+    "low": "LOW",
+    "medium": "MEDIUM",
+    "high": "HIGH",
+  };
+
+  // 加载我的报修记录 - 使用 useCallback 包装，避免重复创建
+  const fetchMyRepairs = useCallback(async () => {
+    setLoading(true);
+    try {
+      console.log('========================================');
+      console.log('开始获取我的报修订单...');
+      console.log('当前时间:', new Date().toLocaleString());
+      console.log('========================================');
+
+      const result = await repairService.getMyRepairOrders();
+      console.log('获取到的订单结果:', result);
+      console.log('订单数据:', result.data);
+      console.log('订单数量:', result.data?.length || 0);
+
+      // 检查是否有数据
+      if (!result.data || result.data.length === 0) {
+        console.warn('警告：没有获取到任何报修订单数据');
+        console.warn('可能原因：');
+        console.warn('1. 后端数据库中没有该学生的报修单');
+        console.warn('2. Token无效或已过期');
+        console.warn('3. 后端服务未正常运行');
+        setRepairOrders([]);
+        setFilteredOrders([]);
+        message.warning('暂无报修记录');
+        return;
+      }
+
+      // 映射后端字段名到前端字段名：ticketId -> id, categoryName -> category, locationText -> location
+      const mappedData = result.data.map((order, index) => {
+        console.log(`处理订单 ${index + 1}:`, order);
+
+        // 确保title和description正确区分
+        const description = order.description || '';
+        // 如果后端返回的title和description相同，说明后端没有正确存储title，使用位置信息生成标题
+        const rawTitle = order.title || '';
+        const title = (rawTitle && rawTitle !== description)
+          ? rawTitle
+          : (order.locationText ? `报修-${order.locationText}` : '报修单');
+
+        const backendStatus = order.status;
+        const mappedStatus = mapStatusToFrontend(backendStatus);
+        console.log(`订单ID ${order.ticketId || order.id}: 后端状态="${backendStatus}" -> 前端状态="${mappedStatus}"`);
+
+        const mappedOrder = {
+          ...order,
+          id: order.ticketId || order.id, // 兼容两种字段名
+          ticketId: order.ticketId || order.id,
+          category: order.categoryName || order.category,
+          location: order.locationText || order.location,
+          description: description, // 确保description字段存在且完整
+          created_at: order.createdAt || order.created_at,
+          assigned_at: order.assignedAt || order.assigned_at,
+          completed_at: order.completedAt || order.completed_at,
+          repairmanId: order.staffId || order.repairmanId || null,
+          repairmanName: order.staffName || null, // 添加维修人员名称
+          status: mappedStatus, // 映射状态
+          originalStatus: backendStatus, // 保存原始状态
+          title: title, // 确保标题正确生成，与description区分
+          rating: order.ratingScore || order.rating || null, // 映射评价分数
+        };
+
+        console.log(`映射后的订单 ${index + 1}:`, mappedOrder);
+        return mappedOrder;
+      });
+
+      console.log('========================================');
+      console.log('映射后的报修数据汇总:', mappedData);
+      console.log('总数:', mappedData.length);
+
+      const statusCounts = {
+        pending: mappedData.filter(o => o.status === 'pending').length,
+        processing: mappedData.filter(o => o.status === 'processing').length,
+        completed: mappedData.filter(o => o.status === 'completed').length,
+        to_be_evaluated: mappedData.filter(o => o.status === 'to_be_evaluated').length,
+        closed: mappedData.filter(o => o.status === 'closed').length,
+        rejected: mappedData.filter(o => o.status === 'rejected').length,
+      };
+      console.log('各状态数量:', statusCounts);
+      console.log('========================================');
+
+      setRepairOrders(mappedData);
+      setFilteredOrders(mappedData);
+
+      // 不再每次加载都弹提示，用户可以从表格看到数据
+      console.log(`成功加载 ${mappedData.length} 条报修记录`);
+
+    } catch (error) {
+      console.error('========================================');
+      console.error('获取报修记录失败:', error);
+      console.error('错误消息:', error.message);
+      console.error('错误堆栈:', error.stack);
+      console.error('========================================');
+
+      message.error(`获取报修记录失败: ${error.message}`);
+      setRepairOrders([]);
+      setFilteredOrders([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []); // useCallback 的依赖数组为空，表示函数不依赖任何外部变量
+
+  // 搜索我的报修记录
+
+  // 搜索我的报修记录
+  const searchMyRepairs = async (keyword = "") => {
+    setLoading(true);
+    try {
+      const searchParams = { ...filters };
+      if (keyword) {
+        searchParams.keyword = keyword;
+      }
+      
+      const result = await repairService.searchMyRepairOrders(searchParams);
+      setFilteredOrders(result.data || []);
+    } catch (error) {
+      console.error("搜索报修记录失败:", error);
+      message.error("搜索报修记录失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 应用筛选
+  const applyFilters = () => {
+    let filtered = [...repairOrders];
+
+    // 状态筛选 - 直接匹配前端状态值
+    if (filters.status !== "all") {
+      filtered = filtered.filter((order) => order.status === filters.status);
+    }
+
+    // 分类筛选 - 前端值映射到后端值
+    if (filters.category !== "all") {
+      const backendCategory = categoryValueMap[filters.category];
+      filtered = filtered.filter(
+        (order) => order.category === backendCategory || order.category === filters.category
+      );
+    }
+
+    // 紧急程度筛选 - 前端值映射到后端值
+    if (filters.priority !== "all") {
+      const backendPriority = priorityValueMap[filters.priority];
+      filtered = filtered.filter(
+        (order) => order.priority === backendPriority || order.priority === filters.priority || order.priority?.toLowerCase() === filters.priority
+      );
+    }
+
+    // 关键字搜索
+    if (filters.keyword && filters.keyword.trim()) {
+      const keyword = filters.keyword.trim().toLowerCase();
+      filtered = filtered.filter((order) => {
+        const title = (order.title || '').toLowerCase();
+        const description = (order.description || '').toLowerCase();
+        const location = (order.location || '').toLowerCase();
+        return title.includes(keyword) || description.includes(keyword) || location.includes(keyword);
+      });
+    }
+
+    console.log('筛选结果:', { filters, total: repairOrders.length, filtered: filtered.length });
+    setFilteredOrders(filtered);
+  };
+
+  useEffect(() => {
+    console.log('========================================');
+    console.log('组件初始化，开始加载报修数据...');
+    console.log('========================================');
+    fetchMyRepairs();
+  }, [fetchMyRepairs]); // 依赖 fetchMyRepairs
+
+  // 添加轮询刷新，每10秒刷新一次数据，确保分配和完成情况同步
+  useEffect(() => {
+    const interval = setInterval(() => {
+      console.log('========================================');
+      console.log('轮询刷新订单状态...');
+      console.log('当前时间:', new Date().toLocaleString());
+      console.log('========================================');
+      fetchMyRepairs();
+    }, 10000); // 10秒刷新一次，更快地同步状态
+
+    return () => {
+      console.log('清除轮询定时器');
+      clearInterval(interval);
+    };
+  }, [fetchMyRepairs]); // 依赖 fetchMyRepairs
+
+  useEffect(() => {
+    applyFilters();
+  }, [filters, repairOrders]);
+
+  useEffect(() => {
+    if (!initialFilters) return;
+    setFilters((prev) => ({
+      ...prev,
+      status: initialFilters.status || "all",
+      category: initialFilters.category || "all",
+      priority: initialFilters.priority || "all",
+      keyword: initialFilters.keyword || "",
+    }));
+  }, [
+    initialFilters?.status,
+    initialFilters?.category,
+    initialFilters?.priority,
+    initialFilters?.keyword,
+  ]);
+
+  // 处理筛选条件变化
+  const handleFilterChange = (key, value) => {
+    setFilters((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
+  // 重置筛选
+  const handleResetFilters = () => {
+    setFilters({
+      status: "all",
+      category: "all",
+      priority: "all",
+      keyword: "",
+    });
+  };
+
+  // 打开详情模态框
+  const handleViewDetail = async (record) => {
+    setDetailModalVisible(true);
+    setDetailLoading(true);
+
+    try {
+      // 使用 ticketId 或 id 作为工单ID
+      const orderId = record.ticketId || record.id;
+      if (!orderId) {
+        message.error("工单ID不存在");
+        setDetailLoading(false);
+        return;
+      }
+
+      console.log('查看工单详情，工单ID:', orderId);
+
+      // repairService 已经完成了字段映射，直接使用返回的数据
+      const orderDetail = await repairService.getRepairOrderById(orderId);
+      console.log('获取到的订单详情（已映射）:', orderDetail);
+
+      setSelectedOrder(orderDetail);
+    } catch (error) {
+      console.error("获取工单详情失败:", error);
+      message.error("获取详情失败: " + error.message);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  // 关闭详情模态框
+  const handleCloseDetail = () => {
+    setDetailModalVisible(false);
+    setSelectedOrder(null);
+  };
+
+  useEffect(() => {
+    if (!targetOrderId) return;
+    handleViewDetail({ id: targetOrderId, ticketId: targetOrderId });
+    if (onTargetOrderHandled) {
+      onTargetOrderHandled();
+    }
+  }, [targetOrderId]);
+
+  // 删除报修记录
+  const handleDeleteRepair = async (record) => {
+    try {
+      const orderId = record.ticketId || record.id;
+      if (!orderId) {
+        message.error("工单ID不存在");
+        return;
+      }
+      await repairService.deleteRepairOrder(orderId);
+      message.success("报修记录删除成功");
+
+      // 刷新数据
+      fetchMyRepairs();
+      
+      // 如果有传入刷新函数，则调用父组件的刷新
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (error) {
+      console.error("删除报修记录失败:", error);
+      message.error("删除失败");
+    }
+  };
+
+  // 新增：打开评价模态框
+  const handleEvaluate = (record) => {
+    setEvaluatingOrder(record);
+    setRating(0);
+    setFeedback("");
+    setEvaluateModalVisible(true);
+  };
+
+  // 新增：关闭评价模态框
+  const handleCloseEvaluate = () => {
+    setEvaluateModalVisible(false);
+    setEvaluatingOrder(null);
+    setRating(0);
+    setSpeedRating(5);
+    setQualityRating(5);
+    setAttitudeRating(5);
+    setResolved(true);
+    setAnonymous(false);
+    setFeedback("");
+  };
+
+  // 新增：提交评价
+  const handleSubmitEvaluation = async () => {
+    if (rating === 0) {
+      message.error("请至少给一星评价");
+      return;
+    }
+
+    setEvaluating(true);
+    try {
+      const orderId = evaluatingOrder.ticketId || evaluatingOrder.id;
+      if (!orderId) {
+        message.error("工单ID不存在");
+        return;
+      }
+      
+      // 获取当前学生ID
+      const userStr = localStorage.getItem('user');
+      let studentId = null;
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          console.log('解析的用户信息:', user);
+          // 尝试多种可能的字段名
+          studentId = user.userId || user.id || user.user_id || user.studentId || null;
+          console.log('提取的学生ID:', studentId);
+        } catch (e) {
+          console.error('解析用户信息失败:', e);
+        }
+      } else {
+        console.warn('localStorage中没有user信息');
+      }
+      
+      if (!studentId) {
+        console.error('无法获取学生ID，localStorage中的user:', userStr);
+        message.error("无法获取学生ID，请重新登录");
+        setEvaluating(false);
+        return;
+      }
+      
+      await repairService.evaluateRepairOrder(orderId, studentId, {
+        score: rating,
+        comment: feedback,
+        speedRating,
+        qualityRating,
+        attitudeRating,
+        resolved,
+        anonymous,
+      });
+      
+      message.success("评价提交成功！");
+      handleCloseEvaluate();
+
+      // 刷新数据
+      fetchMyRepairs();
+      
+      // 如果有传入刷新函数，则调用父组件的刷新
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (error) {
+      console.error("提交评价失败:", error);
+      message.error("提交评价失败，请重试！");
+    } finally {
+      setEvaluating(false);
+    }
+  };
+
+  // 统计信息 - 基于实际的repairOrders数据动态计算，添加调试日志
+  const getStats = () => {
+    console.log('========================================');
+    console.log('学生端统计信息计算开始...');
+    console.log('当前报修订单数组:', repairOrders);
+    console.log('报修订单数量:', repairOrders.length);
+
+    if (!repairOrders || repairOrders.length === 0) {
+      console.warn('警告：报修订单数组为空，返回默认统计数据');
+      console.log('========================================');
+      return {
+        total: 0,
+        pending: 0,
+        processing: 0,
+        completed: 0,
+        toBeEvaluated: 0,
+        rejected: 0
+      };
+    }
+
+    const total = repairOrders.length;
+
+    console.log('========================================');
+    console.log('开始统计各状态订单数量...');
+    console.log('订单状态详情:');
+    repairOrders.forEach((order, index) => {
+      console.log(`订单 ${index + 1}: ID=${order.id}, 状态="${order.status}", 原始状态="${order.originalStatus}", 标题="${order.title}"`);
+    });
+    console.log('========================================');
+
+    // 统计各状态数量 - 从学生视角正确统计
+    // 学生端视角：
+    // - pending（待受理）= WAITING_ACCEPT（刚提交，等待维修工接单）
+    // - processing（处理中）= IN_PROGRESS（维修工正在处理）
+    // - toBeEvaluated（待评价）= RESOLVED（维修完成，需要学生评价）或 WAITING_FEEDBACK（等待评价）
+    // - completed（已完成）= FEEDBACKED（已评价）或 CLOSED（已关闭）
+    // - rejected（已驳回）= REJECTED
+
+    console.log('========================================');
+    console.log('开始分类统计（学生视角）...');
+    console.log('========================================');
+
+    // 待受理：WAITING_ACCEPT 状态
+    const pendingOrders = repairOrders.filter(order => {
+      const originalStatus = order.originalStatus || order.status;
+      // 检查原始后端状态是否为 WAITING_ACCEPT
+      const isPending = originalStatus === 'WAITING_ACCEPT' || order.status === 'pending';
+      console.log(`订单 ${order.id}: 原始状态="${originalStatus}", 是否待受理=${isPending}`);
+      return isPending;
+    });
+    const pending = pendingOrders.length;
+    console.log('待受理订单 (WAITING_ACCEPT):', pending, '条');
+    if (pendingOrders.length > 0) {
+      console.log('待受理订单详情:', pendingOrders.map(o => ({ id: o.id, title: o.title, originalStatus: o.originalStatus })));
+    }
+
+    // 处理中：IN_PROGRESS 状态
+    const processingOrders = repairOrders.filter(order => {
+      const originalStatus = order.originalStatus || order.status;
+      const isProcessing = originalStatus === 'IN_PROGRESS' || order.status === 'processing';
+      console.log(`订单 ${order.id}: 原始状态="${originalStatus}", 是否处理中=${isProcessing}`);
+      return isProcessing;
+    });
+    const processing = processingOrders.length;
+    console.log('处理中订单 (IN_PROGRESS):', processing, '条');
+    if (processingOrders.length > 0) {
+      console.log('处理中订单详情:', processingOrders.map(o => ({ id: o.id, title: o.title, originalStatus: o.originalStatus })));
+    }
+
+    // 学生端"待评价"：RESOLVED（维修完成）或 WAITING_FEEDBACK（等待评价）状态
+    // 注意：从学生视角，RESOLVED 就是"维修工已完成，我需要去评价"
+    const toBeEvaluatedOrders = repairOrders.filter(order => {
+      const originalStatus = order.originalStatus || order.status;
+      // RESOLVED 状态：维修工已完成，等待学生评价
+      // WAITING_FEEDBACK 状态：系统标记为等待评价
+      const isToBeEvaluated = originalStatus === 'RESOLVED' || originalStatus === 'WAITING_FEEDBACK' || order.status === 'to_be_evaluated';
+      console.log(`订单 ${order.id}: 原始状态="${originalStatus}", 是否待评价=${isToBeEvaluated}`);
+      return isToBeEvaluated;
+    });
+    const toBeEvaluated = toBeEvaluatedOrders.length;
+    console.log('待评价订单 (RESOLVED 或 WAITING_FEEDBACK):', toBeEvaluated, '条');
+    if (toBeEvaluatedOrders.length > 0) {
+      console.log('待评价订单详情:', toBeEvaluatedOrders.map(o => ({
+        id: o.id,
+        title: o.title,
+        originalStatus: o.originalStatus,
+        status: o.status
+      })));
+    }
+
+    // 学生端"已完成"：FEEDBACKED（已评价）或 CLOSED（已关闭）状态
+    const completedOrders = repairOrders.filter(order => {
+      const originalStatus = order.originalStatus || order.status;
+      // 只有已评价或已关闭的才算"已完成"
+      const isCompleted = originalStatus === 'FEEDBACKED' || originalStatus === 'CLOSED' || order.status === 'closed';
+      console.log(`订单 ${order.id}: 原始状态="${originalStatus}", 是否已完成=${isCompleted}`);
+      return isCompleted;
+    });
+    const completed = completedOrders.length;
+    console.log('已完成订单 (FEEDBACKED 或 CLOSED):', completed, '条');
+    if (completedOrders.length > 0) {
+      console.log('已完成订单详情:', completedOrders.map(o => ({
+        id: o.id,
+        title: o.title,
+        originalStatus: o.originalStatus,
+        rating: o.rating
+      })));
+    }
+
+    // 已驳回：REJECTED 状态
+    const rejectedOrders = repairOrders.filter(order => {
+      const originalStatus = order.originalStatus || order.status;
+      const isRejected = originalStatus === 'REJECTED' || order.status === 'rejected';
+      console.log(`订单 ${order.id}: 原始状态="${originalStatus}", 是否已驳回=${isRejected}`);
+      return isRejected;
+    });
+    const rejected = rejectedOrders.length;
+    console.log('已驳回订单 (REJECTED):', rejected, '条');
+    if (rejectedOrders.length > 0) {
+      console.log('已驳回订单详情:', rejectedOrders.map(o => ({ id: o.id, title: o.title, originalStatus: o.originalStatus })));
+    }
+
+    const stats = { total, pending, processing, completed, toBeEvaluated, rejected };
+
+    console.log('========================================');
+    console.log('学生端统计结果汇总:', stats);
+    console.log(`验证: total(${total}) = pending(${pending}) + processing(${processing}) + toBeEvaluated(${toBeEvaluated}) + completed(${completed}) + rejected(${rejected})`);
+    const verificationSum = pending + processing + toBeEvaluated + completed + rejected;
+    console.log(`验证计算: ${total} = ${verificationSum}`);
+    console.log(`验证结果: ${total === verificationSum ? '✓ 正确' : '✗ 错误（差额=' + (total - verificationSum) + '）'}`);
+    console.log('========================================');
+
+    return stats;
+  };
+
+  const stats = getStats();
+
+  // 表格列定义
+  const columns = [
+    {
+      title: "报修单号",
+      dataIndex: "id",
+      key: "id",
+      width: 100,
+    },
+    {
+      title: "报修标题",
+      dataIndex: "title",
+      key: "title",
+      width: 150,
+    },
+    {
+      title: "报修分类",
+      dataIndex: "category",
+      key: "category",
+      width: 100,
+      render: (category) => {
+        const categoryInfo = repairUtils.getCategoryInfo(category);
+        return categoryInfo ? categoryInfo.label : category;
+      },
+    },
+    {
+      title: "具体位置",
+      dataIndex: "location",
+      key: "location",
+      width: 120,
+    },
+    {
+      title: "问题描述",
+      dataIndex: "description",
+      key: "description",
+      ellipsis: true,
+      width: 200,
+    },
+    {
+      title: "紧急程度",
+      dataIndex: "priority",
+      key: "priority",
+      width: 100,
+      render: (priority) => {
+        const priorityInfo = (repairUtils.getPriorityInfo || repairUtils.getpriorityInfo)?.(priority) || { label: priority || '未知', color: 'default' };
+        return <Tag color={priorityInfo.color}>{priorityInfo.label}</Tag>;
+      },
+    },
+    {
+      title: "提交时间",
+      dataIndex: "created_at",
+      key: "created_at",
+      width: 150,
+    },
+    {
+      title: "状态",
+      dataIndex: "status",
+      key: "status",
+      width: 100,
+      render: (status) => {
+        const statusInfo = repairUtils.getStatusInfo(status);
+        return <Tag color={statusInfo.color}>{statusInfo.label}</Tag>;
+      },
+    },
+    {
+      title: "操作",
+      key: "action",
+      width: 200,
+      render: (_, record) => (
+        <Space size="small">
+          <Button
+            type="link"
+            icon={<EyeOutlined />}
+            onClick={() => handleViewDetail(record)}
+            size="small"
+          >
+            详情
+          </Button>
+
+          {/* 只有待受理状态可以删除 */}
+          {record.status === "pending" && (
+            <Popconfirm
+              title="确定要删除这条报修记录吗？"
+              description="删除后无法恢复，请谨慎操作！"
+              onConfirm={() => handleDeleteRepair(record)}
+              okText="确定"
+              cancelText="取消"
+            >
+              <Button type="link" danger icon={<DeleteOutlined />} size="small">
+                删除
+              </Button>
+            </Popconfirm>
+          )}
+
+          {/* 待评价状态可以评价：to_be_evaluated (RESOLVED/WAITING_FEEDBACK) */}
+          {(record.status === "to_be_evaluated" ||
+            (record.status === "closed" && !record.rating) ||
+            (record.status === "completed" && !record.rating)) &&
+           !record.rating && (
+            <Button
+              type="link"
+              icon={<StarOutlined />}
+              onClick={() => handleEvaluate(record)}
+              size="small"
+              style={{ color: "#faad14" }}
+            >
+              评价
+            </Button>
+          )}
+
+          {/* 已评价显示已评价标签：有评价分数或状态为FEEDBACKED */}
+          {(record.rating || record.originalStatus === 'FEEDBACKED') && (
+            <Tag color="success" style={{ marginLeft: 8 }}>
+              已评价
+            </Tag>
+          )}
+        </Space>
+      ),
+    },
+  ];
+
+  return (
+    <div>
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: "16px",
+        paddingBottom: "12px",
+        borderBottom: "1px solid #e8e8e8",
+      }}>
+        <h2 style={{
+          fontSize: "16px",
+          fontWeight: "600",
+          color: "#1f1f1f",
+          margin: 0,
+        }}>我的报修</h2>
+
+        <Button
+          type="primary"
+          icon={<ReloadOutlined />}
+          onClick={() => {
+            console.log('手动刷新报修数据...');
+            fetchMyRepairs();
+          }}
+          loading={loading}
+          style={{
+            backgroundColor: "#0F52BA",
+            borderColor: "#0F52BA",
+          }}
+        >
+          刷新数据
+        </Button>
+      </div>
+
+      {/* 统计信息 */}
+      <Row
+        gutter={16}
+        style={{
+          marginBottom: "16px",
+          display: "flex",
+          justifyContent: "space-between",
+        }}
+      >
+        <Col span={4}>
+          <Card style={{ borderRadius: "8px", border: "none", boxShadow: "0 2px 8px rgba(15, 82, 186, 0.06)", background: "#FFFFFF" }}>
+            <Statistic
+              title={<span style={{ fontSize: "13px", color: "#8c8c8c", fontWeight: "400" }}>总报修数</span>}
+              value={stats.total}
+              valueStyle={{ color: "#1f1f1f", fontSize: "28px", fontWeight: "600" }}
+            />
+          </Card>
+        </Col>
+        <Col span={4}>
+          <Card style={{ borderRadius: "8px", border: "none", boxShadow: "0 2px 8px rgba(15, 82, 186, 0.06)", background: "#FFFFFF" }}>
+            <Statistic
+              title={<span style={{ fontSize: "13px", color: "#8c8c8c", fontWeight: "400" }}>待受理</span>}
+              value={stats.pending}
+              prefix={<ClockCircleOutlined style={{ color: "#f5c26b" }} />}
+              valueStyle={{ color: "#1f1f1f", fontSize: "28px", fontWeight: "600" }}
+            />
+          </Card>
+        </Col>
+        <Col span={4}>
+          <Card style={{ borderRadius: "8px", border: "none", boxShadow: "0 2px 8px rgba(15, 82, 186, 0.06)", background: "#FFFFFF" }}>
+            <Statistic
+              title={<span style={{ fontSize: "13px", color: "#8c8c8c", fontWeight: "400" }}>处理中</span>}
+              value={stats.processing}
+              prefix={<ClockCircleOutlined style={{ color: "#7eb8da" }} />}
+              valueStyle={{ color: "#1f1f1f", fontSize: "28px", fontWeight: "600" }}
+            />
+          </Card>
+        </Col>
+        <Col span={4}>
+          <Card style={{ borderRadius: "8px", border: "none", boxShadow: "0 2px 8px rgba(15, 82, 186, 0.06)", background: "#FFFFFF" }}>
+            <Statistic
+              title={<span style={{ fontSize: "13px", color: "#8c8c8c", fontWeight: "400" }}>待评价</span>}
+              value={stats.toBeEvaluated}
+              prefix={<StarOutlined style={{ color: "#7eb8da" }} />}
+              valueStyle={{ color: "#1f1f1f", fontSize: "28px", fontWeight: "600" }}
+            />
+          </Card>
+        </Col>
+        <Col span={4}>
+          <Card style={{ borderRadius: "8px", border: "none", boxShadow: "0 2px 8px rgba(15, 82, 186, 0.06)", background: "#FFFFFF" }}>
+            <Statistic
+              title={<span style={{ fontSize: "13px", color: "#8c8c8c", fontWeight: "400" }}>已完成</span>}
+              value={stats.completed}
+              prefix={<CheckCircleOutlined style={{ color: "#86c8bc" }} />}
+              valueStyle={{ color: "#1f1f1f", fontSize: "28px", fontWeight: "600" }}
+            />
+          </Card>
+        </Col>
+      </Row>
+
+      {/* 筛选器 */}
+      <Card
+        title={<span style={{ fontSize: "15px", fontWeight: "600", color: "#1f1f1f" }}>筛选条件</span>}
+        style={{ marginBottom: "16px", borderRadius: "8px", border: "none", background: "#FFFFFF" }}
+      >
+        <Space size="middle" wrap>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontSize: "15px", fontWeight: "500", color: "#5c5c5c", minWidth: "50px" }}>状态：</span>
+            <Select
+              value={filters.status}
+              style={{ width: 140 }}
+              onChange={(value) => handleFilterChange("status", value)}
+            >
+              <Option value="all">全部状态</Option>
+              <Option value="pending">待受理</Option>
+              <Option value="processing">处理中</Option>
+              <Option value="to_be_evaluated">待评价</Option>
+              <Option value="completed">已完成</Option>
+              <Option value="closed">已关闭</Option>
+              <Option value="rejected">已驳回</Option>
+            </Select>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontSize: "15px", fontWeight: "500", color: "#5c5c5c", minWidth: "50px" }}>分类：</span>
+            <Select
+              value={filters.category}
+              style={{ width: 140 }}
+              onChange={(value) => handleFilterChange("category", value)}
+            >
+              <Option value="all">全部分类</Option>
+              {categoryOptions.map((option) => (
+                <Option key={option.value} value={option.value}>
+                  {option.label}
+                </Option>
+              ))}
+            </Select>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontSize: "15px", fontWeight: "500", color: "#5c5c5c", minWidth: "70px" }}>紧急程度：</span>
+            <Select
+              value={filters.priority}
+              style={{ width: 140 }}
+              onChange={(value) => handleFilterChange("priority", value)}
+            >
+              <Option value="all">全部</Option>
+              <Option value="low">低</Option>
+              <Option value="medium">中</Option>
+              <Option value="high">高</Option>
+            </Select>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <Input
+              placeholder="按标题/描述/位置搜索"
+              allowClear
+              style={{ width: 200, height: 36 }}
+              onChange={(e) => {
+                setFilters(prev => ({ ...prev, keyword: e.target.value }));
+              }}
+            />
+            <Button
+              type="primary"
+              icon={<SearchOutlined />}
+              style={{ height: 36, marginLeft: "-1px" }}
+              onClick={() => {
+                applyFilters();
+              }}
+            >
+              搜索
+            </Button>
+          </div>
+
+          <Button icon={<FilterOutlined />} onClick={handleResetFilters}>
+            重置筛选
+          </Button>
+        </Space>
+      </Card>
+
+      {/* 报修记录表格 */}
+      <Card style={{ borderRadius: "8px", border: "none", background: "#FFFFFF" }}>
+        <Table
+          style={{
+            height: "80vh",
+          }}
+          columns={columns}
+          dataSource={filteredOrders}
+          rowKey={(record) => record.ticketId || record.id || record.key || Math.random()}
+          loading={loading}
+          pagination={{
+            pageSize: 10,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            showTotal: (total, range) =>
+              `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
+          }}
+          scroll={{ x: 1000 }}
+          locale={{ emptyText: "暂无报修记录" }}
+        />
+      </Card>
+
+      {/* 报修单详情模态框 */}
+      <Modal
+        title={
+          <Space>
+            <EyeOutlined />
+            报修单详情
+          </Space>
+        }
+        open={detailModalVisible}
+        onCancel={handleCloseDetail}
+        footer={[
+          <Button key="close" onClick={handleCloseDetail}>
+            关闭
+          </Button>,
+        ]}
+        width={800}
+        styles={{ body: { padding: "20px" } }}
+      >
+        {detailLoading ? (
+          <div style={{ textAlign: "center", padding: "50px" }}>
+            <Spin size="large" />
+            <div style={{ marginTop: 16 }}>加载详情中...</div>
+          </div>
+        ) : selectedOrder ? (
+          <div>
+            {/* 基本信息 */}
+            <Descriptions
+              title="基本信息"
+              bordered
+              column={2}
+              size="small"
+              style={{ marginBottom: 24 }}
+            >
+              <Descriptions.Item label="报修单号" span={1}>
+                {selectedOrder.id}
+              </Descriptions.Item>
+              <Descriptions.Item label="报修标题" span={1}>
+                {selectedOrder.title || (selectedOrder.locationText ? `报修-${selectedOrder.locationText}` : '报修单')}
+              </Descriptions.Item>
+              <Descriptions.Item label="报修分类" span={1}>
+                {repairUtils.getCategoryInfo(selectedOrder.category)?.label ||
+                  selectedOrder.category}
+              </Descriptions.Item>
+              <Descriptions.Item label="紧急程度" span={1}>
+                <Tag
+                  color={
+                    (repairUtils.getPriorityInfo || repairUtils.getpriorityInfo)?.(selectedOrder.priority)?.color || 'default'
+                  }
+                >
+                  {(repairUtils.getPriorityInfo || repairUtils.getpriorityInfo)?.(selectedOrder.priority)?.label || selectedOrder.priority || '未知'}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="具体位置" span={2}>
+                {selectedOrder.location}
+              </Descriptions.Item>
+              <Descriptions.Item label="问题描述" span={2}>
+                {selectedOrder.description}
+              </Descriptions.Item>
+              <Descriptions.Item label="当前状态" span={1}>
+                <Tag
+                  color={repairUtils.getStatusInfo(selectedOrder.status).color}
+                >
+                  {repairUtils.getStatusInfo(selectedOrder.status).label}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="提交时间" span={1}>
+                {selectedOrder.created_at}
+              </Descriptions.Item>
+            </Descriptions>
+
+            {/* 人员信息 */}
+            <Descriptions
+              title="人员信息"
+              bordered
+              column={2}
+              size="small"
+              style={{ marginBottom: 24 }}
+            >
+              <Descriptions.Item label="报修学生" span={1}>
+                <Space>
+                  <UserOutlined />
+                  {selectedOrder.studentName || "未知"}
+                </Space>
+              </Descriptions.Item>
+              <Descriptions.Item label="联系电话" span={1}>
+                {selectedOrder.contactPhone || "未提供"}
+              </Descriptions.Item>
+              <Descriptions.Item label="维修人员" span={1}>
+                {selectedOrder.repairmanName || selectedOrder.staffName || (selectedOrder.repairmanId || selectedOrder.staffId)
+                  ? (selectedOrder.repairmanName || selectedOrder.staffName || repairUtils.getRepairmanInfo(selectedOrder.repairmanId || selectedOrder.staffId)?.name || selectedOrder.repairmanId || selectedOrder.staffId || '未知')
+                  : "未分配"}
+              </Descriptions.Item>
+              <Descriptions.Item label="学号" span={1}>
+                {selectedOrder.studentID}
+              </Descriptions.Item>
+            </Descriptions>
+
+            {/* 时间线信息 */}
+            <Descriptions
+              title="处理进度"
+              bordered
+              column={1}
+              size="small"
+              style={{ marginBottom: 24 }}
+            >
+              <Descriptions.Item label="提交时间">
+                <Space>
+                  <ClockCircleOutlined />
+                  {selectedOrder.created_at ? (typeof selectedOrder.created_at === 'string' ? selectedOrder.created_at : new Date(selectedOrder.created_at).toLocaleString('zh-CN')) : '未知'}
+                </Space>
+              </Descriptions.Item>
+              <Descriptions.Item label="分配时间">
+                <Space>
+                  <ClockCircleOutlined />
+                  {selectedOrder.assigned_at ? (typeof selectedOrder.assigned_at === 'string' ? selectedOrder.assigned_at : new Date(selectedOrder.assigned_at).toLocaleString('zh-CN')) : "未分配"}
+                </Space>
+              </Descriptions.Item>
+              <Descriptions.Item label="完成时间">
+                <Space>
+                  <ClockCircleOutlined />
+                  {selectedOrder.completed_at ? (typeof selectedOrder.completed_at === 'string' ? selectedOrder.completed_at : new Date(selectedOrder.completed_at).toLocaleString('zh-CN')) : "未完成"}
+                </Space>
+              </Descriptions.Item>
+              {selectedOrder.rejection_reason && (
+                <Descriptions.Item label="驳回原因">
+                  {selectedOrder.rejection_reason}
+                </Descriptions.Item>
+              )}
+              {selectedOrder.repairNotes && (
+                <Descriptions.Item label="维修备注">
+                  {selectedOrder.repairNotes}
+                </Descriptions.Item>
+              )}
+            </Descriptions>
+
+            {/* 新增：现场照片展示 */}
+            <RepairTimeline order={selectedOrder} />
+            <RepairProcessRecords ticketId={selectedOrder.ticketId || selectedOrder.id} role="STUDENT" />
+            <TicketComments ticketId={selectedOrder.ticketId || selectedOrder.id} role="STUDENT" />
+
+            {selectedOrder.images && selectedOrder.images.length > 0 ? (
+              <div style={{ marginBottom: 24 }}>
+                <h4 style={{ marginBottom: 16, fontSize: "15px", fontWeight: "600", color: "#1f1f1f" }}>现场照片</h4>
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  {selectedOrder.images.map((image, index) => {
+                    let imageUrl = typeof image === 'string' ? image : (image.imageUrl || image.url || image);
+                    // 确保URL完整
+                    if (imageUrl && !imageUrl.startsWith('http')) {
+                      imageUrl = `http://localhost:8080${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
+                    }
+                    console.log('图片URL:', imageUrl, '原始图片:', image);
+                    return (
+                      <Image
+                        key={index}
+                        width={120}
+                        height={90}
+                        src={imageUrl}
+                        style={{
+                          borderRadius: 6,
+                          objectFit: "cover",
+                          border: "1px solid #d9d9d9",
+                          cursor: "pointer",
+                        }}
+                        placeholder={
+                          <div
+                            style={{
+                              width: 120,
+                              height: 90,
+                              background: "#f5f5f5",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              borderRadius: 6,
+                            }}
+                          >
+                            加载中...
+                          </div>
+                        }
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div style={{ marginBottom: 24 }}>
+                <h4 style={{ marginBottom: 16, fontSize: "15px", fontWeight: "600", color: "#1f1f1f" }}>现场照片</h4>
+                <div style={{ color: '#8c8c8c', textAlign: 'center', padding: '20px', background: '#f8fafc', borderRadius: '6px' }}>暂无照片</div>
+              </div>
+            )}
+
+            {/* 评价信息（如果已完成且有评价） */}
+            {selectedOrder.rating ? (
+              <Descriptions title="评价信息" bordered column={1} size="small" style={{ marginBottom: 24 }}>
+                <Descriptions.Item label="评分">
+                  {"★".repeat(selectedOrder.rating)}
+                  {"☆".repeat(5 - selectedOrder.rating)}
+                  <span style={{ marginLeft: 8, color: "#faad14" }}>
+                    ({selectedOrder.rating}分)
+                  </span>
+                </Descriptions.Item>
+                {selectedOrder.feedback && (
+                  <Descriptions.Item label="评价内容">
+                    {selectedOrder.feedback}
+                  </Descriptions.Item>
+                )}
+              </Descriptions>
+            ) : (
+              // 如果已完成但未评价，显示评价按钮
+              (selectedOrder.status === "to_be_evaluated" || 
+               selectedOrder.status === "completed" || 
+               selectedOrder.status === "closed") && (
+                <div style={{ marginBottom: 24, textAlign: 'center' }}>
+                  <Button
+                    type="primary"
+                    icon={<StarOutlined />}
+                    onClick={() => {
+                      handleCloseDetail();
+                      handleEvaluate(selectedOrder);
+                    }}
+                    style={{ backgroundColor: "#faad14", borderColor: "#faad14" }}
+                  >
+                    立即评价
+                  </Button>
+                </div>
+              )
+            )}
+          </div>
+        ) : (
+          <div style={{ textAlign: "center", padding: "50px", color: "#999" }}>
+            未找到报修单详情
+          </div>
+        )}
+      </Modal>
+
+      {/* 新增：评价模态框 */}
+      <Modal
+        title={
+          <Space>
+            <StarOutlined />
+            服务评价
+          </Space>
+        }
+        open={evaluateModalVisible}
+        onCancel={handleCloseEvaluate}
+        onOk={handleSubmitEvaluation}
+        confirmLoading={evaluating}
+        okText="提交评价"
+        cancelText="取消"
+        width={560}
+      >
+        {evaluatingOrder && (
+          <div>
+            <div style={{ marginBottom: 16 }}>
+              <strong>报修单：</strong>
+              {evaluatingOrder.title}
+            </div>
+
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ marginBottom: 8 }}>
+                <strong>
+                  评分 <span style={{ color: "#ff4d4f" }}>*</span>
+                </strong>
+              </div>
+              <Rate
+                value={rating}
+                onChange={setRating}
+                style={{ fontSize: 24 }}
+              />
+              <div style={{ marginTop: 8, color: "#999" }}>
+                {rating > 0 ? `您选择了 ${rating} 星` : "请选择评分"}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <Row gutter={[16, 12]}>
+                <Col span={8}>
+                  <div style={{ marginBottom: 6 }}>维修速度</div>
+                  <Rate value={speedRating} onChange={setSpeedRating} />
+                </Col>
+                <Col span={8}>
+                  <div style={{ marginBottom: 6 }}>维修质量</div>
+                  <Rate value={qualityRating} onChange={setQualityRating} />
+                </Col>
+                <Col span={8}>
+                  <div style={{ marginBottom: 6 }}>服务态度</div>
+                  <Rate value={attitudeRating} onChange={setAttitudeRating} />
+                </Col>
+              </Row>
+            </div>
+
+            <Space style={{ marginBottom: 16 }} wrap>
+              <Checkbox checked={resolved} onChange={(event) => setResolved(event.target.checked)}>
+                问题已彻底解决
+              </Checkbox>
+              <Checkbox checked={anonymous} onChange={(event) => setAnonymous(event.target.checked)}>
+                匿名展示评价
+              </Checkbox>
+            </Space>
+
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ marginBottom: 8 }}>
+                <strong>评价内容</strong>（选填）
+              </div>
+              <TextArea
+                rows={4}
+                placeholder="请写下您对本次服务的评价..."
+                value={feedback}
+                onChange={(e) => setFeedback(e.target.value)}
+                maxLength={500}
+                showCount
+              />
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+};
+
+export default MyRepairs;

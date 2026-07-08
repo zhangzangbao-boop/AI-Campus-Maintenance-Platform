@@ -1,0 +1,44 @@
+# Backend (Java/Maven)
+backend/target/
+backend/.idea/
+backend/*.iml
+backend/*.log
+backend/backups/
+
+# Frontend (React/Node)
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary
+*.tmp
+*.bak
+*.swp
+*~
+
+# Claude Code
+.claude/
+
+.claude/
+.codex_tmp/
+.cursor/

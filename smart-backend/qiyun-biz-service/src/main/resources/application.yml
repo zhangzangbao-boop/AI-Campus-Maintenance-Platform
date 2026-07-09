@@ -1,7 +1,16 @@
 server:
-  port: 8080
+  port: 9001
 
 spring:
+  application:
+    name: qiyun-biz-service
+
+  # Nacos 配置（第一阶段暂不接入）
+  # cloud:
+  #   nacos:
+  #     discovery:
+  #       server-addr: 127.0.0.1:8848
+
   datasource:
     url: jdbc:mysql://127.0.0.1:3306/repairdb?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=UTF-8&allowPublicKeyRetrieval=true&useSSL=false
     username: root

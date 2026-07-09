@@ -2,11 +2,14 @@ package com.qiyun.aiservice;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+// 第一阶段暂不接入 Nacos
+// import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 
 /**
- * AI 服务启动类（暂未实现，后续接入 AI 功能时启用）
+ * AI 服务启动类
  */
 @SpringBootApplication
+// @EnableDiscoveryClient
 public class AiServiceApplication {
 
     public static void main(String[] args) {

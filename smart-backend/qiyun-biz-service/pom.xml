@@ -101,13 +101,11 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Nacos Discovery（第一阶段暂不接入） -->
-        <!--
+        <!-- Nacos Discovery -->
         <dependency>
             <groupId>com.alibaba.cloud</groupId>
             <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
         </dependency>
-        -->
 
         <!-- 测试依赖 -->
         <dependency>

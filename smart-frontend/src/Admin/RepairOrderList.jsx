@@ -1103,7 +1103,7 @@ const RepairOrderList = ({ onRefresh, targetOrderId, onTargetOrderHandled }) => 
                   {detailData.images.map((img, idx) => {
                     let url = typeof img === 'string' ? img : (img.imageUrl || img.url || img.image_url || img);
                     if (url && !url.startsWith('http')) {
-                      url = `http://localhost:8080${url.startsWith('/') ? '' : '/'}${url}`;
+                      url = `http://localhost:8070${url.startsWith('/') ? '' : '/'}${url}`;
                     }
                     return (
                       <Image

@@ -1095,7 +1095,7 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
                     let imageUrl = typeof image === 'string' ? image : (image.imageUrl || image.url || image);
                     // 确保URL完整
                     if (imageUrl && !imageUrl.startsWith('http')) {
-                      imageUrl = `http://localhost:8080${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
+                      imageUrl = `http://localhost:8070${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
                     }
                     console.log('图片URL:', imageUrl, '原始图片:', image);
                     return (

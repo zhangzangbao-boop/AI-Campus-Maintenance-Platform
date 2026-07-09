@@ -2,6 +2,9 @@
 import api from './api';
 import { message } from 'antd';
 
+// Gateway 网关地址（用于图片等静态资源）
+const GATEWAY_URL = 'http://localhost:8070';
+
 // 工单状态枚举
 export const REPAIR_STATUS = {
   PENDING: { value: "pending", label: "待受理", color: "orange" },
@@ -265,10 +268,10 @@ export const repairService = {
           // 处理图片
           images: (orderDetail.images || []).map(img => {
             if (typeof img === 'string') {
-              return img.startsWith('http') ? img : `http://localhost:8080${img.startsWith('/') ? '' : '/'}${img}`;
+              return img.startsWith('http') ? img : `${GATEWAY_URL}${img.startsWith('/') ? '' : '/'}${img}`;
             }
             const imageUrl = img.imageUrl || img.url || img;
-            return imageUrl.startsWith('http') ? imageUrl : `http://localhost:8080${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
+            return imageUrl.startsWith('http') ? imageUrl : `${GATEWAY_URL}${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
           }),
         };
 

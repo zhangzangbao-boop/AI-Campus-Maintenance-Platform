@@ -1,22 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Modal, 
-  Form, 
-  Input, 
-  Button, 
-  Avatar, 
+import {
+  Modal,
+  Form,
+  Input,
+  Button,
+  Avatar,
   message,
   Upload,
   Space,
   Tabs
 } from 'antd';
-import { 
-  UserOutlined, 
+import {
+  UserOutlined,
   EditOutlined,
   UploadOutlined
 } from '@ant-design/icons';
 // 引入封装好的 API 服务
-import api from './api.jsx'; 
+import api from './api.jsx';
+
+// Gateway 网关地址（用于图片等静态资源）
+const GATEWAY_URL = 'http://localhost:8070';
 
 const PersonalInfoEd = ({ visible, onCancel, userInfo, onUpdate }) => {
   const [form] = Form.useForm();
@@ -90,9 +93,9 @@ const PersonalInfoEd = ({ visible, onCancel, userInfo, onUpdate }) => {
             // 后端返回的是相对路径，需要转换为完整 URL（因为后端 @URL 验证要求）
             const uploadedUrl = uploadResponse[0].url;
             // 转换为完整 URL
-            avatarUrlToUpdate = uploadedUrl.startsWith('http') 
-              ? uploadedUrl 
-              : `http://localhost:8080${uploadedUrl.startsWith('/') ? uploadedUrl : '/' + uploadedUrl}`;
+            avatarUrlToUpdate = uploadedUrl.startsWith('http')
+              ? uploadedUrl
+              : `${GATEWAY_URL}${uploadedUrl.startsWith('/') ? uploadedUrl : '/' + uploadedUrl}`;
             console.log('头像上传成功，URL:', avatarUrlToUpdate);
           } else {
             throw new Error('头像上传失败：未返回有效的 URL');
@@ -110,15 +113,15 @@ const PersonalInfoEd = ({ visible, onCancel, userInfo, onUpdate }) => {
       
       // 如果还是没有头像 URL，使用默认值（完整 URL）
       if (!finalAvatarUrl || !finalAvatarUrl.trim()) {
-        finalAvatarUrl = 'http://localhost:8080/uploads/default-avatar.png';
+        finalAvatarUrl = `${GATEWAY_URL}/uploads/default-avatar.png`;
       } else {
         // 确保是完整的 URL 格式（后端 @URL 验证要求）
         finalAvatarUrl = finalAvatarUrl.trim();
         if (!finalAvatarUrl.startsWith('http://') && !finalAvatarUrl.startsWith('https://')) {
           // 如果是相对路径，转换为完整 URL
           finalAvatarUrl = finalAvatarUrl.startsWith('/')
-            ? `http://localhost:8080${finalAvatarUrl}`
-            : `http://localhost:8080/${finalAvatarUrl}`;
+            ? `${GATEWAY_URL}${finalAvatarUrl}`
+            : `${GATEWAY_URL}/${finalAvatarUrl}`;
         }
         // 确保 URL 格式正确（移除末尾空格等）
         finalAvatarUrl = finalAvatarUrl.trim();

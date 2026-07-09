@@ -68,7 +68,7 @@ const getImageUrl = (imageUrl) => {
   if (imageUrl.startsWith("http")) {
     return imageUrl;
   }
-  return `http://localhost:8080${imageUrl.startsWith("/") ? "" : "/"}${imageUrl}`;
+  return `http://localhost:8070${imageUrl.startsWith("/") ? "" : "/"}${imageUrl}`;
 };
 
 function TicketComments({ ticketId, role }) {

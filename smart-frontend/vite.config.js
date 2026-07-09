@@ -13,11 +13,11 @@ export default defineConfig({
   },
   server: {
     // 开发服务器配置
-    port: 3000,
+    port: 5173,
     proxy: {
-      // API 请求代理到后端服务器
+      // API 请求代理到 Gateway 网关
       '/api': {
-        target: 'http://localhost:8080',
+        target: 'http://localhost:8070',
         changeOrigin: true,
       },
     },

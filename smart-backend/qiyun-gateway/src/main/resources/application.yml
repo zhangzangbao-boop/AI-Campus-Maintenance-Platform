@@ -17,19 +17,19 @@ spring:
           lower-case-service-id: true
 
       routes:
-        # 转发到 qiyun-biz-service
-        - id: biz-service-route
-          uri: lb://qiyun-biz-service
-          predicates:
-            - Path=/api/biz/**
-          filters:
-            - RewritePath=/api/biz/(?<segment>.*), /api/${segment}
-
-        # 转发到 qiyun-ai-service
+        # 转发到 qiyun-ai-service（优先级最高，精确匹配）
         - id: ai-service-route
           uri: lb://qiyun-ai-service
           predicates:
             - Path=/api/ai/**
+          order: 0
+
+        # 转发到 qiyun-biz-service（兼容原业务接口，匹配所有其他 /api/**）
+        - id: biz-service-route
+          uri: lb://qiyun-biz-service
+          predicates:
+            - Path=/api/**
+          order: 1
 
       # 全局 CORS 配置
       globalcors:

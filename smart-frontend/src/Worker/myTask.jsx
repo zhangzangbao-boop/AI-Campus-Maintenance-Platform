@@ -1095,7 +1095,7 @@ const MyTask = ({ targetTaskId, onTargetTaskHandled, initialFilters, overdueOnly
                     }
                     // 确保URL完整
                     if (imageUrl && !imageUrl.startsWith('http')) {
-                      imageUrl = `http://localhost:8080${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
+                      imageUrl = `http://localhost:8070${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
                     }
                     console.log('图片URL:', imageUrl, '原始图片:', img);
                     return (

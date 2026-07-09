@@ -5,11 +5,10 @@ spring:
   application:
     name: qiyun-ai-service
 
-  # Nacos 配置（第一阶段暂不接入）
-  # cloud:
-  #   nacos:
-  #     discovery:
-  #       server-addr: 127.0.0.1:8848
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 127.0.0.1:8848
 
 # AI 服务配置（后续接入时完善）
 ai:

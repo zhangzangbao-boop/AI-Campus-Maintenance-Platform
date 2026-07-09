@@ -1,0 +1,16 @@
+server:
+  port: 9000
+
+spring:
+  application:
+    name: qiyun-gateway
+
+# 网关配置（后续接入时完善）
+# spring:
+#   cloud:
+#     gateway:
+#       routes:
+#         - id: biz-service
+#           uri: lb://qiyun-biz-service
+#           predicates:
+#             - Path=/api/**

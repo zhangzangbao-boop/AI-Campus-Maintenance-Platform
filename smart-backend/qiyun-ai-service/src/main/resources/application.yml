@@ -1,0 +1,10 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: qiyun-ai-service
+
+# AI 服务配置（后续接入时完善）
+ai:
+  enabled: false

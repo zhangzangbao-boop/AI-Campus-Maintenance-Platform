@@ -42,3 +42,20 @@ logs/
 .claude/
 .codex_tmp/
 .cursor/
+
+# Smart frontend
+smart-frontend/node_modules/
+smart-frontend/dist/
+smart-frontend/.env
+smart-frontend/.env.local
+smart-frontend/.env.development.local
+smart-frontend/.env.test.local
+smart-frontend/.env.production.local
+smart-frontend/npm-debug.log*
+smart-frontend/yarn-debug.log*
+smart-frontend/yarn-error.log*
+
+# Smart backend
+smart-backend/**/target/
+smart-backend/**/backups/
+smart-backend/**/*.log

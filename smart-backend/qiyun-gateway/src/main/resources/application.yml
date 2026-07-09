@@ -1,16 +1,59 @@
 server:
-  port: 9000
+  port: 8080
 
 spring:
   application:
     name: qiyun-gateway
 
-# 网关配置（后续接入时完善）
-# spring:
-#   cloud:
-#     gateway:
-#       routes:
-#         - id: biz-service
-#           uri: lb://qiyun-biz-service
-#           predicates:
-#             - Path=/api/**
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 127.0.0.1:8848
+
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+
+      routes:
+        # 转发到 qiyun-biz-service
+        - id: biz-service-route
+          uri: lb://qiyun-biz-service
+          predicates:
+            - Path=/api/biz/**
+          filters:
+            - RewritePath=/api/biz/(?<segment>.*), /api/${segment}
+
+        # 转发到 qiyun-ai-service
+        - id: ai-service-route
+          uri: lb://qiyun-ai-service
+          predicates:
+            - Path=/api/ai/**
+
+      # 全局 CORS 配置
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowed-origins:
+              - "http://localhost:5173"
+              - "http://127.0.0.1:5173"
+            allowed-methods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowed-headers: "*"
+            allow-credentials: true
+            max-age: 3600
+
+# Actuator 配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always

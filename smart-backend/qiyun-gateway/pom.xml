@@ -17,26 +17,23 @@
     <description>网关模块：API 网关、路由转发、负载均衡等</description>
 
     <dependencies>
-        <!-- 内部模块依赖（暂时注释，后续启用）
-        <dependency>
-            <groupId>com.qiyun</groupId>
-            <artifactId>qiyun-common</artifactId>
-        </dependency>
-        -->
-
-        <!-- Spring Boot Web -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
-
-        <!-- Spring Cloud Gateway（后续接入 Nacos 时启用） -->
-        <!--
+        <!-- Spring Cloud Gateway（基于 WebFlux，不引入 spring-boot-starter-web） -->
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-gateway</artifactId>
         </dependency>
-        -->
+
+        <!-- Nacos Discovery -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+        </dependency>
+
+        <!-- 负载均衡器（Gateway 使用 lb:// 需要此依赖） -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+        </dependency>
 
         <!-- Actuator -->
         <dependency>

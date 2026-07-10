@@ -1,0 +1,51 @@
+spring:
+  application:
+    name: qiyun-biz-service-test
+
+  # 禁用 Nacos 服务发现（测试环境）
+  cloud:
+    nacos:
+      discovery:
+        enabled: false
+
+  # H2 内存数据库配置（测试环境）
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  # 禁用 schema.sql 自动执行（MySQL 语法不兼容 H2）
+  sql:
+    init:
+      mode: never
+
+  # JPA 配置（自动创建表结构）
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: true
+    show-sql: false
+
+  # H2 控制台（可选，用于调试）
+  h2:
+    console:
+      enabled: false
+
+# JWT 配置
+jwt:
+  secret: testSecretKeyForTestingPurposesOnly123456789
+  expiration-ms: 604800000
+
+# 禁用 AI 服务调用（测试环境）
+ai:
+  enabled: false
+
+# 日志配置
+logging:
+  level:
+    com.ligong.reportingcenter: DEBUG
+    org.springframework: WARN

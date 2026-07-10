@@ -3,6 +3,7 @@ package com.ligong.reportingcenter.controller;
 import com.ligong.reportingcenter.domain.enums.TicketStatus;
 import com.ligong.reportingcenter.domain.enums.RepairProcessActionType;
 import com.ligong.reportingcenter.dto.RepairProcessRecordDto;
+import com.ligong.reportingcenter.dto.StaffDashboardDto;
 import com.ligong.reportingcenter.dto.StaffRecommendationDto;
 import com.ligong.reportingcenter.dto.TicketDetailDto;
 import com.ligong.reportingcenter.dto.TicketSummaryDto;
@@ -380,42 +381,90 @@ public class TicketController {
         } catch (Exception e) {
             throw new BusinessException("无法获取当前用户信息，请先登录");
         }
-        
-        List<TicketSummaryDto> tasks;
-        if (status != null && !status.isBlank() && !status.equalsIgnoreCase("all")) {
-            try {
-                // 将前端状态值映射到后端枚举值
-                TicketStatus ticketStatus = mapStatusFromFrontend(status);
-                // 先获取该状态的所有任务，然后过滤出分配给当前维修工的
-                List<TicketSummaryDto> allStatusTasks = ticketService.listByStatus(ticketStatus);
-                // 过滤出分配给当前维修工的任务
-                tasks = allStatusTasks.stream()
-                    .filter(task -> staffId.equals(task.staffId()))
-                    .collect(java.util.stream.Collectors.toList());
-            } catch (IllegalArgumentException ex) {
-                throw new BusinessException("无效的任务状态: " + status);
-            }
-        } else {
-            // 获取分配给当前维修工的所有任务
-            tasks = ticketService.listByStaff(staffId);
+
+        // 转换状态参数
+        TicketStatus ticketStatus = null;
+        if (status != null && !status.isBlank() && !"all".equalsIgnoreCase(status)) {
+            ticketStatus = mapStatusFromFrontend(status);
         }
-        
-        // 简单分页模拟
-        int total = tasks.size();
-        int fromIndex = page * size;
-        int toIndex = Math.min(fromIndex + size, total);
-        List<TicketSummaryDto> pagedTasks = fromIndex < total ? tasks.subList(fromIndex, toIndex) : new java.util.ArrayList<>();
-        
+
+        // 使用分页查询
+        return ticketService.listStaffTasksPage(staffId, ticketStatus, page, size);
+    }
+
+    /**
+     * 获取维修工工作台统计数据
+     */
+    @GetMapping("/staff/dashboard")
+    @PreAuthorize("hasRole('STAFF')")
+    public Map<String, Object> getStaffDashboard() {
+        String staffId = currentUserId();
+        StaffDashboardDto dashboard = ticketService.getStaffDashboard(staffId);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("code", 200);
+        result.put("message", "获取维修工统计数据成功");
+        result.put("data", dashboard);
+        return result;
+    }
+
+    /**
+     * 获取维修工任务详情（增强版，包含更多关联数据）
+     */
+    @GetMapping("/tasks/{id}/detail")
+    @PreAuthorize("hasRole('STAFF')")
+    public Map<String, Object> getTaskDetailWithRecords(@PathVariable("id") Long id) {
+        TicketDetailDto detail = ticketService.getTicketDetail(id);
+        assertStaffOwnsTicket(detail);
+
         // 返回统一格式的响应
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
         result.put("message", "获取成功");
-        Map<String, Object> data = new HashMap<>();
-        data.put("list", pagedTasks);
-        data.put("total", total);
-        data.put("page", page);
-        data.put("pageSize", size);
-        result.put("data", data);
+        result.put("data", detail);
+        return result;
+    }
+
+    // ==================== 工单处理流程接口 ====================
+
+    /**
+     * 维修工主动接单
+     * POST /api/tasks/{id}/accept
+     *
+     * 状态流转: WAITING_ACCEPT → IN_PROGRESS
+     */
+    @PostMapping("/tasks/{id}/accept")
+    @PreAuthorize("hasRole('STAFF')")
+    public Map<String, Object> acceptTask(@PathVariable("id") Long id) {
+        String staffId = currentUserId();
+        TicketDetailDto detail = ticketService.acceptTicket(id, staffId);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("code", 200);
+        result.put("message", "接单成功，请尽快处理");
+        result.put("data", detail);
+        return result;
+    }
+
+    /**
+     * 维修工完成工单
+     * PUT /api/tasks/{id}/resolve
+     *
+     * 状态流转: IN_PROGRESS → RESOLVED
+     */
+    @PutMapping("/tasks/{id}/resolve")
+    @PreAuthorize("hasRole('STAFF')")
+    public Map<String, Object> resolveTask(@PathVariable("id") Long id,
+                                           @RequestBody(required = false) Map<String, Object> requestBody) {
+        String staffId = currentUserId();
+        String repairNotes = requestBody != null ? (String) requestBody.get("repairNotes") : null;
+
+        TicketDetailDto detail = ticketService.resolveTicket(id, staffId, repairNotes);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("code", 200);
+        result.put("message", "工单已完成，等待学生确认");
+        result.put("data", detail);
         return result;
     }
 

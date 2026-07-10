@@ -15,17 +15,22 @@ import com.ligong.reportingcenter.dto.request.TicketRatingRequest;
 import com.ligong.reportingcenter.dto.request.TicketStatusUpdateRequest;
 import com.ligong.reportingcenter.dto.request.UserRegisterRequest;
 import com.ligong.reportingcenter.exception.BusinessException;
+import com.ligong.reportingcenter.service.AiAnalysisIntegrationService;
 import com.ligong.reportingcenter.service.CategoryService;
 import com.ligong.reportingcenter.service.TicketService;
 import com.ligong.reportingcenter.service.UserService;
+import com.qiyun.feign.client.AiServiceClient;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest
+@ActiveProfiles("test")
 @Transactional
 class TicketServiceTests {
 
@@ -37,6 +42,13 @@ class TicketServiceTests {
 
     @Autowired
     private CategoryService categoryService;
+
+    // Mock Feign 客户端，避免测试时调用远程服务
+    @MockBean
+    private AiServiceClient aiServiceClient;
+
+    @MockBean
+    private AiAnalysisIntegrationService aiAnalysisIntegrationService;
 
     private String studentId;
     private String staffId;

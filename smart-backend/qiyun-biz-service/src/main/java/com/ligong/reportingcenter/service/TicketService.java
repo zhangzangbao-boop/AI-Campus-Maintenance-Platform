@@ -32,6 +32,9 @@ import java.nio.file.Paths;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -1233,5 +1236,192 @@ public class TicketService {
         return user.getNickname() != null && !user.getNickname().isBlank()
             ? user.getNickname()
             : user.getUserId();
+    }
+
+    // ==================== 维修工相关方法 ====================
+
+    /**
+     * 维修工主动接单
+     * 将 WAITING_ACCEPT 状态的工单分配给自己，状态变为 IN_PROGRESS
+     *
+     * @param ticketId 工单ID
+     * @param staffId  维修工ID
+     * @return 工单详情
+     */
+    @Transactional
+    public TicketDetailDto acceptTicket(Long ticketId, String staffId) {
+        try {
+            // 使用悲观锁防止并发接单
+            RepairTicket ticket = findTicketWithLock(ticketId);
+            User staff = userService.loadActiveUser(staffId);
+
+            // 验证维修工角色
+            if (staff.getRole() != UserRole.STAFF) {
+                throw new BusinessException("仅维修工角色可以接单");
+            }
+
+            // 验证工单状态
+            if (ticket.getStatus() != TicketStatus.WAITING_ACCEPT) {
+                throw new BusinessException("当前工单状态不允许接单，仅待受理状态的工单可以接单");
+            }
+
+            // 验证工单未被分配
+            if (ticket.getStaff() != null) {
+                throw new BusinessException("该工单已被分配，无法接单");
+            }
+
+            // 分配工单并更新状态
+            TicketStatus oldStatus = ticket.getStatus();
+            ticket.setStaff(staff);
+            ticket.setAssignedAt(LocalDateTime.now());
+            ticket.setStatus(TicketStatus.IN_PROGRESS);
+
+            // 记录状态变更日志
+            appendStatusLog(ticket, oldStatus, TicketStatus.IN_PROGRESS, staff);
+
+            // 发送通知
+            notifyTicketAssigned(ticket, staff);
+
+            log.info("维修工接单成功: ticketId={}, staffId={}", ticketId, staffId);
+            return toDetailDto(ticket);
+
+        } catch (ObjectOptimisticLockingFailureException e) {
+            throw new BusinessException("工单已被其他用户修改，请刷新后重试");
+        }
+    }
+
+    /**
+     * 维修工完成工单
+     * 将 IN_PROGRESS 状态的工单更新为 RESOLVED
+     *
+     * @param ticketId       工单ID
+     * @param staffId        维修工ID
+     * @param repairNotes    维修备注（可选）
+     * @return 工单详情
+     */
+    @Transactional
+    public TicketDetailDto resolveTicket(Long ticketId, String staffId, String repairNotes) {
+        try {
+            // 使用悲观锁防止并发操作
+            RepairTicket ticket = findTicketWithLock(ticketId);
+            User staff = userService.loadActiveUser(staffId);
+
+            // 验证工单归属
+            if (ticket.getStaff() == null || !ticket.getStaff().getUserId().equals(staffId)) {
+                throw new BusinessException("只能完成分配给自己的工单");
+            }
+
+            // 验证工单状态
+            if (ticket.getStatus() != TicketStatus.IN_PROGRESS) {
+                throw new BusinessException("当前工单状态不允许完成，仅处理中状态的工单可以完成");
+            }
+
+            // 更新维修备注
+            if (repairNotes != null && !repairNotes.isBlank()) {
+                ticket.setRepairNotes(repairNotes);
+            }
+
+            // 更新状态为已处理
+            TicketStatus oldStatus = ticket.getStatus();
+            ticket.setStatus(TicketStatus.RESOLVED);
+            ticket.setCompletedAt(LocalDateTime.now());
+
+            // 记录状态变更日志
+            appendStatusLog(ticket, oldStatus, TicketStatus.RESOLVED, staff);
+
+            // 发送通知
+            notifyStatusChanged(ticket, oldStatus, TicketStatus.RESOLVED, staff);
+
+            log.info("维修工完成工单: ticketId={}, staffId={}", ticketId, staffId);
+            return toDetailDto(ticket);
+
+        } catch (ObjectOptimisticLockingFailureException e) {
+            throw new BusinessException("工单已被其他用户修改，请刷新后重试");
+        }
+    }
+
+    /**
+     * 获取维修工工作台统计数据
+     */
+    @Transactional(readOnly = true)
+    public StaffDashboardDto getStaffDashboard(String staffId) {
+        // 1. 各状态工单数量
+        Long pendingCount = ticketRepository.countByStaffIdAndStatus(staffId, "WAITING_ACCEPT");
+        Long inProgressCount = ticketRepository.countByStaffIdAndStatus(staffId, "IN_PROGRESS");
+        Long completedCount = ticketRepository.countCompletedTasksByStaffId(staffId);
+
+        // 2. 时间维度完成数量
+        Long todayCompleted = ticketRepository.countTodayCompletedByStaffId(staffId);
+        Long weekCompleted = ticketRepository.countWeekCompletedByStaffId(staffId);
+        Long monthCompleted = ticketRepository.countMonthCompletedByStaffId(staffId);
+
+        // 3. 评价统计
+        Object[] ratingStats = ticketRepository.findRatingStatsByStaffId(staffId);
+        Double avgRating = 0.0;
+        Long totalRatingCount = 0L;
+        if (ratingStats != null) {
+            totalRatingCount = ratingStats[0] != null ? ((Number) ratingStats[0]).longValue() : 0L;
+            avgRating = ratingStats[1] != null ? ((Number) ratingStats[1]).doubleValue() : 0.0;
+        }
+
+        // 4. 优先级分布
+        Map<String, Long> priorityDistribution = new HashMap<>();
+        List<Object[]> priorityStats = ticketRepository.findPriorityDistributionByStaffId(staffId);
+        for (Object[] row : priorityStats) {
+            String priority = row[0] != null ? row[0].toString() : "未设置";
+            Long count = row[1] != null ? ((Number) row[1]).longValue() : 0L;
+            priorityDistribution.put(priority, count);
+        }
+
+        // 5. 分类分布
+        Map<String, Long> categoryDistribution = new HashMap<>();
+        List<Object[]> categoryStats = ticketRepository.findCategoryDistributionByStaffId(staffId);
+        for (Object[] row : categoryStats) {
+            String category = row[0] != null ? row[0].toString() : "未分类";
+            Long count = row[1] != null ? ((Number) row[1]).longValue() : 0L;
+            categoryDistribution.put(category, count);
+        }
+
+        // 6. 平均处理时长
+        Double avgProcessingHours = ticketRepository.findAverageProcessingHoursByStaffId(staffId);
+        if (avgProcessingHours == null) {
+            avgProcessingHours = 0.0;
+        }
+
+        return new StaffDashboardDto(
+            pendingCount != null ? pendingCount : 0L,
+            inProgressCount != null ? inProgressCount : 0L,
+            completedCount != null ? completedCount : 0L,
+            todayCompleted != null ? todayCompleted : 0L,
+            weekCompleted != null ? weekCompleted : 0L,
+            monthCompleted != null ? monthCompleted : 0L,
+            avgRating,
+            totalRatingCount,
+            priorityDistribution,
+            categoryDistribution,
+            avgProcessingHours
+        );
+    }
+
+    /**
+     * 分页获取维修工的任务列表
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> listStaffTasksPage(String staffId, TicketStatus status, int page, int size) {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+        org.springframework.data.domain.Page<RepairTicket> ticketPage = ticketRepository.findByStaffIdWithFilter(staffId, status, pageable);
+
+        List<TicketSummaryDto> summaries = ticketPage.getContent().stream()
+            .map(this::toSummaryDto)
+            .collect(Collectors.toList());
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("list", summaries);
+        result.put("total", ticketPage.getTotalElements());
+        result.put("page", page);
+        result.put("pageSize", size);
+        result.put("totalPages", ticketPage.getTotalPages());
+
+        return result;
     }
 }

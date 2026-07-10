@@ -253,4 +253,116 @@ public interface TicketRepository extends JpaRepository<RepairTicket, Long> {
         nativeQuery = true
     )
     Long countCompletedTickets();
+
+    // ==================== 维修工相关统计查询 ====================
+
+    /**
+     * 统计维修工指定状态的工单数量
+     */
+    @Query(
+        value = "SELECT COUNT(*) " +
+                "FROM repair_order " +
+                "WHERE repairman_id = :staffId " +
+                "  AND status = :status " +
+                "  AND (is_deleted IS NULL OR is_deleted = false)",
+        nativeQuery = true
+    )
+    Long countByStaffIdAndStatus(@Param("staffId") String staffId, @Param("status") String status);
+
+    /**
+     * 统计维修工今日完成的工单数量
+     */
+    @Query(
+        value = "SELECT COUNT(*) " +
+                "FROM repair_order " +
+                "WHERE repairman_id = :staffId " +
+                "  AND status IN ('RESOLVED', 'WAITING_FEEDBACK', 'FEEDBACKED', 'CLOSED') " +
+                "  AND DATE(completed_at) = CURDATE() " +
+                "  AND (is_deleted IS NULL OR is_deleted = false)",
+        nativeQuery = true
+    )
+    Long countTodayCompletedByStaffId(@Param("staffId") String staffId);
+
+    /**
+     * 统计维修工本周完成的工单数量
+     */
+    @Query(
+        value = "SELECT COUNT(*) " +
+                "FROM repair_order " +
+                "WHERE repairman_id = :staffId " +
+                "  AND status IN ('RESOLVED', 'WAITING_FEEDBACK', 'FEEDBACKED', 'CLOSED') " +
+                "  AND YEARWEEK(completed_at, 1) = YEARWEEK(CURDATE(), 1) " +
+                "  AND (is_deleted IS NULL OR is_deleted = false)",
+        nativeQuery = true
+    )
+    Long countWeekCompletedByStaffId(@Param("staffId") String staffId);
+
+    /**
+     * 统计维修工本月完成的工单数量
+     */
+    @Query(
+        value = "SELECT COUNT(*) " +
+                "FROM repair_order " +
+                "WHERE repairman_id = :staffId " +
+                "  AND status IN ('RESOLVED', 'WAITING_FEEDBACK', 'FEEDBACKED', 'CLOSED') " +
+                "  AND DATE_FORMAT(completed_at, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m') " +
+                "  AND (is_deleted IS NULL OR is_deleted = false)",
+        nativeQuery = true
+    )
+    Long countMonthCompletedByStaffId(@Param("staffId") String staffId);
+
+    /**
+     * 获取维修工的工单优先级分布
+     */
+    @Query(
+        value = "SELECT priority, COUNT(*) as count " +
+                "FROM repair_order " +
+                "WHERE repairman_id = :staffId " +
+                "  AND (is_deleted IS NULL OR is_deleted = false) " +
+                "GROUP BY priority",
+        nativeQuery = true
+    )
+    List<Object[]> findPriorityDistributionByStaffId(@Param("staffId") String staffId);
+
+    /**
+     * 获取维修工的工单分类分布
+     */
+    @Query(
+        value = "SELECT category_key, COUNT(*) as count " +
+                "FROM repair_order " +
+                "WHERE repairman_id = :staffId " +
+                "  AND (is_deleted IS NULL OR is_deleted = false) " +
+                "GROUP BY category_key",
+        nativeQuery = true
+    )
+    List<Object[]> findCategoryDistributionByStaffId(@Param("staffId") String staffId);
+
+    /**
+     * 获取维修工收到的评价统计
+     */
+    @Query(
+        value = "SELECT COUNT(*) as total_count, COALESCE(AVG(rating), 0) as avg_rating " +
+                "FROM repair_feedback " +
+                "WHERE repairman_id = :staffId",
+        nativeQuery = true
+    )
+    Object[] findRatingStatsByStaffId(@Param("staffId") String staffId);
+
+    /**
+     * 分页查询维修工的工单（支持状态筛选）
+     */
+    @Query(
+        value = "SELECT rt FROM RepairTicket rt WHERE rt.staff.userId = :staffId " +
+                "AND (:status IS NULL OR rt.status = :status) " +
+                "AND (rt.deleted IS NULL OR rt.deleted = false) " +
+                "ORDER BY rt.createdAt DESC",
+        countQuery = "SELECT COUNT(rt) FROM RepairTicket rt WHERE rt.staff.userId = :staffId " +
+                "AND (:status IS NULL OR rt.status = :status) " +
+                "AND (rt.deleted IS NULL OR rt.deleted = false)"
+    )
+    org.springframework.data.domain.Page<RepairTicket> findByStaffIdWithFilter(
+            @Param("staffId") String staffId,
+            @Param("status") TicketStatus status,
+            org.springframework.data.domain.Pageable pageable
+    );
 }

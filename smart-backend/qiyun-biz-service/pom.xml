@@ -17,16 +17,24 @@
     <description>业务服务模块：报修系统的核心业务逻辑</description>
 
     <dependencies>
-        <!-- 内部模块依赖（暂时注释，后续启用）
-        <dependency>
-            <groupId>com.qiyun</groupId>
-            <artifactId>qiyun-common</artifactId>
-        </dependency>
+        <!-- qiyun-feign-api -->
         <dependency>
             <groupId>com.qiyun</groupId>
             <artifactId>qiyun-feign-api</artifactId>
+            <version>${project.version}</version>
         </dependency>
-        -->
+
+        <!-- OpenFeign -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+
+        <!-- Spring Cloud LoadBalancer (Feign 负载均衡必需) -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+        </dependency>
 
         <!-- Spring Boot Web -->
         <dependency>

@@ -22,6 +22,9 @@ public class AiTicketAnalysis {
     @Column(name = "id")
     private Long analysisId;
 
+    @Column(name = "ticket_id")
+    private Long ticketId;  // 关联的工单ID
+
     @Column(name = "source_text", columnDefinition = "TEXT")
     private String sourceText;
 
@@ -36,6 +39,15 @@ public class AiTicketAnalysis {
 
     @Column(name = "priority", length = 20)
     private String priority;
+
+    @Column(name = "urgency", length = 20)
+    private String urgency;  // 紧急程度：紧急/普通/一般
+
+    @Column(name = "suggestion", columnDefinition = "TEXT")
+    private String suggestion;  // AI 维修建议
+
+    @Column(name = "keywords", columnDefinition = "TEXT")
+    private String keywords;  // 关键词（JSON数组格式）
 
     @Column(name = "summary", columnDefinition = "TEXT")
     private String summary;

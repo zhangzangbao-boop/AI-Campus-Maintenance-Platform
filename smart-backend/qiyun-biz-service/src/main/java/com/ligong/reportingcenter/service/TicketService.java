@@ -30,6 +30,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -37,6 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class TicketService {
@@ -51,6 +53,7 @@ public class TicketService {
     private final UserRepository userRepository;
     private final FileStorageService fileStorageService;
     private final SystemConfigService systemConfigService;
+    private final AiAnalysisIntegrationService aiAnalysisIntegrationService;
 
     @Value("${upload.path:./uploads}")
     private String uploadPath;
@@ -95,6 +98,19 @@ public class TicketService {
             }
         }
         ticketRepository.flush();
+
+        // 异步调用 AI 分析（不阻塞主流程）
+        try {
+            aiAnalysisIntegrationService.analyzeAndSave(
+                ticket.getTicketId(),
+                ticket.getDescription(),
+                ticket.getLocationText()
+            );
+        } catch (Exception e) {
+            // AI 分析失败不影响工单创建
+            log.warn("AI 分析调用失败: ticketId={}, error={}", ticket.getTicketId(), e.getMessage());
+        }
+
         notifyAdminsNewTicket(ticket);
         return toDetailDto(ticket);
     }
@@ -140,6 +156,19 @@ public class TicketService {
         }
 
         ticketRepository.flush();
+
+        // 异步调用 AI 分析（不阻塞主流程）
+        try {
+            aiAnalysisIntegrationService.analyzeAndSave(
+                ticket.getTicketId(),
+                ticket.getDescription(),
+                ticket.getLocationText()
+            );
+        } catch (Exception e) {
+            // AI 分析失败不影响工单创建
+            log.warn("AI 分析调用失败: ticketId={}, error={}", ticket.getTicketId(), e.getMessage());
+        }
+
         notifyAdminsNewTicket(ticket);
         return toDetailDto(ticket);
     }

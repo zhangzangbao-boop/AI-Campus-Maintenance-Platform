@@ -452,6 +452,13 @@ const api = {
         body: JSON.stringify(data),
       }),
 
+    // 新增：AI 智能报修分析接口（调用 qiyun-ai-service）
+    analyzeTicketV2: (data) =>
+      request("/ai/analyze-ticket", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
     findSimilarTickets: (data) =>
       request("/ai/ticket/similar", {
         method: "POST",

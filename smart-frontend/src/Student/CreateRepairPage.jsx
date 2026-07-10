@@ -10,12 +10,16 @@ import {
   message,
   List,
   Space,
-  Tag
+  Tag,
+  Modal,
+  Descriptions
 } from 'antd';
 import {
   BulbOutlined,
   ThunderboltOutlined,
-  UploadOutlined
+  UploadOutlined,
+  CheckCircleOutlined,
+  WarningOutlined
 } from '@ant-design/icons';
 import { repairService } from '../services/repairService';
 import api from '../services/api';
@@ -41,6 +45,17 @@ const categoryLabelToValue = CATEGORY_OPTIONS.reduce((map, item) => {
   return map;
 }, {});
 
+// AI 返回的分类名到前端分类值的映射
+const aiCategoryToValueMap = {
+  '空调故障': 'airConditioning',
+  '管道故障': 'waterAndElectricity',
+  '电力故障': 'waterAndElectricity',
+  '网络故障': 'networkIssues',
+  '家具故障': 'furnitureRepair',
+  '门窗故障': 'doorWindowRepair',
+  '其他故障': 'other',
+};
+
 const CreateRepairPage = ({ currentUser, onSubmitSuccess }) => {
   const [form] = Form.useForm();
   const [fileList, setFileList] = useState([]);
@@ -51,6 +66,10 @@ const CreateRepairPage = ({ currentUser, onSubmitSuccess }) => {
   const [similarTickets, setSimilarTickets] = useState([]);
   const [knowledgeRecommendations, setKnowledgeRecommendations] = useState([]);
   const similarTicketTimerRef = useRef(null);
+
+  // AI 分析结果弹窗状态
+  const [aiModalVisible, setAiModalVisible] = useState(false);
+  const [submittedAiResult, setSubmittedAiResult] = useState(null);
 
   // 处理文件上传
   const handleUploadChange = ({ fileList: newFileList }) => {
@@ -64,20 +83,32 @@ const CreateRepairPage = ({ currentUser, onSubmitSuccess }) => {
     }
     setAiLoading(true);
     try {
-      const response = await api.ai.analyzeTicket({ text: aiText });
+      // 调用 qiyun-ai-service 的 AI 分析接口
+      const response = await api.ai.analyzeTicketV2({
+        description: aiText,
+        location: form.getFieldValue('location') || ''
+      });
       const result = response?.data || response;
-      const categoryValue = categoryLabelToValue[result.categoryKey] || categoryLabelToValue[result.categoryName] || 'other';
+
+      // AI 分类名映射到前端分类值
+      const categoryValue = aiCategoryToValueMap[result.category] ||
+                            categoryLabelToValue[result.category] ||
+                            'other';
+
+      // AI 紧急程度映射到前端优先级
+      const urgencyToPriorityMap = {
+        '紧急': 'high',
+        '普通': 'medium',
+        '一般': 'low',
+      };
+      const priorityValue = urgencyToPriorityMap[result.urgency] || 'low';
 
       form.setFieldsValue({
-        title: result.title,
         category: categoryValue,
-        location: result.locationText?.startsWith('请补充') ? undefined : result.locationText,
-        description: result.summary || aiText,
-        priority: result.priority || 'medium',
+        description: aiText,
+        priority: priorityValue,
       });
       setAiResult(result);
-      setSimilarTickets(Array.isArray(result.similarTickets) ? result.similarTickets : []);
-      setKnowledgeRecommendations(Array.isArray(result.knowledgeRecommendations) ? result.knowledgeRecommendations : []);
       message.success('智能识别完成，已自动填写报修表单');
     } catch (error) {
       console.error('智能识别失败:', error);
@@ -125,13 +156,35 @@ const CreateRepairPage = ({ currentUser, onSubmitSuccess }) => {
       };
 
       console.log('提交的报修数据:', orderData);
-      
+
       // 调用服务创建报修
       const newOrder = await repairService.createRepairOrder(orderData, fileList);
       console.log('创建报修成功:', newOrder);
-      
-      message.success('报修申请提交成功！');
-      
+
+      // 尝试调用 AI 分析接口获取分析结果
+      try {
+        const aiResponse = await api.ai.analyzeTicketV2({
+          description: values.description,
+          location: values.location
+        });
+        console.log('AI 分析结果:', aiResponse);
+
+        if (aiResponse?.data) {
+          setSubmittedAiResult(aiResponse.data);
+          setAiModalVisible(true);
+        }
+      } catch (aiError) {
+        console.warn('AI 分析调用失败（不影响报单创建）:', aiError);
+        // AI 分析失败不显示弹窗，直接显示成功消息
+        message.success('报修申请提交成功！');
+      }
+
+      // 如果 AI 分析成功，弹窗中已显示结果
+      // 如果 AI 分析失败，显示普通成功消息
+      if (!submittedAiResult) {
+        message.success('报修申请提交成功！');
+      }
+
       // 重置表单
       form.resetFields();
       setFileList([]);
@@ -139,7 +192,7 @@ const CreateRepairPage = ({ currentUser, onSubmitSuccess }) => {
       setAiResult(null);
       setSimilarTickets([]);
       setKnowledgeRecommendations([]);
-      
+
       // 通知父组件刷新数据
       if (onSubmitSuccess) {
         onSubmitSuccess();
@@ -446,6 +499,72 @@ const CreateRepairPage = ({ currentUser, onSubmitSuccess }) => {
           </Form.Item>
         </Form>
       </Card>
+
+      {/* AI 分析结果弹窗 */}
+      <Modal
+        title={
+          <Space>
+            <CheckCircleOutlined style={{ color: '#52c41a' }} />
+            <span>报修申请提交成功</span>
+          </Space>
+        }
+        open={aiModalVisible}
+        onCancel={() => {
+          setAiModalVisible(false);
+          setSubmittedAiResult(null);
+        }}
+        footer={[
+          <Button key="close" type="primary" onClick={() => {
+            setAiModalVisible(false);
+            setSubmittedAiResult(null);
+          }}>
+            知道了
+          </Button>
+        ]}
+        width={600}
+      >
+        <Alert
+          message="您的报修申请已成功提交，以下是 AI 智能分析结果"
+          type="success"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+
+        {submittedAiResult && (
+          <Descriptions bordered column={1} size="small">
+            <Descriptions.Item label={<strong>故障类型</strong>}>
+              <Tag color="blue">{submittedAiResult.category || '未分类'}</Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label={<strong>紧急程度</strong>}>
+              <Tag color={
+                submittedAiResult.urgency === '紧急' ? 'red' :
+                submittedAiResult.urgency === '普通' ? 'orange' : 'green'
+              }>
+                {submittedAiResult.urgency || '一般'}
+              </Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label={<strong>维修建议</strong>}>
+              {submittedAiResult.suggestion || '暂无建议'}
+            </Descriptions.Item>
+            {submittedAiResult.keywords && submittedAiResult.keywords.length > 0 && (
+              <Descriptions.Item label={<strong>关键词</strong>}>
+                <Space wrap>
+                  {submittedAiResult.keywords.map((keyword, index) => (
+                    <Tag key={index} color="geekblue">{keyword}</Tag>
+                  ))}
+                </Space>
+              </Descriptions.Item>
+            )}
+          </Descriptions>
+        )}
+
+        <Alert
+          message="维修人员将尽快处理您的报修请求，请保持联系方式畅通"
+          type="info"
+          showIcon
+          style={{ marginTop: 16 }}
+        />
+      </Modal>
     </div>
   );
 };

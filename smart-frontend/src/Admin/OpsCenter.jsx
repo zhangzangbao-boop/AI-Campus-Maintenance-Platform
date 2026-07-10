@@ -19,6 +19,7 @@ import {
 } from "antd";
 import { ReloadOutlined, PlusOutlined } from "@ant-design/icons";
 import api from "../services/api";
+import { backupService } from "./backupService";
 
 const categoryOptions = [
   "水电维修",
@@ -58,6 +59,7 @@ const OpsCenter = ({ initialTab = "knowledge" }) => {
             { key: "knowledge", label: "维修知识库", children: <KnowledgeBaseTab /> },
             { key: "transfer", label: "转派审核", children: <TransferRequestTab /> },
             { key: "config", label: "系统配置", children: <SystemConfigTab /> },
+            { key: "backup", label: "数据备份", children: <BackupTab /> },
             { key: "audit", label: "审计日志", children: <AuditLogTab /> },
           ]}
         />
@@ -593,6 +595,159 @@ const AuditLogTab = () => {
           { title: "详情", dataIndex: "detail", key: "detail", ellipsis: true },
           { title: "结果", dataIndex: "success", key: "success", width: 80, render: (value) => <Tag color={value ? "green" : "red"}>{value ? "成功" : "失败"}</Tag> },
         ]}
+      />
+    </>
+  );
+};
+
+const BackupTab = () => {
+  const [loading, setLoading] = useState(false);
+  const [backupList, setBackupList] = useState([]);
+  const [backupStatus, setBackupStatus] = useState(null);
+
+  const loadBackups = async () => {
+    setLoading(true);
+    try {
+      const [list, status] = await Promise.all([
+        backupService.list(),
+        backupService.status().catch(() => null),
+      ]);
+      setBackupList(Array.isArray(list) ? list : []);
+      setBackupStatus(status);
+    } catch (error) {
+      console.error('加载备份列表失败:', error);
+      message.error(`加载备份列表失败：${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadBackups();
+  }, []);
+
+  const handleCreateBackup = async () => {
+    setLoading(true);
+    try {
+      await backupService.create();
+      await loadBackups();
+    } catch (error) {
+      console.error('手动备份失败:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRestore = async (fileName) => {
+    if (!fileName) return;
+    setLoading(true);
+    try {
+      await backupService.restore(fileName);
+      message.success('恢复完成，系统已在恢复前创建保护备份，建议刷新页面并核对数据');
+    } catch (error) {
+      console.error('恢复失败:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteBackup = async (fileName) => {
+    if (!fileName) {
+      message.error('文件名不能为空');
+      return;
+    }
+    setLoading(true);
+    try {
+      await backupService.remove(fileName);
+      await loadBackups();
+    } catch (error) {
+      console.error('删除备份失败:', error);
+      message.error(`删除备份失败: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatSize = (bytes) => {
+    if (!bytes && bytes !== 0) return '-';
+    if (bytes < 1024) return `${bytes} B`;
+    const kb = bytes / 1024;
+    if (kb < 1024) return `${kb.toFixed(1)} KB`;
+    const mb = kb / 1024;
+    return `${mb.toFixed(1)} MB`;
+  };
+
+  return (
+    <>
+      <Space style={{ marginBottom: 12 }} wrap>
+        <Button type="primary" onClick={handleCreateBackup} loading={loading}>
+          立即备份
+        </Button>
+        <Button icon={<ReloadOutlined />} onClick={loadBackups} loading={loading}>
+          刷新列表
+        </Button>
+      </Space>
+
+      {backupStatus && (
+        <Descriptions
+          size="small"
+          bordered
+          column={{ xs: 1, sm: 2, md: 4 }}
+          style={{ marginBottom: 12 }}
+          items={[
+            { key: 'directory', label: '备份目录', children: backupStatus.directory || '-' },
+            { key: 'retentionDays', label: '保留天数', children: `${backupStatus.retentionDays ?? '-'} 天` },
+            { key: 'backupCount', label: '备份数量', children: `${backupStatus.backupCount ?? 0} 个` },
+            { key: 'database', label: '数据库', children: backupStatus.database || 'repairdb' },
+          ]}
+        />
+      )}
+
+      <Table
+        size="small"
+        loading={loading}
+        dataSource={backupList}
+        rowKey={(item) => item.fileName || item.file_path || item.file_name}
+        pagination={{ pageSize: 8 }}
+        columns={[
+          { title: '文件名', dataIndex: 'fileName', key: 'fileName', ellipsis: true },
+          { title: '备份时间', dataIndex: 'backupTime', key: 'backupTime', width: 180, render: (t) => t || '-' },
+          { title: '大小', dataIndex: 'fileSize', key: 'fileSize', width: 100, render: (s) => formatSize(s) },
+          {
+            title: '操作',
+            key: 'action',
+            width: 200,
+            render: (_, record) => (
+              <Space>
+                <Popconfirm
+                  title="确认恢复？"
+                  description="恢复会覆盖当前数据，系统会先自动创建一份保护备份。"
+                  onConfirm={() => handleRestore(record.fileName)}
+                >
+                  <Button size="small" type="primary" danger loading={loading}>
+                    恢复
+                  </Button>
+                </Popconfirm>
+                <Popconfirm
+                  title="确认删除此备份？"
+                  onConfirm={() => handleDeleteBackup(record.fileName)}
+                >
+                  <Button size="small" danger loading={loading}>
+                    删除
+                  </Button>
+                </Popconfirm>
+              </Space>
+            ),
+          },
+        ]}
+        locale={{ emptyText: '暂无备份记录' }}
+      />
+
+      <Alert
+        type="warning"
+        style={{ marginTop: 12 }}
+        message="恢复操作会覆盖当前数据库数据；系统会在恢复前自动创建保护备份。"
+        showIcon
       />
     </>
   );

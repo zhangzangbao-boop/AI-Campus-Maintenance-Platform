@@ -299,6 +299,12 @@ const api = {
       return request(`/users${toQueryString(queryParams)}`);
     },
     
+    createUser: (userData) =>
+      request("/admin/users", {
+        method: "POST",
+        body: JSON.stringify(userData),
+      }),
+
     updateUser: (id, updateRequest) => {
       // 后端需要完整的UserRegisterRequest
       return request(`/admin/users/${id}`, {

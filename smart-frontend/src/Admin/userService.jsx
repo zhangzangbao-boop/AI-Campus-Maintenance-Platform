@@ -87,6 +87,23 @@ export const userService = {
     }
   },
 
+  // 创建用户
+  createUser: async (userData) => {
+    try {
+      const response = await api.admin.createUser(userData);
+      if (response && response.userId) {
+        message.success('用户创建成功');
+        return response;
+      } else {
+        throw new Error(response?.message || '创建用户失败：响应格式不正确');
+      }
+    } catch (error) {
+      console.error('创建用户失败:', error);
+      message.error('创建用户失败: ' + (error.message || '未知错误'));
+      throw error;
+    }
+  },
+
   // 更新用户信息
   updateUser: async (userId, userData) => {
     try {

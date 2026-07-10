@@ -20,6 +20,7 @@ import {
 import RepairOrderList from "./RepairOrderList";
 import UserManagement from "./UserManagement";
 import DataAnalysis from "./DataAnalysis";
+import AdminAnalysis from "./AdminAnalysis";
 import FeedbackManagement from "./FeedbackManagement";
 import OpsCenter from "./OpsCenter";
 import PersonalInfoEd from "../services/PersonalInfoEd";
@@ -193,6 +194,7 @@ const AdminHome = () => {
         { key: "command-center", icon: <DashboardOutlined />, label: "运营指挥台" },
         { key: "order-management", icon: <FileTextOutlined />, label: "工单池" },
         { key: "data-analysis", icon: <BarChartOutlined />, label: "图表分析" },
+        { key: "admin-analysis", icon: <PieChartOutlined />, label: "智慧分析" },
       ],
     },
     {
@@ -300,6 +302,7 @@ const AdminHome = () => {
 
     if (currentMenu === "feedback-management") return <FeedbackManagement />;
     if (currentMenu === "data-analysis") return <DataAnalysis />;
+    if (currentMenu === "admin-analysis") return <AdminAnalysis />;
     if (currentMenu === "ops-center") return <OpsCenter initialTab="knowledge" />;
     if (currentMenu === "system-config") return <OpsCenter initialTab="config" />;
     return null;

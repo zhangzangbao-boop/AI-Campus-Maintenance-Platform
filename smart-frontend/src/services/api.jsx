@@ -401,6 +401,21 @@ const api = {
       request(`/admin/backup/${encodeURIComponent(fileName)}`, {
         method: "DELETE",
       }),
+
+    // 智慧分析接口（组员二新增）
+    getAnalysisDashboard: () => request("/admin/analysis/dashboard"),
+
+    getAnalysisEfficiency: () => request("/admin/analysis/efficiency"),
+
+    getAnalysisProgressTracking: () => request("/admin/analysis/progress-tracking"),
+
+    aiEnhance: (data) =>
+      request("/admin/analysis/ai-enhance", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    getAiStatus: () => request("/admin/analysis/ai-status"),
   },
 
   notifications: {

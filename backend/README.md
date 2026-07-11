@@ -171,7 +171,7 @@ ai:
   model: ${DEEPSEEK_MODEL:deepseek-v4-flash}
 
 jwt:
-  secret: ${JWT_SECRET:mySecretKeyForCampusMaintenanceSystem123456}
+  secret: ${JWT_SECRET:}
   expiration-ms: ${JWT_EXPIRATION_MS:604800000}
 ```
 

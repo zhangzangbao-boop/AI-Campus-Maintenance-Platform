@@ -8,8 +8,8 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: 127.0.0.1:8848
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
 
 # AI 服务配置（后续接入时完善）
 ai:
-  enabled: false
+  enabled: ${AI_ENABLED:false}

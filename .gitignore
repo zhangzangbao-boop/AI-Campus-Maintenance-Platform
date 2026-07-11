@@ -1,11 +1,36 @@
+# ========================================
+# AI Campus Maintenance Platform - Git Ignore
+# ========================================
+
+# Environment Variables (IMPORTANT: Never commit real secrets!)
+.env
+.env.*
+!.env.example
+
+# Local secret configurations
+application-local.yml
+application-secret.yml
+**/application-local.yml
+**/application-secret.yml
+
+# ========================================
 # Backend (Java/Maven)
+# ========================================
 backend/target/
 backend/.idea/
 backend/*.iml
 backend/*.log
 backend/backups/
+backend/logs/
 
+smart-backend/**/target/
+smart-backend/**/backups/
+smart-backend/**/*.log
+smart-backend/**/logs/
+
+# ========================================
 # Frontend (React/Node)
+# ========================================
 frontend/node_modules/
 frontend/dist/
 frontend/.env
@@ -17,33 +42,6 @@ frontend/npm-debug.log*
 frontend/yarn-debug.log*
 frontend/yarn-error.log*
 
-# IDE
-.idea/
-.vscode/
-*.iml
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-logs/
-
-# Temporary
-*.tmp
-*.bak
-*.swp
-*~
-
-# Claude Code
-.claude/
-
-.claude/
-.codex_tmp/
-.cursor/
-
-# Smart frontend
 smart-frontend/node_modules/
 smart-frontend/dist/
 smart-frontend/.env
@@ -55,7 +53,66 @@ smart-frontend/npm-debug.log*
 smart-frontend/yarn-debug.log*
 smart-frontend/yarn-error.log*
 
-# Smart backend
-smart-backend/**/target/
-smart-backend/**/backups/
-smart-backend/**/*.log
+# ========================================
+# IDE
+# ========================================
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+
+# ========================================
+# OS Generated Files
+# ========================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ========================================
+# Logs
+# ========================================
+*.log
+logs/
+**/logs/
+
+# ========================================
+# Temporary Files
+# ========================================
+*.tmp
+*.bak
+*.swp
+*~
+*.cache
+
+# ========================================
+# Build Outputs
+# ========================================
+build/
+out/
+bin/
+*.class
+*.jar
+*.war
+
+# ========================================
+# Claude Code / AI Tools
+# ========================================
+.claude/
+.codex_tmp/
+.cursor/
+
+# ========================================
+# Database Backups
+# ========================================
+*.sql.bak
+*.sql.gz
+db-backups/

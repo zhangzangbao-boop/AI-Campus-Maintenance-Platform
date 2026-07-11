@@ -20,7 +20,7 @@ public class JwtUtil {
     private final long tokenValidityMs;
 
     public JwtUtil(
-            @Value("${jwt.secret:mySecretKeyForCampusMaintenanceSystem123456}") String secret,
+            @Value("${jwt.secret:}") String secret,
             @Value("${jwt.expiration-ms:604800000}") long tokenValidityMs) {
         this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.tokenValidityMs = tokenValidityMs;

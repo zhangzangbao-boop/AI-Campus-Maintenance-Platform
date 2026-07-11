@@ -3,9 +3,9 @@ server:
 
 spring:
   datasource:
-    url: jdbc:mysql://127.0.0.1:3306/repairdb?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=UTF-8&allowPublicKeyRetrieval=true&useSSL=false
-    username: root
-    password: 123456
+    url: ${DB_URL:jdbc:mysql://127.0.0.1:3306/repairdb?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=UTF-8&allowPublicKeyRetrieval=true&useSSL=false}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       connection-timeout: 30000
@@ -36,15 +36,15 @@ backup:
   cron: "0 30 2 * * ?"
 
 jwt:
-  secret: mySecretKeyForCampusMaintenanceSystem123456
-  expiration-ms: 604800000
+  secret: ${JWT_SECRET:}
+  expiration-ms: ${JWT_EXPIRATION_MS:604800000}
 
 ai:
-  enabled: true
-  provider: deepseek
-  base-url: https://api.deepseek.com
-  api-key: sk-fca211fc980749d8acb54489dfd706e0
-  model: deepseek-chat
-  timeout-seconds: 20
+  enabled: ${AI_ENABLED:false}
+  provider: ${AI_PROVIDER:deepseek}
+  base-url: ${AI_BASE_URL:https://api.deepseek.com}
+  api-key: ${DEEPSEEK_API_KEY:}
+  model: ${AI_MODEL:deepseek-chat}
+  timeout-seconds: ${AI_TIMEOUT_SECONDS:20}
   thinking:
     enabled: false

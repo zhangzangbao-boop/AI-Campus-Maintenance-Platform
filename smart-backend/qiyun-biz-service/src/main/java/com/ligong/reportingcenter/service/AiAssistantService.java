@@ -12,7 +12,7 @@ import com.ligong.reportingcenter.dto.request.AiKnowledgeDraftRequest;
 import com.ligong.reportingcenter.dto.request.AiTicketAnalyzeRequest;
 import com.ligong.reportingcenter.dto.request.KnowledgeBaseRequest;
 import com.ligong.reportingcenter.dto.request.SimilarTicketRequest;
-import com.ligong.reportingcenter.exception.BusinessException;
+import com.qiyun.common.exception.BusinessException;
 import com.ligong.reportingcenter.repository.AiTicketAnalysisRepository;
 import com.ligong.reportingcenter.repository.RatingRepository;
 import com.ligong.reportingcenter.repository.TicketRepository;

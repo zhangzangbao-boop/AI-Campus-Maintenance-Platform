@@ -1,7 +1,7 @@
 package com.ligong.reportingcenter.service;
 
 import com.ligong.reportingcenter.dto.BackupDto;
-import com.ligong.reportingcenter.exception.BusinessException;
+import com.qiyun.common.exception.BusinessException;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;

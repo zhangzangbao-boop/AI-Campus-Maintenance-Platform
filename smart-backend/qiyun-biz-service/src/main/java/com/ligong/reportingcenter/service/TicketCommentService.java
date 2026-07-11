@@ -8,7 +8,7 @@ import com.ligong.reportingcenter.domain.enums.TicketStatus;
 import com.ligong.reportingcenter.domain.enums.UserRole;
 import com.ligong.reportingcenter.dto.TicketCommentDto;
 import com.ligong.reportingcenter.dto.request.TicketCommentRequest;
-import com.ligong.reportingcenter.exception.BusinessException;
+import com.qiyun.common.exception.BusinessException;
 import com.ligong.reportingcenter.repository.TicketCommentRepository;
 import com.ligong.reportingcenter.repository.TicketRepository;
 import java.time.LocalDateTime;

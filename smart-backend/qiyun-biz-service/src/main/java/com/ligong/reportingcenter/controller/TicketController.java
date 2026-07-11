@@ -12,7 +12,7 @@ import com.ligong.reportingcenter.dto.request.TicketAssignRequest;
 import com.ligong.reportingcenter.dto.request.TicketCreateRequest;
 import com.ligong.reportingcenter.dto.request.TicketRatingRequest;
 import com.ligong.reportingcenter.dto.request.TicketStatusUpdateRequest;
-import com.ligong.reportingcenter.exception.BusinessException;
+import com.qiyun.common.exception.BusinessException;
 import com.ligong.reportingcenter.service.RepairProcessRecordService;
 import com.ligong.reportingcenter.service.TicketService;
 import jakarta.validation.Valid;

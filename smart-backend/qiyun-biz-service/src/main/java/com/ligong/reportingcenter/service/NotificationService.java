@@ -5,7 +5,7 @@ import com.ligong.reportingcenter.domain.entity.RepairTicket;
 import com.ligong.reportingcenter.domain.entity.User;
 import com.ligong.reportingcenter.domain.enums.UserRole;
 import com.ligong.reportingcenter.dto.NotificationDto;
-import com.ligong.reportingcenter.exception.BusinessException;
+import com.qiyun.common.exception.BusinessException;
 import com.ligong.reportingcenter.repository.NotificationRepository;
 import com.ligong.reportingcenter.repository.UserRepository;
 import java.time.LocalDateTime;

@@ -17,6 +17,13 @@
     <description>业务服务模块：报修系统的核心业务逻辑</description>
 
     <dependencies>
+        <!-- qiyun-common -->
+        <dependency>
+            <groupId>com.qiyun</groupId>
+            <artifactId>qiyun-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- qiyun-feign-api -->
         <dependency>
             <groupId>com.qiyun</groupId>

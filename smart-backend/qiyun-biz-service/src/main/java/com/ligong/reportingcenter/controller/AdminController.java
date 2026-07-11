@@ -11,7 +11,7 @@ import com.ligong.reportingcenter.service.RatingService;
 import com.ligong.reportingcenter.service.CategoryService;
 import com.ligong.reportingcenter.service.AuditLogService;
 import com.ligong.reportingcenter.domain.enums.TicketStatus;
-import com.ligong.reportingcenter.exception.BusinessException;
+import com.qiyun.common.exception.BusinessException;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;

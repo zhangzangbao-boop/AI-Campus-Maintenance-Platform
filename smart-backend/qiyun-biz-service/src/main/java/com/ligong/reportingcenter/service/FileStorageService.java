@@ -1,6 +1,6 @@
 package com.ligong.reportingcenter.service;
 
-import com.ligong.reportingcenter.exception.BusinessException;
+import com.qiyun.common.exception.BusinessException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

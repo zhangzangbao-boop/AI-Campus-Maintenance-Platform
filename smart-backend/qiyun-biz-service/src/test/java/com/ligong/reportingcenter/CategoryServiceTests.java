@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ligong.reportingcenter.domain.entity.Category;
 import com.ligong.reportingcenter.dto.CategoryDto;
-import com.ligong.reportingcenter.exception.BusinessException;
+import com.qiyun.common.exception.BusinessException;
 import com.ligong.reportingcenter.service.CategoryService;
 import java.util.List;
 import java.util.UUID;

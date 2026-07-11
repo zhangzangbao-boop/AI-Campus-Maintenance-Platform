@@ -4,7 +4,7 @@ import com.ligong.reportingcenter.domain.enums.UserRole;
 import com.ligong.reportingcenter.dto.UserDto;
 import com.ligong.reportingcenter.dto.request.ChangePasswordRequest;
 import com.ligong.reportingcenter.dto.request.UserUpdateRequest;
-import com.ligong.reportingcenter.exception.BusinessException;
+import com.qiyun.common.exception.BusinessException;
 import com.ligong.reportingcenter.service.UserService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;

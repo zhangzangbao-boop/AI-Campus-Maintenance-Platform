@@ -14,7 +14,7 @@ import com.ligong.reportingcenter.dto.request.TicketImageRequest;
 import com.ligong.reportingcenter.dto.request.TicketRatingRequest;
 import com.ligong.reportingcenter.dto.request.TicketStatusUpdateRequest;
 import com.ligong.reportingcenter.dto.request.UserRegisterRequest;
-import com.ligong.reportingcenter.exception.BusinessException;
+import com.qiyun.common.exception.BusinessException;
 import com.ligong.reportingcenter.service.AiAnalysisIntegrationService;
 import com.ligong.reportingcenter.service.CategoryService;
 import com.ligong.reportingcenter.service.TicketService;

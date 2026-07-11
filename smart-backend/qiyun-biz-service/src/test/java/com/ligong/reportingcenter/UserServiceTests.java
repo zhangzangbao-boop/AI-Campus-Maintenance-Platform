@@ -7,7 +7,7 @@ import com.ligong.reportingcenter.domain.enums.UserRole;
 import com.ligong.reportingcenter.dto.request.LoginRequest;
 import com.ligong.reportingcenter.dto.request.UserRegisterRequest;
 import com.ligong.reportingcenter.dto.response.AuthResponse;
-import com.ligong.reportingcenter.exception.BusinessException;
+import com.qiyun.common.exception.BusinessException;
 import com.ligong.reportingcenter.service.UserService;
 import java.util.List;
 import org.junit.jupiter.api.Test;

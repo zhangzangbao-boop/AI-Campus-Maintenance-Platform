@@ -2,7 +2,7 @@ package com.ligong.reportingcenter.service;
 
 import com.ligong.reportingcenter.domain.entity.Category;
 import com.ligong.reportingcenter.dto.CategoryDto;
-import com.ligong.reportingcenter.exception.BusinessException;
+import com.qiyun.common.exception.BusinessException;
 import com.ligong.reportingcenter.repository.CategoryRepository;
 import java.util.List;
 import java.util.stream.Collectors;

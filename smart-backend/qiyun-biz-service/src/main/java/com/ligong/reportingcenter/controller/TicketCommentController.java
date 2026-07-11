@@ -3,7 +3,7 @@ package com.ligong.reportingcenter.controller;
 import com.ligong.reportingcenter.domain.enums.TicketCommentType;
 import com.ligong.reportingcenter.dto.TicketCommentDto;
 import com.ligong.reportingcenter.dto.request.TicketCommentRequest;
-import com.ligong.reportingcenter.exception.BusinessException;
+import com.qiyun.common.exception.BusinessException;
 import com.ligong.reportingcenter.service.TicketCommentService;
 import jakarta.validation.Valid;
 import java.util.HashMap;

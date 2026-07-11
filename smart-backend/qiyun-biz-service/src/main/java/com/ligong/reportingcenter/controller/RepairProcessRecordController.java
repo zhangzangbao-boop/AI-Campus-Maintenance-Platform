@@ -2,7 +2,7 @@ package com.ligong.reportingcenter.controller;
 
 import com.ligong.reportingcenter.dto.RepairProcessRecordDto;
 import com.ligong.reportingcenter.dto.request.RepairProcessRecordRequest;
-import com.ligong.reportingcenter.exception.BusinessException;
+import com.qiyun.common.exception.BusinessException;
 import com.ligong.reportingcenter.service.RepairProcessRecordService;
 import jakarta.validation.Valid;
 import java.util.HashMap;

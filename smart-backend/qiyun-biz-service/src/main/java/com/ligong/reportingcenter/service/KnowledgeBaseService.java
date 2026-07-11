@@ -4,7 +4,7 @@ import com.ligong.reportingcenter.domain.entity.Category;
 import com.ligong.reportingcenter.domain.entity.KnowledgeBase;
 import com.ligong.reportingcenter.dto.KnowledgeBaseDto;
 import com.ligong.reportingcenter.dto.request.KnowledgeBaseRequest;
-import com.ligong.reportingcenter.exception.BusinessException;
+import com.qiyun.common.exception.BusinessException;
 import com.ligong.reportingcenter.repository.KnowledgeBaseRepository;
 import java.util.Comparator;
 import java.util.List;

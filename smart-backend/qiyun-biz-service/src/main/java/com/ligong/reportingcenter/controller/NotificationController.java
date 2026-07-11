@@ -1,7 +1,7 @@
 package com.ligong.reportingcenter.controller;
 
 import com.ligong.reportingcenter.dto.NotificationDto;
-import com.ligong.reportingcenter.exception.BusinessException;
+import com.qiyun.common.exception.BusinessException;
 import com.ligong.reportingcenter.service.NotificationService;
 import java.util.HashMap;
 import java.util.List;

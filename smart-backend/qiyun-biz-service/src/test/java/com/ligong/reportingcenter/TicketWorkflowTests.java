@@ -9,7 +9,7 @@ import com.ligong.reportingcenter.dto.CategoryDto;
 import com.ligong.reportingcenter.dto.TicketDetailDto;
 import com.ligong.reportingcenter.dto.request.TicketCreateRequest;
 import com.ligong.reportingcenter.dto.request.UserRegisterRequest;
-import com.ligong.reportingcenter.exception.BusinessException;
+import com.qiyun.common.exception.BusinessException;
 import com.ligong.reportingcenter.service.AiAnalysisIntegrationService;
 import com.ligong.reportingcenter.service.CategoryService;
 import com.ligong.reportingcenter.service.TicketService;

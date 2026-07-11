@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Row, Col, Card, Table, Tag, Skeleton, Statistic, Alert, Button, Space, Popconfirm, message, Descriptions } from 'antd';
+import { Row, Col, Card, Table, Tag, Skeleton, Statistic, Alert, Button, Space, message } from 'antd';
 import { Line } from '@ant-design/charts';
 import { ReloadOutlined } from '@ant-design/icons';
 import { statisticsService } from './statisticsService';
 import { TASK_STATUS } from '../Worker/mytaskService';
-import { backupService } from './backupService';
 
 const chartColors = ['#0f62fe', '#00c2d1', '#7c3aed', '#16a34a', '#f59e0b', '#ef4444', '#64748b'];
 
@@ -56,9 +55,6 @@ const DataAnalysis = () => {
     userSatisfaction: '暂无数据'
   });
   const [loading, setLoading] = useState(true);
-  const [backupLoading, setBackupLoading] = useState(false);
-  const [backupList, setBackupList] = useState([]);
-  const [backupStatus, setBackupStatus] = useState(null);
   const [lastUpdateTime, setLastUpdateTime] = useState(null); // 新增：记录最后更新时间
 
   // 加载统计数据 - 使用 useCallback 包装
@@ -132,72 +128,11 @@ const DataAnalysis = () => {
     }
   }, []);
 
-  const loadBackups = async () => {
-    setBackupLoading(true);
-    try {
-      const [list, status] = await Promise.all([
-        backupService.list(),
-        backupService.status().catch(() => null),
-      ]);
-      setBackupList(Array.isArray(list) ? list : []);
-      setBackupStatus(status);
-    } catch (error) {
-      console.error('加载备份列表失败:', error);
-    } finally {
-      setBackupLoading(false);
-    }
-  };
-
-  const handleCreateBackup = async () => {
-    setBackupLoading(true);
-    try {
-      await backupService.create();
-      await loadBackups();
-    } catch (error) {
-      console.error('手动备份失败:', error);
-    } finally {
-      setBackupLoading(false);
-    }
-  };
-
-  const handleRestore = async (fileName) => {
-    if (!fileName) return;
-    setBackupLoading(true);
-    try {
-      await backupService.restore(fileName);
-      message.success('恢复完成，系统已在恢复前创建保护备份，建议刷新页面并核对数据');
-    } catch (error) {
-      console.error('恢复失败:', error);
-    } finally {
-      setBackupLoading(false);
-    }
-  };
-
-  const handleDelete = async (fileName) => {
-    if (!fileName) {
-      message.error('文件名不能为空');
-      return;
-    }
-
-    setBackupLoading(true);
-
-    try {
-      await backupService.remove(fileName);
-      await loadBackups();
-    } catch (error) {
-      console.error('删除备份失败:', error);
-      message.error(`删除备份失败: ${error.message}`);
-    } finally {
-      setBackupLoading(false);
-    }
-  };
-
   useEffect(() => {
     console.log('========================================');
     console.log('管理员端数据统计 - 组件初始化');
     console.log('========================================');
     loadStatistics();
-    loadBackups();
   }, [loadStatistics]);
 
   // 添加轮询刷新，每30秒刷新一次统计数据
@@ -281,82 +216,6 @@ const DataAnalysis = () => {
         </Space>
       </div>
 
-      {/* 备份与恢复 */}
-      <Card
-        size="small"
-        title="数据备份与恢复"
-        style={{ marginBottom: 16 }}
-        extra={
-          <Space>
-            <Button type="primary" onClick={handleCreateBackup} loading={backupLoading}>
-              立即备份
-            </Button>
-            <Button onClick={loadBackups} loading={backupLoading}>
-              刷新列表
-            </Button>
-          </Space>
-        }
-        >
-        {backupStatus && (
-          <Descriptions
-            size="small"
-            column={{ xs: 1, sm: 2, md: 4 }}
-            style={{ marginBottom: 12 }}
-            items={[
-              { key: 'directory', label: '备份目录', children: backupStatus.directory || '-' },
-              { key: 'retentionDays', label: '保留天数', children: `${backupStatus.retentionDays ?? '-'} 天` },
-              { key: 'backupCount', label: '备份数量', children: `${backupStatus.backupCount ?? 0} 个` },
-              { key: 'database', label: '数据库', children: backupStatus.database || 'repairdb' },
-            ]}
-          />
-        )}
-        <Table
-          size="small"
-          loading={backupLoading}
-          dataSource={backupList}
-          rowKey={(item) => item.fileName || item.file_path || item.file_name}
-          pagination={{ pageSize: 5 }}
-          columns={[
-            { title: '文件名', dataIndex: 'fileName', key: 'fileName', ellipsis: true },
-            { title: '备份时间', dataIndex: 'backupTime', key: 'backupTime', render: (t) => t || '-' },
-            { title: '大小', dataIndex: 'fileSize', key: 'fileSize', render: (s) => formatSize(s) },
-            {
-              title: '操作',
-              key: 'action',
-              width: 200,
-              render: (_, record) => (
-                <Space>
-                  <Popconfirm
-                    title="确认恢复？"
-                    description="恢复会覆盖当前数据，系统会先自动创建一份保护备份。"
-                    onConfirm={() => handleRestore(record.fileName)}
-                  >
-                    <Button size="small" type="primary" danger loading={backupLoading}>
-                      恢复
-                    </Button>
-                  </Popconfirm>
-                  <Popconfirm
-                    title="确认删除此备份？"
-                    onConfirm={() => handleDelete(record.fileName)}
-                  >
-                    <Button size="small" danger loading={backupLoading}>
-                      删除
-                    </Button>
-                  </Popconfirm>
-                </Space>
-              ),
-            },
-          ]}
-          locale={{ emptyText: '暂无备份记录' }}
-        />
-        <Alert
-          type="warning"
-          style={{ marginTop: 12 }}
-          message="恢复操作会覆盖当前数据库数据；系统会在恢复前自动创建保护备份。"
-          showIcon
-        />
-      </Card>
-      
       {/* 统计摘要 */}
       <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
         <Col xs={24} sm={8}>
@@ -1077,15 +936,6 @@ const RepairmanRatingTable = ({ data }) => {
   ) : (
     <div style={{ textAlign: 'center', padding: '50px 0', color: '#999' }}>暂无数据</div>
   );
-};
-
-const formatSize = (bytes) => {
-  if (!bytes && bytes !== 0) return '-';
-  if (bytes < 1024) return `${bytes} B`;
-  const kb = bytes / 1024;
-  if (kb < 1024) return `${kb.toFixed(1)} KB`;
-  const mb = kb / 1024;
-  return `${mb.toFixed(1)} MB`;
 };
 
 export default DataAnalysis;

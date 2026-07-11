@@ -3,7 +3,7 @@ import { Card, Table, Space, Select, Row, Col, Statistic, Tag,
   Button, Modal, Form, Input, message, Popconfirm
 } from 'antd';
 import { UserOutlined, ToolOutlined, TeamOutlined, PhoneOutlined,
-  EditOutlined, DeleteOutlined, KeyOutlined, SearchOutlined
+  EditOutlined, DeleteOutlined, KeyOutlined, SearchOutlined, PlusOutlined
  } from '@ant-design/icons';
 import { userService } from './userService';
 
@@ -13,8 +13,10 @@ const UserManagement = () => {
   const [currentUserType, setCurrentUserType] = useState('students');
   const [loading, setLoading] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [form] = Form.useForm();
+  const [createForm] = Form.useForm();
 
   // 状态管理
   const [studentAccounts, setStudentAccounts] = useState([]);
@@ -91,6 +93,37 @@ const UserManagement = () => {
     } catch (error) {
       console.error('重置密码失败:', error);
     }
+  };
+
+  // 新增用户
+  const handleCreate = async () => {
+    try {
+      const values = await createForm.validateFields();
+      const role = currentUserType === 'students' ? 'STUDENT' : 'STAFF';
+      await userService.createUser({
+        userId: values.userId,
+        password: values.password,
+        nickname: values.name,
+        contactPhone: values.phone || '',
+        role: role,
+      });
+      setCreateModalVisible(false);
+      createForm.resetFields();
+      // 重新加载数据
+      if (currentUserType === 'students') {
+        loadStudents();
+      } else {
+        loadRepairmen();
+      }
+    } catch (error) {
+      console.error('创建用户失败:', error);
+    }
+  };
+
+  // 取消新增
+  const handleCancelCreate = () => {
+    setCreateModalVisible(false);
+    createForm.resetFields();
   };
 
   // 修改数据：打开编辑模态框
@@ -278,11 +311,20 @@ const UserManagement = () => {
   ];
 
   return (
-    <div>
-      <h2>用户管理</h2>
-      
+    <div className="analytics-page">
+      <div className="analytics-header">
+        <div>
+          <div className="page-hero-eyebrow">平台管理</div>
+          <h2>用户管理</h2>
+          <p>管理学生和维修人员的账号信息，支持创建、编辑、重置密码和禁用操作。</p>
+        </div>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => { createForm.resetFields(); setCreateModalVisible(true); }}>
+          新增用户
+        </Button>
+      </div>
+
       {/* 统计信息 */}
-      <Row gutter={16} style={{ marginBottom: '16px' }}>
+      <Row gutter={16}>
         <Col span={8}>
           <Card>
             <Statistic
@@ -318,6 +360,7 @@ const UserManagement = () => {
       {/* 用户类型选择和表格 */}
       <Card 
         title={getCurrentTitle()}
+        style={{ marginTop: 16 }}
       >
         <Row gutter={12} style={{ marginBottom: 16, alignItems: 'center' }}>
           <Col>
@@ -402,6 +445,64 @@ const UserManagement = () => {
           size="middle"
         />
       </Card>
+
+      {/* 新增用户模态框 */}
+      <Modal
+        title={`新增${currentUserType === 'students' ? '学生' : '维修人员'}账号`}
+        open={createModalVisible}
+        onOk={handleCreate}
+        onCancel={handleCancelCreate}
+        okText="创建"
+        cancelText="取消"
+      >
+        <Form
+          form={createForm}
+          layout="vertical"
+          autoComplete="off"
+        >
+          <Form.Item
+            label={currentUserType === 'students' ? '学号' : '工号'}
+            name="userId"
+            rules={[
+              { required: true, message: `请输入${currentUserType === 'students' ? '学号' : '工号'}` },
+              { min: 3, message: '至少3个字符' },
+            ]}
+          >
+            <Input placeholder={`请输入${currentUserType === 'students' ? '学号' : '工号'}`} />
+          </Form.Item>
+
+          <Form.Item
+            label="姓名"
+            name="name"
+            rules={[
+              { required: true, message: '请输入姓名' },
+            ]}
+          >
+            <Input placeholder="请输入姓名" />
+          </Form.Item>
+
+          <Form.Item
+            label="登录密码"
+            name="password"
+            rules={[
+              { required: true, message: '请输入登录密码' },
+              { min: 6, message: '密码至少6个字符' },
+            ]}
+          >
+            <Input.Password placeholder="请输入登录密码" />
+          </Form.Item>
+          
+          <Form.Item
+            label="联系电话"
+            name="phone"
+            rules={[
+              { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号码' },
+            ]}
+          >
+            <Input placeholder="请输入联系电话（选填）" />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       {/* 编辑用户模态框 */}
       <Modal

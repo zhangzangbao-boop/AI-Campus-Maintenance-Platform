@@ -12,7 +12,6 @@ import {
   PieChartOutlined,
   ReloadOutlined,
   RobotOutlined,
-  SettingOutlined,
   StarOutlined,
   TeamOutlined,
   UserSwitchOutlined,
@@ -20,6 +19,7 @@ import {
 import RepairOrderList from "./RepairOrderList";
 import UserManagement from "./UserManagement";
 import DataAnalysis from "./DataAnalysis";
+import AdminAnalysis from "./AdminAnalysis";
 import FeedbackManagement from "./FeedbackManagement";
 import OpsCenter from "./OpsCenter";
 import PersonalInfoEd from "../services/PersonalInfoEd";
@@ -192,7 +192,15 @@ const AdminHome = () => {
       children: [
         { key: "command-center", icon: <DashboardOutlined />, label: "运营指挥台" },
         { key: "order-management", icon: <FileTextOutlined />, label: "工单池" },
+      ],
+    },
+    {
+      key: "analytics",
+      label: "数据分析",
+      type: "group",
+      children: [
         { key: "data-analysis", icon: <BarChartOutlined />, label: "图表分析" },
+        { key: "admin-analysis", icon: <PieChartOutlined />, label: "智慧分析" },
       ],
     },
     {
@@ -210,7 +218,6 @@ const AdminHome = () => {
       label: "系统设置",
       type: "group",
       children: [
-        { key: "system-config", icon: <SettingOutlined />, label: "系统配置" },
         { key: "profile", icon: <EditOutlined />, label: "个人资料" },
       ],
     },
@@ -300,8 +307,8 @@ const AdminHome = () => {
 
     if (currentMenu === "feedback-management") return <FeedbackManagement />;
     if (currentMenu === "data-analysis") return <DataAnalysis />;
+    if (currentMenu === "admin-analysis") return <AdminAnalysis />;
     if (currentMenu === "ops-center") return <OpsCenter initialTab="knowledge" />;
-    if (currentMenu === "system-config") return <OpsCenter initialTab="config" />;
     return null;
   };
 

@@ -189,11 +189,17 @@ const FeedbackManagement = () => {
   const highRatings = feedbacks.filter(f => f.rating >= 4).length;
 
   return (
-    <div style={{ padding: '16px' }}>
-      <h2>评价管理</h2>
+    <div className="analytics-page">
+      <div className="analytics-header">
+        <div>
+          <div className="page-hero-eyebrow">平台管理</div>
+          <h2>评价管理</h2>
+          <p>查看和管理学生对维修服务的评价反馈，支持删除不当评价。</p>
+        </div>
+      </div>
       
       {/* 统计信息 */}
-      <Row gutter={16} style={{ marginBottom: '24px' }}>
+      <Row gutter={16}>
         <Col xs={24} sm={6}>
           <Card size="small">
             <Statistic
@@ -237,23 +243,21 @@ const FeedbackManagement = () => {
       </Row>
 
       {/* 评价列表 */}
-      {loading ? (
-        <Card>
+      <Card title="评价列表" style={{ marginTop: 16 }}>
+        {loading ? (
           <div style={{ textAlign: 'center', padding: '40px 0' }}>
             <span>加载评价数据中...</span>
           </div>
-        </Card>
-      ) : feedbacks.length === 0 ? (
-        <Card>
+        ) : feedbacks.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
             暂无评价数据
           </div>
-        </Card>
-      ) : (
-        <div>
-          {feedbacks.map(renderFeedbackCard)}
-        </div>
-      )}
+        ) : (
+          <div>
+            {feedbacks.map(renderFeedbackCard)}
+          </div>
+        )}
+      </Card>
     </div>
   );
 };

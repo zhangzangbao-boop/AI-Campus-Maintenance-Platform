@@ -5,6 +5,7 @@ import com.ligong.reportingcenter.domain.entity.RepairTicket;
 import com.ligong.reportingcenter.domain.entity.User;
 import com.ligong.reportingcenter.domain.entity.Rating;
 import com.ligong.reportingcenter.domain.enums.TicketStatus;
+import java.time.LocalDateTime;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -270,8 +271,31 @@ public interface TicketRepository extends JpaRepository<RepairTicket, Long> {
     Long countByStaffIdAndStatus(@Param("staffId") String staffId, @Param("status") String status);
 
     /**
-     * 统计维修工今日完成的工单数量
+     * 统计维修工在指定时间范围内完成的工单数量（数据库无关）
+     * 使用左闭右开区间 [start, end)
+     *
+     * @param staffId 维修工ID
+     * @param start 开始时间（包含）
+     * @param end 结束时间（不包含）
+     * @return 完成的工单数量
      */
+    @Query("SELECT COUNT(rt) FROM RepairTicket rt " +
+           "WHERE rt.staff.userId = :staffId " +
+           "  AND rt.status IN ('RESOLVED', 'WAITING_FEEDBACK', 'FEEDBACKED', 'CLOSED') " +
+           "  AND rt.completedAt >= :start " +
+           "  AND rt.completedAt < :end " +
+           "  AND rt.completedAt IS NOT NULL " +
+           "  AND (rt.deleted IS NULL OR rt.deleted = false)")
+    Long countCompletedByStaffIdAndCompletedAtBetween(
+            @Param("staffId") String staffId,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end);
+
+    /**
+     * 统计维修工今日完成的工单数量
+     * @deprecated 使用 {@link #countCompletedByStaffIdAndCompletedAtBetween} 替代
+     */
+    @Deprecated
     @Query(
         value = "SELECT COUNT(*) " +
                 "FROM repair_order " +

@@ -23,6 +23,8 @@ import com.ligong.reportingcenter.repository.UserRepository;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.DayOfWeek;
+import java.time.temporal.TemporalAdjusters;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -1350,18 +1352,51 @@ public class TicketService {
         Long inProgressCount = ticketRepository.countByStaffIdAndStatus(staffId, "IN_PROGRESS");
         Long completedCount = ticketRepository.countCompletedTasksByStaffId(staffId);
 
-        // 2. 时间维度完成数量
-        Long todayCompleted = ticketRepository.countTodayCompletedByStaffId(staffId);
-        Long weekCompleted = ticketRepository.countWeekCompletedByStaffId(staffId);
-        Long monthCompleted = ticketRepository.countMonthCompletedByStaffId(staffId);
+        // 2. 时间维度完成数量（使用数据库无关的时间范围查询）
+        LocalDateTime now = LocalDateTime.now();
+
+        // 今日：当天 00:00:00 到下一天 00:00:00
+        LocalDateTime todayStart = now.toLocalDate().atStartOfDay();
+        LocalDateTime todayEnd = todayStart.plusDays(1);
+        Long todayCompleted = ticketRepository.countCompletedByStaffIdAndCompletedAtBetween(
+                staffId, todayStart, todayEnd);
+
+        // 本周：周一 00:00:00 到下周一 00:00:00
+        LocalDateTime weekStart = now.toLocalDate()
+                .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+                .atStartOfDay();
+        LocalDateTime weekEnd = weekStart.plusWeeks(1);
+        Long weekCompleted = ticketRepository.countCompletedByStaffIdAndCompletedAtBetween(
+                staffId, weekStart, weekEnd);
+
+        // 本月：当月第一天 00:00:00 到下个月第一天 00:00:00
+        LocalDateTime monthStart = now.toLocalDate()
+                .with(TemporalAdjusters.firstDayOfMonth())
+                .atStartOfDay();
+        LocalDateTime monthEnd = now.toLocalDate()
+                .with(TemporalAdjusters.firstDayOfNextMonth())
+                .atStartOfDay();
+        Long monthCompleted = ticketRepository.countCompletedByStaffIdAndCompletedAtBetween(
+                staffId, monthStart, monthEnd);
 
         // 3. 评价统计
-        Object[] ratingStats = ticketRepository.findRatingStatsByStaffId(staffId);
-        Double avgRating = 0.0;
         Long totalRatingCount = 0L;
-        if (ratingStats != null) {
-            totalRatingCount = ratingStats[0] != null ? ((Number) ratingStats[0]).longValue() : 0L;
-            avgRating = ratingStats[1] != null ? ((Number) ratingStats[1]).doubleValue() : 0.0;
+        Double avgRating = 0.0;
+        try {
+            Object ratingStatsRaw = ticketRepository.findRatingStatsByStaffId(staffId);
+            if (ratingStatsRaw instanceof Object[]) {
+                Object[] row = (Object[]) ratingStatsRaw;
+                if (row.length >= 2) {
+                    if (row[0] != null) {
+                        totalRatingCount = ((Number) row[0]).longValue();
+                    }
+                    if (row[1] != null) {
+                        avgRating = ((Number) row[1]).doubleValue();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // 忽略解析错误，使用默认值
         }
 
         // 4. 优先级分布

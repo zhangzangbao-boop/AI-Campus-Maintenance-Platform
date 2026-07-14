@@ -1,0 +1,21 @@
+server:
+  port: ${USER_SERVICE_PORT:9003}
+
+spring:
+  application:
+    name: qiyun-user-service
+
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+
+# Actuator 配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always

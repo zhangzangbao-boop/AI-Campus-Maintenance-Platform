@@ -1,13 +1,11 @@
-package com.ligong.reportingcenter.service;
+package com.qiyun.opsservice.service;
 
-import com.ligong.reportingcenter.dto.BackupDto;
+import com.qiyun.opsservice.dto.BackupDto;
 import com.qiyun.common.exception.BusinessException;
 import jakarta.annotation.PostConstruct;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -18,6 +16,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
 
 @Slf4j
 @Service
@@ -79,7 +80,7 @@ public class BackupService {
             // 构建mysqldump命令
             String host = extractHost(datasourceUrl);
             String port = extractPort(datasourceUrl);
-            
+
             // 使用ProcessBuilder构建命令，避免密码暴露在命令行
             ProcessBuilder processBuilder;
             if (System.getProperty("os.name").toLowerCase().contains("windows")) {
@@ -109,13 +110,13 @@ public class BackupService {
                     DB_NAME
                 );
             }
-            
+
             // 重定向输出到文件
             processBuilder.redirectOutput(backupFile.toFile());
             processBuilder.redirectErrorStream(true);
-            
+
             Process process = processBuilder.start();
-            
+
             // 等待进程完成
             int exitCode = process.waitFor();
             if (exitCode != 0) {
@@ -162,11 +163,8 @@ public class BackupService {
      */
     public void restoreBackup(String fileName) {
         try {
-            Path backupFile = Paths.get(backupDirectory, fileName);
-            
-            if (!Files.exists(backupFile)) {
-                throw new BusinessException("备份文件不存在: " + fileName);
-            }
+            // 验证文件名，防止路径穿越
+            Path backupFile = validateAndGetBackupFile(fileName);
 
             try {
                 BackupDto safetyBackup = performBackup();
@@ -201,10 +199,10 @@ public class BackupService {
                 // 重定向输入从备份文件读取
                 processBuilder.redirectInput(backupFile.toFile());
             }
-            
+
             processBuilder.redirectErrorStream(true);
             Process process = processBuilder.start();
-            
+
             // 对于Windows，需要等待进程完成
             // 对于Linux，进程会从文件读取输入
             int exitCode = process.waitFor();
@@ -258,7 +256,7 @@ public class BackupService {
                                 Files.getLastModifiedTime(path).toInstant(),
                                 java.time.ZoneId.systemDefault()
                             );
-                            
+
                             backups.add(new BackupDto(
                                 fileName,
                                 path.toAbsolutePath().toString(),
@@ -284,16 +282,44 @@ public class BackupService {
      */
     public void deleteBackup(String fileName) {
         try {
-            Path backupFile = Paths.get(backupDirectory, fileName);
-            if (!Files.exists(backupFile)) {
-                throw new BusinessException("备份文件不存在: " + fileName);
-            }
+            Path backupFile = validateAndGetBackupFile(fileName);
             Files.delete(backupFile);
             log.info("删除备份文件: {}", backupFile.toAbsolutePath());
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
             log.error("删除备份文件失败", e);
             throw new BusinessException("删除备份文件失败: " + e.getMessage());
         }
+    }
+
+    /**
+     * 验证文件名并获取备份文件路径
+     * 防止路径穿越攻击
+     */
+    private Path validateAndGetBackupFile(String fileName) {
+        if (fileName == null || fileName.isBlank()) {
+            throw new BusinessException("文件名不能为空");
+        }
+
+        // 检查文件名是否包含路径穿越字符
+        if (fileName.contains("..") || fileName.contains("/") || fileName.contains("\\")) {
+            throw new BusinessException("无效的文件名: " + fileName);
+        }
+
+        Path backupDir = Paths.get(backupDirectory).normalize().toAbsolutePath();
+        Path backupFile = backupDir.resolve(fileName).normalize();
+
+        // 确保解析后的路径仍在备份目录内
+        if (!backupFile.startsWith(backupDir)) {
+            throw new BusinessException("文件不在备份目录内: " + fileName);
+        }
+
+        if (!Files.exists(backupFile)) {
+            throw new BusinessException("备份文件不存在: " + fileName);
+        }
+
+        return backupFile;
     }
 
     /**
@@ -307,7 +333,7 @@ public class BackupService {
             }
 
             LocalDateTime cutoffDate = LocalDateTime.now().minusDays(retentionDays);
-            
+
             try (Stream<Path> paths = Files.list(backupDir)) {
                 paths.filter(Files::isRegularFile)
                     .filter(path -> path.getFileName().toString().endsWith(".sql"))
@@ -375,4 +401,3 @@ public class BackupService {
         }
     }
 }
-

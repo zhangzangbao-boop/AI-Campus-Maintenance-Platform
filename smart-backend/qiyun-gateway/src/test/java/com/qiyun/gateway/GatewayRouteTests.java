@@ -200,21 +200,129 @@ class GatewayRouteTests {
     }
 
     @Test
-    @DisplayName("五个路由全部存在")
+    @DisplayName("/internal/**路径不经过Gateway")
+    void internalPathNotRoutedThroughGateway() {
+        List<Route> routes = collectRoutes();
+
+        // 检查所有路由的predicate，确保没有匹配/internal/**
+        for (Route route : routes) {
+            String predicateString = route.getPredicate().toString();
+            assertThat(predicateString)
+                .as("路由 %s 不应匹配 /internal/** 路径", route.getId())
+                .doesNotContain("/internal/");
+        }
+    }
+
+    @Test
+    @DisplayName("admin-ops-route路由统计和评价路径")
+    void adminOpsRoute_matchesStatsAndFeedbacks() {
+        List<Route> routes = collectRoutes();
+
+        Route adminOpsRoute = routes.stream()
+            .filter(r -> r.getId().equals("admin-ops-route"))
+            .findFirst()
+            .orElse(null);
+
+        assertThat(adminOpsRoute).as("admin-ops-route应存在").isNotNull();
+        assertThat(adminOpsRoute.getUri().toString()).isEqualTo("lb://qiyun-ops-service");
+
+        // 验证predicate包含统计和评价路径
+        String predicateString = adminOpsRoute.getPredicate().toString();
+        assertThat(predicateString).contains("/api/admin/stats");
+        assertThat(predicateString).contains("/api/admin/feedbacks");
+    }
+
+    @Test
+    @DisplayName("所有路由全部存在")
     void allRoutesExist() {
         List<Route> routes = collectRoutes();
 
         List<String> routeIds = routes.stream()
-                .map(Route::getId)
-                .toList();
+            .map(Route::getId)
+            .toList();
 
         assertThat(routeIds).contains(
             "ai-service-route",
             "user-auth-route",
             "admin-users-route",
             "users-route",
+            "repair-service-route",
+            "admin-repair-route",
+            "notification-route",
+            "knowledge-base-route",
+            "admin-ops-route",
             "biz-service-route"
         );
+    }
+
+    @Test
+    @DisplayName("notification-route存在且指向ops-service")
+    void notificationRoute_exists() {
+        List<Route> routes = collectRoutes();
+
+        Route notificationRoute = routes.stream()
+            .filter(r -> r.getId().equals("notification-route"))
+            .findFirst()
+            .orElse(null);
+
+        assertThat(notificationRoute).as("notification-route应存在").isNotNull();
+        assertThat(notificationRoute.getUri().toString()).isEqualTo("lb://qiyun-ops-service");
+    }
+
+    @Test
+    @DisplayName("knowledge-base-route存在且指向ops-service")
+    void knowledgeBaseRoute_exists() {
+        List<Route> routes = collectRoutes();
+
+        Route knowledgeBaseRoute = routes.stream()
+            .filter(r -> r.getId().equals("knowledge-base-route"))
+            .findFirst()
+            .orElse(null);
+
+        assertThat(knowledgeBaseRoute).as("knowledge-base-route应存在").isNotNull();
+        assertThat(knowledgeBaseRoute.getUri().toString()).isEqualTo("lb://qiyun-ops-service");
+    }
+
+    @Test
+    @DisplayName("admin-ops-route存在且指向ops-service")
+    void adminOpsRoute_exists() {
+        List<Route> routes = collectRoutes();
+
+        Route adminOpsRoute = routes.stream()
+            .filter(r -> r.getId().equals("admin-ops-route"))
+            .findFirst()
+            .orElse(null);
+
+        assertThat(adminOpsRoute).as("admin-ops-route应存在").isNotNull();
+        assertThat(adminOpsRoute.getUri().toString()).isEqualTo("lb://qiyun-ops-service");
+    }
+
+    @Test
+    @DisplayName("repair-service-route存在且指向repair-service")
+    void repairServiceRoute_exists() {
+        List<Route> routes = collectRoutes();
+
+        Route repairRoute = routes.stream()
+            .filter(r -> r.getId().equals("repair-service-route"))
+            .findFirst()
+            .orElse(null);
+
+        assertThat(repairRoute).as("repair-service-route应存在").isNotNull();
+        assertThat(repairRoute.getUri().toString()).isEqualTo("lb://qiyun-repair-service");
+    }
+
+    @Test
+    @DisplayName("admin-repair-route存在且指向repair-service")
+    void adminRepairRoute_exists() {
+        List<Route> routes = collectRoutes();
+
+        Route adminRepairRoute = routes.stream()
+            .filter(r -> r.getId().equals("admin-repair-route"))
+            .findFirst()
+            .orElse(null);
+
+        assertThat(adminRepairRoute).as("admin-repair-route应存在").isNotNull();
+        assertThat(adminRepairRoute.getUri().toString()).isEqualTo("lb://qiyun-repair-service");
     }
 
     private List<Route> collectRoutes() {

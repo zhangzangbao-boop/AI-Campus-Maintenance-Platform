@@ -528,4 +528,429 @@ public class TicketService {
     private String safeText(String text) {
         return text == null || text.isBlank() ? "未填写" : text;
     }
+
+    // ==================== 统计方法 ====================
+
+    @Transactional(readOnly = true)
+    public List<LocationStatsDto> getLocationStats() {
+        List<Object[]> results = ticketRepository.findLocationStats();
+        return results.stream()
+            .map(row -> new LocationStatsDto(
+                (String) row[0],
+                ((Long) row[1]).intValue()
+            ))
+            .limit(10)
+            .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<RepairmanRatingStatsDto> getRepairmanRatingStats() {
+        List<Object[]> results = ticketRepository.findRepairmanRatingStats();
+        return results.stream()
+            .map(row -> {
+                String id = (String) row[0];
+                String name = (String) row[1];
+                Number avgRatingNum = (Number) row[2];
+                Number completedNum = (Number) row[3];
+                int rating = avgRatingNum != null ? (int) Math.round(avgRatingNum.doubleValue()) : 0;
+                int completed = completedNum != null ? completedNum.intValue() : 0;
+                return new RepairmanRatingStatsDto(id, name, rating, completed);
+            })
+            .limit(10)
+            .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getCategoryStatsFromView() {
+        List<Object[]> results = ticketRepository.findCategoryStatsFromView();
+        List<Map<String, Object>> stats = new ArrayList<>();
+
+        for (Object[] row : results) {
+            String categoryKey = (String) row[0];
+            String categoryName = (String) row[1];
+            Number totalTicketsNum = (Number) row[2];
+            Number completedTicketsNum = (Number) row[3];
+            Number ratedTicketsNum = (Number) row[4];
+            Number avgRatingNum = (Number) row[5];
+
+            Map<String, Object> item = new HashMap<>();
+            item.put("category", categoryName);
+            item.put("name", categoryName);
+            item.put("type", categoryName);
+            int total = totalTicketsNum != null ? totalTicketsNum.intValue() : 0;
+            item.put("count", total);
+            item.put("value", total);
+
+            item.put("categoryKey", categoryKey);
+            item.put("totalTickets", total);
+            item.put("completedTickets", completedTicketsNum != null ? completedTicketsNum.intValue() : 0);
+            item.put("ratedTickets", ratedTicketsNum != null ? ratedTicketsNum.intValue() : 0);
+            item.put("avgRating", avgRatingNum != null ? avgRatingNum.doubleValue() : 0.0);
+
+            stats.add(item);
+        }
+
+        return stats;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> getMonthlyStats() {
+        java.time.LocalDate now = java.time.LocalDate.now();
+        Map<String, Object> monthlyStats = new HashMap<>();
+
+        List<Map<String, Object>> monthsData = new ArrayList<>();
+        java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM");
+
+        for (int i = 11; i >= 0; i--) {
+            java.time.LocalDate month = now.minusMonths(i);
+            String monthStr = month.format(formatter);
+
+            Map<String, Object> monthData = new HashMap<>();
+            monthData.put("month", monthStr);
+            monthData.put("count", ticketRepository.countByMonth(monthStr));
+            monthsData.add(monthData);
+        }
+
+        monthlyStats.put("months", monthsData);
+
+        Map<String, Long> statusStats = new HashMap<>();
+        for (TicketStatus status : TicketStatus.values()) {
+            statusStats.put(status.name(), ticketRepository.countByStatus(status));
+        }
+        monthlyStats.put("statusDistribution", statusStats);
+
+        return monthlyStats;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> getAverageProcessingTime() {
+        Double avgHours = ticketRepository.findAverageProcessingTimeHours();
+        Long completedCount = ticketRepository.countCompletedTickets();
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("completedTickets", completedCount);
+
+        if (avgHours != null && avgHours > 0 && completedCount > 0) {
+            double totalHours = avgHours;
+
+            if (totalHours >= 24) {
+                double days = totalHours / 24;
+                result.put("avgHours", Math.round(totalHours));
+                result.put("avgDays", Math.round(days * 10) / 10.0);
+                result.put("displayText", String.format("约 %.1f 天", days));
+            } else {
+                result.put("avgHours", Math.round(totalHours));
+                result.put("avgDays", 0);
+                result.put("displayText", String.format("约 %.0f 小时", totalHours));
+            }
+        } else {
+            result.put("avgHours", 0);
+            result.put("avgDays", 0);
+            result.put("displayText", "暂无数据");
+        }
+
+        return result;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> getSlaOverview() {
+        LocalDateTime now = LocalDateTime.now();
+        List<RepairTicket> tickets = ticketRepository.findAll();
+        List<Map<String, Object>> alertTickets = new ArrayList<>();
+
+        int activeCount = 0;
+        int overdueAcceptCount = 0;
+        int overdueCompletionCount = 0;
+        int warningCount = 0;
+
+        for (RepairTicket ticket : tickets) {
+            if (Boolean.TRUE.equals(ticket.getDeleted())) {
+                continue;
+            }
+            TicketStatus status = ticket.getStatus();
+            if (status != TicketStatus.WAITING_ACCEPT && status != TicketStatus.IN_PROGRESS) {
+                continue;
+            }
+
+            activeCount++;
+            Map<String, Object> slaItem = buildSlaItem(ticket, now);
+            if (slaItem == null) {
+                continue;
+            }
+
+            String slaStatus = String.valueOf(slaItem.get("slaStatus"));
+            String slaType = String.valueOf(slaItem.get("slaType"));
+            if ("OVERDUE".equals(slaStatus) && "ACCEPTANCE".equals(slaType)) {
+                overdueAcceptCount++;
+            } else if ("OVERDUE".equals(slaStatus) && "COMPLETION".equals(slaType)) {
+                overdueCompletionCount++;
+            } else if ("WARNING".equals(slaStatus)) {
+                warningCount++;
+            }
+
+            alertTickets.add(slaItem);
+        }
+
+        alertTickets.sort((left, right) -> {
+            int leftRank = "OVERDUE".equals(left.get("slaStatus")) ? 0 : 1;
+            int rightRank = "OVERDUE".equals(right.get("slaStatus")) ? 0 : 1;
+            if (leftRank != rightRank) {
+                return Integer.compare(leftRank, rightRank);
+            }
+            LocalDateTime leftDue = (LocalDateTime) left.get("dueAt");
+            LocalDateTime rightDue = (LocalDateTime) right.get("dueAt");
+            if (leftDue == null && rightDue == null) {
+                return 0;
+            }
+            if (leftDue == null) {
+                return 1;
+            }
+            if (rightDue == null) {
+                return -1;
+            }
+            return leftDue.compareTo(rightDue);
+        });
+
+        int alertTotal = overdueAcceptCount + overdueCompletionCount + warningCount;
+        Map<String, Object> result = new HashMap<>();
+        result.put("activeCount", activeCount);
+        result.put("overdueAcceptCount", overdueAcceptCount);
+        result.put("overdueCompletionCount", overdueCompletionCount);
+        result.put("warningCount", warningCount);
+        result.put("alertTotal", alertTotal);
+        result.put("overdueRate", activeCount == 0 ? 0.0 : Math.round((overdueAcceptCount + overdueCompletionCount) * 1000.0 / activeCount) / 10.0);
+        result.put("alertTickets", alertTickets);
+        result.put("rules", buildSlaRules());
+        return result;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> getHotspotAnalysis() {
+        Map<String, Object> result = new HashMap<>();
+
+        try {
+            result.put("hotAreas", mapHotAreas(ticketRepository.findHotAreaStats()));
+        } catch (Exception e) {
+            result.put("hotAreas", new ArrayList<>());
+        }
+
+        try {
+            result.put("categoryGrowth", mapCategoryGrowth(ticketRepository.findCategoryGrowthStats()));
+        } catch (Exception e) {
+            result.put("categoryGrowth", new ArrayList<>());
+        }
+
+        try {
+            result.put("repeatedLocations", mapRepeatedLocations(ticketRepository.findRepeatedLocationStats()));
+        } catch (Exception e) {
+            result.put("repeatedLocations", new ArrayList<>());
+        }
+
+        try {
+            result.put("staffWorkload", mapStaffWorkload(ticketRepository.findStaffWorkloadStats()));
+        } catch (Exception e) {
+            result.put("staffWorkload", new ArrayList<>());
+        }
+
+        try {
+            result.put("categoryProcessingTime", mapCategoryProcessingTime(ticketRepository.findCategoryProcessingTimeStats()));
+        } catch (Exception e) {
+            result.put("categoryProcessingTime", new ArrayList<>());
+        }
+
+        result.put("generatedAt", LocalDateTime.now());
+        return result;
+    }
+
+    private Map<String, Object> buildSlaItem(RepairTicket ticket, LocalDateTime now) {
+        String priority = normalizePriority(ticket.getPriority());
+        long responseHours = responseLimitHours(priority);
+        long completionHours = completionLimitHours(priority);
+
+        LocalDateTime startAt;
+        LocalDateTime dueAt;
+        String slaType;
+        String slaLabel;
+        long limitHours;
+
+        if (ticket.getStatus() == TicketStatus.WAITING_ACCEPT) {
+            startAt = ticket.getCreatedAt();
+            dueAt = startAt != null ? startAt.plusHours(responseHours) : null;
+            slaType = "ACCEPTANCE";
+            slaLabel = "受理时限";
+            limitHours = responseHours;
+        } else if (ticket.getStatus() == TicketStatus.IN_PROGRESS) {
+            startAt = ticket.getAssignedAt() != null ? ticket.getAssignedAt() : ticket.getCreatedAt();
+            dueAt = startAt != null ? startAt.plusHours(completionHours) : null;
+            slaType = "COMPLETION";
+            slaLabel = "完成时限";
+            limitHours = completionHours;
+        } else {
+            return null;
+        }
+
+        if (dueAt == null) {
+            return null;
+        }
+
+        boolean overdue = now.isAfter(dueAt);
+        long warningThreshold = Math.max(1, Math.round(limitHours * 0.25));
+        boolean warning = !overdue && !now.isBefore(dueAt.minusHours(warningThreshold));
+        if (!overdue && !warning) {
+            return null;
+        }
+
+        long remainingHours = java.time.Duration.between(now, dueAt).toHours();
+        long overdueHours = overdue ? java.time.Duration.between(dueAt, now).toHours() : 0;
+
+        Map<String, Object> item = new HashMap<>();
+        item.put("ticketId", ticket.getTicketId());
+        item.put("status", ticket.getStatus());
+        item.put("categoryName", ticket.getCategory() != null ? ticket.getCategory().getCategoryName() : null);
+        item.put("studentId", ticket.getStudent() != null ? ticket.getStudent().getUserId() : null);
+        item.put("staffId", ticket.getStaff() != null ? ticket.getStaff().getUserId() : null);
+        item.put("locationText", ticket.getLocationText());
+        item.put("description", ticket.getDescription());
+        item.put("priority", ticket.getPriority());
+        item.put("createdAt", ticket.getCreatedAt());
+        item.put("assignedAt", ticket.getAssignedAt());
+        item.put("estimatedCompletionTime", ticket.getEstimatedCompletionTime());
+        item.put("deleted", ticket.getDeleted());
+        item.put("deletedAt", ticket.getDeletedAt());
+        item.put("slaType", slaType);
+        item.put("slaStatus", overdue ? "OVERDUE" : "WARNING");
+        item.put("slaLabel", slaLabel);
+        item.put("dueAt", dueAt);
+        item.put("remainingHours", Math.max(0, remainingHours));
+        item.put("overdueHours", Math.max(0, overdueHours));
+        item.put("limitHours", limitHours);
+        return item;
+    }
+
+    private List<Map<String, Object>> buildSlaRules() {
+        List<Map<String, Object>> rules = new ArrayList<>();
+        rules.add(buildSlaRule("high", 2, 24));
+        rules.add(buildSlaRule("medium", 8, 72));
+        rules.add(buildSlaRule("low", 24, 168));
+        return rules;
+    }
+
+    private Map<String, Object> buildSlaRule(String priority, long responseHours, long completionHours) {
+        Map<String, Object> rule = new HashMap<>();
+        rule.put("priority", priority);
+        rule.put("responseHours", responseHours);
+        rule.put("completionHours", completionHours);
+        return rule;
+    }
+
+    private String normalizePriority(String priority) {
+        if (priority == null || priority.isBlank()) {
+            return "medium";
+        }
+        String normalized = priority.toLowerCase(java.util.Locale.ROOT);
+        if ("high".equals(normalized) || "medium".equals(normalized) || "low".equals(normalized)) {
+            return normalized;
+        }
+        return "medium";
+    }
+
+    private long responseLimitHours(String priority) {
+        return switch (priority) {
+            case "high" -> 2;
+            case "low" -> 24;
+            default -> 8;
+        };
+    }
+
+    private long completionLimitHours(String priority) {
+        return switch (priority) {
+            case "high" -> 24;
+            case "low" -> 168;
+            default -> 72;
+        };
+    }
+
+    private List<Map<String, Object>> mapHotAreas(List<Object[]> rows) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Object[] row : rows) {
+            Map<String, Object> item = new HashMap<>();
+            item.put("area", row[0] != null ? row[0].toString() : "未知区域");
+            item.put("totalTickets", toInt((Number) row[1]));
+            item.put("activeTickets", toInt((Number) row[2]));
+            result.add(item);
+        }
+        return result;
+    }
+
+    private List<Map<String, Object>> mapCategoryGrowth(List<Object[]> rows) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Object[] row : rows) {
+            int recent = toInt((Number) row[1]);
+            int previous = toInt((Number) row[2]);
+            Map<String, Object> item = new HashMap<>();
+            item.put("category", row[0] != null ? row[0].toString() : "未分类");
+            item.put("recentCount", recent);
+            item.put("previousCount", previous);
+            item.put("growth", recent - previous);
+            item.put("growthRate", previous == 0 ? (recent > 0 ? 100.0 : 0.0) : Math.round((recent - previous) * 1000.0 / previous) / 10.0);
+            result.add(item);
+        }
+        return result;
+    }
+
+    private List<Map<String, Object>> mapRepeatedLocations(List<Object[]> rows) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Object[] row : rows) {
+            Map<String, Object> item = new HashMap<>();
+            item.put("location", row[0] != null ? row[0].toString() : "未知位置");
+            item.put("category", row[1] != null ? row[1].toString() : "未分类");
+            item.put("totalTickets", toInt((Number) row[2]));
+            item.put("activeTickets", toInt((Number) row[3]));
+            item.put("lastCreatedAt", row[4]);
+            result.add(item);
+        }
+        return result;
+    }
+
+    private List<Map<String, Object>> mapStaffWorkload(List<Object[]> rows) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Object[] row : rows) {
+            Map<String, Object> item = new HashMap<>();
+            item.put("staffId", row[0] != null ? row[0].toString() : "");
+            item.put("staffName", row[1] != null ? row[1].toString() : "未知维修员");
+            item.put("totalAssigned", toInt((Number) row[2]));
+            item.put("activeTickets", toInt((Number) row[3]));
+            item.put("completedTickets", toInt((Number) row[4]));
+            result.add(item);
+        }
+        return result;
+    }
+
+    private List<Map<String, Object>> mapCategoryProcessingTime(List<Object[]> rows) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Object[] row : rows) {
+            double avgHours = row[2] == null ? 0.0 : ((Number) row[2]).doubleValue();
+            Map<String, Object> item = new HashMap<>();
+            item.put("category", row[0] != null ? row[0].toString() : "未分类");
+            item.put("completedTickets", toInt((Number) row[1]));
+            item.put("avgHours", Math.round(avgHours * 10.0) / 10.0);
+            item.put("displayText", formatHoursDisplay(avgHours));
+            result.add(item);
+        }
+        return result;
+    }
+
+    private String formatHoursDisplay(double hours) {
+        if (hours <= 0) {
+            return "暂无数据";
+        }
+        if (hours >= 24) {
+            return String.format(java.util.Locale.ROOT, "%.1f 天", hours / 24.0);
+        }
+        return String.format(java.util.Locale.ROOT, "%.1f 小时", hours);
+    }
+
+    private int toInt(Number num) {
+        return num != null ? num.intValue() : 0;
+    }
 }

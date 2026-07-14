@@ -1,6 +1,6 @@
-package com.ligong.reportingcenter.config;
+package com.qiyun.opsservice.config;
 
-import com.ligong.reportingcenter.service.BackupService;
+import com.qiyun.opsservice.service.BackupService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,5 +31,3 @@ public class BackupScheduler {
         }
     }
 }
-
-

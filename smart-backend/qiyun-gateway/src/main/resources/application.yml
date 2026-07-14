@@ -59,6 +59,27 @@ spring:
             - Path=/api/admin/repair-orders/**,/api/admin/transfer-requests/**
           order: 5
 
+        # 转发到 qiyun-ops-service（通知服务，精确匹配）
+        - id: notification-route
+          uri: lb://qiyun-ops-service
+          predicates:
+            - Path=/api/notifications/**
+          order: 6
+
+        # 转发到 qiyun-ops-service（知识库服务，精确匹配）
+        - id: knowledge-base-route
+          uri: lb://qiyun-ops-service
+          predicates:
+            - Path=/api/knowledge-base/**
+          order: 7
+
+        # 转发到 qiyun-ops-service（管理员运维接口，精确匹配）
+        - id: admin-ops-route
+          uri: lb://qiyun-ops-service
+          predicates:
+            - Path=/api/admin/audit-logs/**,/api/admin/system-config/**,/api/admin/backup/**,/api/admin/knowledge-base/**,/api/admin/stats/**,/api/admin/feedbacks/**
+          order: 8
+
         # 转发到 qiyun-biz-service（兼容原业务接口，匹配所有其他 /api/**）
         - id: biz-service-route
           uri: lb://qiyun-biz-service

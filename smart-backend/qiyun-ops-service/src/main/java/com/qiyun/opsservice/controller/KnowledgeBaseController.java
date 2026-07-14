@@ -1,8 +1,8 @@
-package com.ligong.reportingcenter.controller;
+package com.qiyun.opsservice.controller;
 
-import com.ligong.reportingcenter.dto.KnowledgeBaseDto;
-import com.ligong.reportingcenter.dto.request.KnowledgeBaseRequest;
-import com.ligong.reportingcenter.service.KnowledgeBaseService;
+import com.qiyun.opsservice.dto.KnowledgeBaseDto;
+import com.qiyun.opsservice.dto.request.KnowledgeBaseRequest;
+import com.qiyun.opsservice.service.KnowledgeBaseService;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;

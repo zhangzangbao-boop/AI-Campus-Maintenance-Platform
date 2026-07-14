@@ -11,10 +11,10 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
 
-    <artifactId>qiyun-repair-service</artifactId>
+    <artifactId>qiyun-ops-service</artifactId>
     <packaging>jar</packaging>
-    <name>qiyun-repair-service</name>
-    <description>报修服务模块：工单管理、维修过程、评价等报修相关功能</description>
+    <name>qiyun-ops-service</name>
+    <description>运维服务模块：通知管理、审计日志、系统配置、备份、知识库、统计分析等运维功能</description>
 
     <dependencies>
         <!-- qiyun-common -->
@@ -53,12 +53,6 @@
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-openfeign</artifactId>
-        </dependency>
-
-        <!-- Spring Cloud Loadbalancer (required for Feign) -->
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
         </dependency>
 
         <!-- 参数校验 -->

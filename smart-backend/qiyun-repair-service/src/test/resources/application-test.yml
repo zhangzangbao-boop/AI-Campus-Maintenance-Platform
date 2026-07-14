@@ -36,7 +36,7 @@ spring:
 
 # 测试用 JWT 配置
 jwt:
-  secret: test-jwt-secret-key-for-testing-only-minimum-256-bits-required
+  secret: test-jwt-secret-key-for-repair-service-testing-only-minimum-256-bits-required
   expiration-ms: 86400000
 
 # 测试用文件上传配置

@@ -1,4 +1,4 @@
-package com.ligong.reportingcenter.dto;
+package com.qiyun.opsservice.dto;
 
 import java.time.LocalDateTime;
 
@@ -10,5 +10,3 @@ public record BackupDto(
     String status
 ) {
 }
-
-

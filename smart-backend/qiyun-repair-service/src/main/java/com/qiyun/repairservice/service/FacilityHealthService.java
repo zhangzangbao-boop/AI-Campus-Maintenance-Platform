@@ -1,10 +1,10 @@
-package com.ligong.reportingcenter.service;
+package com.qiyun.repairservice.service;
 
-import com.ligong.reportingcenter.domain.entity.Rating;
-import com.ligong.reportingcenter.domain.entity.RepairTicket;
-import com.ligong.reportingcenter.domain.enums.TicketStatus;
-import com.ligong.reportingcenter.repository.RatingRepository;
-import com.ligong.reportingcenter.repository.TicketRepository;
+import com.qiyun.repairservice.domain.entity.Rating;
+import com.qiyun.repairservice.domain.entity.RepairTicket;
+import com.qiyun.repairservice.domain.enums.TicketStatus;
+import com.qiyun.repairservice.repository.RatingRepository;
+import com.qiyun.repairservice.repository.TicketRepository;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -71,11 +71,11 @@ public class FacilityHealthService {
         List<String> suggestions = new ArrayList<>();
         if (!areaHealth.isEmpty()) {
             Map<String, Object> top = areaHealth.get(0);
-            suggestions.add("优先巡检“" + top.get("area") + "”，该区域近期报修和未闭环工单较集中。");
+            suggestions.add("优先巡检" + top.get("area") + "，该区域近期报修和未闭环工单较集中。");
         }
         if (!categoryRisk.isEmpty()) {
             Map<String, Object> top = categoryRisk.get(0);
-            suggestions.add("重点关注“" + top.get("category") + "”类问题，建议结合知识库沉淀标准处理方案。");
+            suggestions.add("重点关注" + top.get("category") + "类问题，建议结合知识库沉淀标准处理方案。");
         }
         if (suggestions.isEmpty()) {
             suggestions.add("当前设施运行平稳，可保持常规巡检频率。");

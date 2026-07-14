@@ -1,20 +1,19 @@
 server:
-  port: 8070
+  port: 0
 
 spring:
   application:
-    name: qiyun-gateway
+    name: qiyun-gateway-test
 
   cloud:
     nacos:
       discovery:
-        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+        enabled: false
 
     gateway:
       discovery:
         locator:
-          enabled: true
-          lower-case-service-id: true
+          enabled: false
 
       routes:
         # 转发到 qiyun-ai-service（优先级最高，精确匹配）
@@ -38,24 +37,6 @@ spring:
             - Path=/api/**
           order: 10
 
-      # 全局 CORS 配置
-      globalcors:
-        cors-configurations:
-          '[/**]':
-            allowed-origins:
-              - "http://localhost:5173"
-              - "http://127.0.0.1:5173"
-            allowed-methods:
-              - GET
-              - POST
-              - PUT
-              - DELETE
-              - OPTIONS
-            allowed-headers: "*"
-            allow-credentials: true
-            max-age: 3600
-
-# Actuator 配置
 management:
   endpoints:
     web:

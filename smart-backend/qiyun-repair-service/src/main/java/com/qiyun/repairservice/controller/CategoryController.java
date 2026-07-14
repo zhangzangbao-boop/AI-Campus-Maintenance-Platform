@@ -1,8 +1,8 @@
-package com.ligong.reportingcenter.controller;
+package com.qiyun.repairservice.controller;
 
-import com.ligong.reportingcenter.dto.CategoryDto;
-import com.ligong.reportingcenter.dto.request.CategoryRequest;
-import com.ligong.reportingcenter.service.CategoryService;
+import com.qiyun.repairservice.dto.CategoryDto;
+import com.qiyun.repairservice.dto.request.CategoryRequest;
+import com.qiyun.repairservice.service.CategoryService;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -51,4 +51,3 @@ public class CategoryController {
         categoryService.delete(categoryId);
     }
 }
-

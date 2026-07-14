@@ -1,12 +1,10 @@
 package com.ligong.reportingcenter.controller;
 
 import com.ligong.reportingcenter.dto.AuditLogDto;
-import com.ligong.reportingcenter.dto.RepairProcessRecordDto;
 import com.ligong.reportingcenter.dto.SystemConfigDto;
 import com.ligong.reportingcenter.dto.request.SystemConfigRequest;
 import com.ligong.reportingcenter.service.AuditLogService;
 import com.ligong.reportingcenter.service.FacilityHealthService;
-import com.ligong.reportingcenter.service.RepairProcessRecordService;
 import com.ligong.reportingcenter.service.SystemConfigService;
 import java.util.HashMap;
 import java.util.List;
@@ -23,6 +21,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 管理员运维接口（审计日志、系统配置、设施健康）
+ * 注意：转派审批已迁移至 repair-service AdminTransferController
+ */
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/admin")
@@ -31,7 +33,6 @@ public class AdminOpsController {
     private final AuditLogService auditLogService;
     private final SystemConfigService systemConfigService;
     private final FacilityHealthService facilityHealthService;
-    private final RepairProcessRecordService repairProcessRecordService;
 
     @GetMapping("/audit-logs")
     @PreAuthorize("hasRole('ADMIN')")
@@ -63,28 +64,6 @@ public class AdminOpsController {
         return success(facilityHealthService.getFacilityHealthIndex(), "获取成功");
     }
 
-    @GetMapping("/transfer-requests")
-    @PreAuthorize("hasRole('ADMIN')")
-    public Map<String, Object> listTransferRequests(
-            @RequestParam(value = "pendingOnly", defaultValue = "true") boolean pendingOnly) {
-        List<RepairProcessRecordDto> requests = repairProcessRecordService.listTransferRequests(pendingOnly);
-        return success(requests, "获取成功");
-    }
-
-    @PutMapping("/transfer-requests/{recordId}/decision")
-    @PreAuthorize("hasRole('ADMIN')")
-    public Map<String, Object> decideTransferRequest(@PathVariable("recordId") Long recordId,
-                                                     @RequestBody TransferDecisionRequest request) {
-        RepairProcessRecordDto result = repairProcessRecordService.decideTransferRequest(
-            recordId,
-            currentUserId(),
-            Boolean.TRUE.equals(request.approved()),
-            request.newStaffId(),
-            request.reason()
-        );
-        return success(result, "处理成功");
-    }
-
     private String currentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         return authentication == null ? null : authentication.getName();
@@ -96,8 +75,5 @@ public class AdminOpsController {
         result.put("message", message);
         result.put("data", data);
         return result;
-    }
-
-    public record TransferDecisionRequest(Boolean approved, String newStaffId, String reason) {
     }
 }

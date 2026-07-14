@@ -15,8 +15,9 @@
     <modules>
         <module>qiyun-common</module>
         <module>qiyun-feign-api</module>
-        <module>qiyun-biz-service</module>
         <module>qiyun-user-service</module>
+        <module>qiyun-repair-service</module>
+        <module>qiyun-biz-service</module>
         <module>qiyun-ai-service</module>
         <module>qiyun-gateway</module>
     </modules>

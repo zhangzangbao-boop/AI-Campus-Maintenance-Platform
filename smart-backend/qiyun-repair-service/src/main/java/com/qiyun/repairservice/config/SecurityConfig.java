@@ -1,4 +1,4 @@
-package com.qiyun.userservice.config;
+package com.qiyun.repairservice.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
@@ -43,15 +43,10 @@ public class SecurityConfig {
                     writeError(response, HttpStatus.FORBIDDEN, "当前账号没有访问该功能的权限"))
             )
             .authorizeHttpRequests(auth -> auth
-                // 登录注册接口放行
-                .requestMatchers("/api/auth/**").permitAll()
-
-                // 内部服务接口放行（仅供微服务间调用）
-                .requestMatchers("/internal/**").permitAll()
-
                 // Actuator健康检查放行
                 .requestMatchers("/actuator/**").permitAll()
-
+                // 分类查询允许匿名访问
+                .requestMatchers("/api/categories").permitAll()
                 // 其他接口必须登录
                 .anyRequest().authenticated()
             )

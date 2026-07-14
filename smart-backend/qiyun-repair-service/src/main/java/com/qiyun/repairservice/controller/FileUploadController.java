@@ -1,11 +1,11 @@
-package com.ligong.reportingcenter.controller;
+package com.qiyun.repairservice.controller;
 
+import com.qiyun.repairservice.service.FileStorageService;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import com.ligong.reportingcenter.service.FileStorageService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -29,20 +29,20 @@ public class FileUploadController {
         }
         return responses;
     }
-    
+
     public static class ImageUploadResponse {
         private String url;
         private String name;
-        
+
         public ImageUploadResponse(String url, String name) {
             this.url = url;
             this.name = name;
         }
-        
+
         public String getUrl() {
             return url;
         }
-        
+
         public String getName() {
             return name;
         }

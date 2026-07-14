@@ -11,10 +11,10 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
 
-    <artifactId>qiyun-user-service</artifactId>
+    <artifactId>qiyun-repair-service</artifactId>
     <packaging>jar</packaging>
-    <name>qiyun-user-service</name>
-    <description>用户服务模块：用户管理、认证授权等用户相关功能</description>
+    <name>qiyun-repair-service</name>
+    <description>报修服务模块：工单管理、维修过程、评价等报修相关功能</description>
 
     <dependencies>
         <!-- qiyun-common -->
@@ -47,6 +47,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- OpenFeign -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
         </dependency>
 
         <!-- 参数校验 -->

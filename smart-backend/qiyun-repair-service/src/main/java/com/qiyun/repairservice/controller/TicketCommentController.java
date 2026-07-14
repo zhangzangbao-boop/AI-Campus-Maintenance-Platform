@@ -1,9 +1,10 @@
-package com.ligong.reportingcenter.controller;
+package com.qiyun.repairservice.controller;
 
-import com.ligong.reportingcenter.dto.RepairProcessRecordDto;
-import com.ligong.reportingcenter.dto.request.RepairProcessRecordRequest;
 import com.qiyun.common.exception.BusinessException;
-import com.ligong.reportingcenter.service.RepairProcessRecordService;
+import com.qiyun.repairservice.domain.enums.TicketCommentType;
+import com.qiyun.repairservice.dto.TicketCommentDto;
+import com.qiyun.repairservice.dto.request.TicketCommentRequest;
+import com.qiyun.repairservice.service.TicketCommentService;
 import jakarta.validation.Valid;
 import java.util.HashMap;
 import java.util.List;
@@ -22,24 +23,37 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/repair-orders/{ticketId}/process-records")
-public class RepairProcessRecordController {
+@RequestMapping("/api/repair-orders/{ticketId}/comments")
+public class TicketCommentController {
 
-    private final RepairProcessRecordService repairProcessRecordService;
+    private final TicketCommentService ticketCommentService;
 
     @GetMapping
     @PreAuthorize("hasAnyRole('STUDENT','STAFF','ADMIN')")
     public Map<String, Object> list(@PathVariable("ticketId") Long ticketId) {
-        List<RepairProcessRecordDto> records = repairProcessRecordService.listRecords(ticketId, currentUserId());
-        return success("维修过程记录获取成功", records);
+        List<TicketCommentDto> comments = ticketCommentService.listComments(ticketId, currentUserId());
+        return success("工单沟通记录获取成功", comments);
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('STAFF')")
+    @PreAuthorize("hasAnyRole('STUDENT','STAFF','ADMIN')")
     public Map<String, Object> add(@PathVariable("ticketId") Long ticketId,
-                                   @Valid @RequestBody RepairProcessRecordRequest request) {
-        RepairProcessRecordDto record = repairProcessRecordService.addRecord(ticketId, currentUserId(), request);
-        return success("维修过程记录已提交", record);
+                                   @Valid @RequestBody TicketCommentRequest request) {
+        TicketCommentDto comment = ticketCommentService.addComment(ticketId, currentUserId(), request);
+        return success("工单沟通记录已提交", comment);
+    }
+
+    @PostMapping("/urge")
+    @PreAuthorize("hasRole('STUDENT')")
+    public Map<String, Object> urge(@PathVariable("ticketId") Long ticketId,
+                                    @Valid @RequestBody TicketCommentRequest request) {
+        TicketCommentRequest urgeRequest = new TicketCommentRequest(
+            request.content(),
+            TicketCommentType.URGE,
+            request.imageUrl()
+        );
+        TicketCommentDto comment = ticketCommentService.addComment(ticketId, currentUserId(), urgeRequest);
+        return success("催单已提交", comment);
     }
 
     private Map<String, Object> success(String message, Object data) {

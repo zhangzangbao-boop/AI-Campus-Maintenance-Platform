@@ -70,6 +70,12 @@ public class UserService implements UserDetailsService {
     }
 
     @Transactional(readOnly = true)
+    public Optional<UserDto> findByIdOptional(String userId) {
+        return userRepository.findById(userId)
+            .map(this::toDto);
+    }
+
+    @Transactional(readOnly = true)
     public List<UserDto> listByRole(UserRole role) {
         return userRepository.findByRoleAndIsActiveTrue(role)
             .stream()

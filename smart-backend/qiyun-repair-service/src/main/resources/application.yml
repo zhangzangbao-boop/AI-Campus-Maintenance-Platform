@@ -1,0 +1,61 @@
+server:
+  port: ${REPAIR_SERVICE_PORT:9004}
+
+spring:
+  application:
+    name: qiyun-repair-service
+
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+
+  datasource:
+    url: ${DB_URL:jdbc:mysql://127.0.0.1:3306/repairdb?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=UTF-8&allowPublicKeyRetrieval=true&useSSL=false}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 50MB
+
+# JWT 配置
+jwt:
+  secret: ${JWT_SECRET:}
+  expiration-ms: 86400000
+
+# 文件上传配置
+upload:
+  path: ${UPLOAD_DIRECTORY:./uploads}
+
+# AI 配置（通过Feign调用）
+ai:
+  enabled: ${AI_ENABLED:true}
+
+# Actuator 配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+# 日志配置
+logging:
+  level:
+    com.qiyun: DEBUG
+    org.springframework.web: INFO

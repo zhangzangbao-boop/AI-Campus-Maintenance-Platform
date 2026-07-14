@@ -1,20 +1,20 @@
-package com.ligong.reportingcenter.controller;
+package com.qiyun.repairservice.controller;
 
-import com.ligong.reportingcenter.domain.enums.TicketStatus;
-import com.ligong.reportingcenter.domain.enums.RepairProcessActionType;
-import com.ligong.reportingcenter.dto.RepairProcessRecordDto;
-import com.ligong.reportingcenter.dto.StaffDashboardDto;
-import com.ligong.reportingcenter.dto.StaffRecommendationDto;
-import com.ligong.reportingcenter.dto.TicketDetailDto;
-import com.ligong.reportingcenter.dto.TicketSummaryDto;
-import com.ligong.reportingcenter.dto.request.RepairProcessRecordRequest;
-import com.ligong.reportingcenter.dto.request.TicketAssignRequest;
-import com.ligong.reportingcenter.dto.request.TicketCreateRequest;
-import com.ligong.reportingcenter.dto.request.TicketRatingRequest;
-import com.ligong.reportingcenter.dto.request.TicketStatusUpdateRequest;
 import com.qiyun.common.exception.BusinessException;
-import com.ligong.reportingcenter.service.RepairProcessRecordService;
-import com.ligong.reportingcenter.service.TicketService;
+import com.qiyun.repairservice.domain.enums.RepairProcessActionType;
+import com.qiyun.repairservice.domain.enums.TicketStatus;
+import com.qiyun.repairservice.dto.RepairProcessRecordDto;
+import com.qiyun.repairservice.dto.StaffDashboardDto;
+import com.qiyun.repairservice.dto.StaffRecommendationDto;
+import com.qiyun.repairservice.dto.TicketDetailDto;
+import com.qiyun.repairservice.dto.TicketSummaryDto;
+import com.qiyun.repairservice.dto.request.RepairProcessRecordRequest;
+import com.qiyun.repairservice.dto.request.TicketAssignRequest;
+import com.qiyun.repairservice.dto.request.TicketCreateRequest;
+import com.qiyun.repairservice.dto.request.TicketRatingRequest;
+import com.qiyun.repairservice.dto.request.TicketStatusUpdateRequest;
+import com.qiyun.repairservice.service.RepairProcessRecordService;
+import com.qiyun.repairservice.service.TicketService;
 import jakarta.validation.Valid;
 import java.util.HashMap;
 import java.util.List;
@@ -163,7 +163,7 @@ public class TicketController {
     public Map<String, Object> detail(@PathVariable("id") Long id) {
         TicketDetailDto detail = ticketService.getTicketDetail(id);
         assertCanReadTicket(detail);
-        
+
         // 返回统一格式的响应
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
@@ -244,7 +244,7 @@ public class TicketController {
         } catch (Exception e) {
             throw new BusinessException("无法获取当前用户信息，请先登录");
         }
-        
+
         // 从请求体中获取状态
         if (hasRole("STAFF") && !hasRole("ADMIN")) {
             assertStaffOwnsTicket(ticketService.getTicketDetail(id));
@@ -254,7 +254,7 @@ public class TicketController {
         if (newStatusStr == null || newStatusStr.isBlank()) {
             throw new BusinessException("新状态不能为空");
         }
-        
+
         // 将字符串状态转换为枚举
         TicketStatus newStatus;
         try {
@@ -263,7 +263,7 @@ public class TicketController {
             // 尝试从前端状态值映射
             newStatus = mapStatusFromFrontend(newStatusStr);
         }
-        
+
         String rejectionReason = (String) requestBody.get("rejectionReason");
 
         TicketStatusUpdateRequest request = new TicketStatusUpdateRequest(
@@ -271,9 +271,9 @@ public class TicketController {
             newStatus,
             rejectionReason
         );
-        
+
         TicketDetailDto detail = ticketService.updateStatus(id, request);
-        
+
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
         result.put("message", "任务状态更新成功");
@@ -295,11 +295,11 @@ public class TicketController {
         } catch (Exception e) {
             throw new BusinessException("无法获取当前用户信息，请先登录");
         }
-        
+
         // 完成任务时，状态应该是 RESOLVED
         String rejectionReason = (String) requestBody.get("rejectionReason");
         String notes = (String) requestBody.get("notes");
-        
+
         assertStaffOwnsTicket(ticketService.getTicketDetail(id));
 
         if (notes != null && !notes.isBlank()) {
@@ -311,9 +311,9 @@ public class TicketController {
             TicketStatus.RESOLVED,
             rejectionReason
         );
-        
+
         TicketDetailDto detail = ticketService.updateStatus(id, request);
-        
+
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
         result.put("message", "任务完成成功");
@@ -431,7 +431,7 @@ public class TicketController {
      * 维修工主动接单
      * POST /api/tasks/{id}/accept
      *
-     * 状态流转: WAITING_ACCEPT → IN_PROGRESS
+     * 状态流转: WAITING_ACCEPT -> IN_PROGRESS
      */
     @PostMapping("/tasks/{id}/accept")
     @PreAuthorize("hasRole('STAFF')")
@@ -450,7 +450,7 @@ public class TicketController {
      * 维修工完成工单
      * PUT /api/tasks/{id}/resolve
      *
-     * 状态流转: IN_PROGRESS → RESOLVED
+     * 状态流转: IN_PROGRESS -> RESOLVED
      */
     @PutMapping("/tasks/{id}/resolve")
     @PreAuthorize("hasRole('STAFF')")
@@ -473,7 +473,7 @@ public class TicketController {
     public Map<String, Object> taskDetail(@PathVariable("id") Long id) {
         TicketDetailDto detail = ticketService.getTicketDetail(id);
         assertStaffOwnsTicket(detail);
-        
+
         // 返回统一格式的响应
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
@@ -500,7 +500,7 @@ public class TicketController {
 
         // 1. 状态筛选（前端传的是 pending/processing/...）
         if (status != null && !status.isBlank() && !"all".equalsIgnoreCase(status)) {
-            com.ligong.reportingcenter.domain.enums.TicketStatus targetStatus = mapStatusFromFrontend(status);
+            TicketStatus targetStatus = mapStatusFromFrontend(status);
             stream = stream.filter(t -> t.status() == targetStatus);
         }
 
@@ -520,7 +520,7 @@ public class TicketController {
                 String studentIdStr = t.studentId() != null ? t.studentId().toLowerCase() : "";
                 String staffIdStr = t.staffId() != null ? t.staffId().toLowerCase() : "";
                 String categoryNameStr = t.categoryName() != null ? t.categoryName().toLowerCase() : "";
-                boolean matches = desc.contains(searchKeyword) 
+                boolean matches = desc.contains(searchKeyword)
                     || loc.contains(searchKeyword)
                     || ticketIdStr.contains(searchKeyword)
                     || studentIdStr.contains(searchKeyword)
@@ -566,17 +566,17 @@ public class TicketController {
         } catch (Exception e) {
             throw new BusinessException("无法获取当前用户信息，请先登录");
         }
-        
+
         // 从请求体中获取维修工ID
         String staffId = requestBody.get("repairmanId") != null ? requestBody.get("repairmanId") : requestBody.get("staffId");
         if (staffId == null || staffId.isBlank()) {
             throw new BusinessException("维修工ID不能为空");
         }
-        
+
         // 构造分配请求
         TicketAssignRequest request = new TicketAssignRequest(operatorId, staffId);
         TicketDetailDto detail = ticketService.assignTicket(id, request);
-        
+
         // 返回统一格式
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
@@ -611,7 +611,7 @@ public class TicketController {
         );
         return ticketService.updateStatus(id, checkedRequest);
     }
-    
+
     @PutMapping("/admin/repair-orders/{id}/repair-notes")
     @PreAuthorize("hasRole('ADMIN')")
     public TicketDetailDto updateRepairNotes(@PathVariable("id") Long id,
@@ -619,7 +619,7 @@ public class TicketController {
         String operatorId = currentUserId();
         return ticketService.updateRepairNotes(id, request.notes(), operatorId);
     }
-    
+
     @PutMapping("/admin/repair-orders/{id}/process-notes")
     @PreAuthorize("hasRole('ADMIN')")
     public TicketDetailDto updateProcessNotes(@PathVariable("id") Long id,
@@ -627,7 +627,7 @@ public class TicketController {
         String operatorId = currentUserId();
         return ticketService.updateProcessNotes(id, request.notes(), operatorId);
     }
-    
+
     @PutMapping("/admin/repair-orders/{id}/estimated-completion-time")
     @PreAuthorize("hasRole('ADMIN')")
     public TicketDetailDto setEstimatedCompletionTime(@PathVariable("id") Long id,
@@ -635,7 +635,7 @@ public class TicketController {
         String operatorId = currentUserId();
         return ticketService.setEstimatedCompletionTime(id, request.estimatedTime(), operatorId);
     }
-    
+
     // 将前端状态值映射到后端枚举值
     private String currentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -711,9 +711,9 @@ public class TicketController {
         }
         return String.valueOf(body.get(key)).trim();
     }
-    
+
     // 内部请求类
     public record UpdateNotesRequest(String notes) {}
-    
+
     public record SetEstimatedTimeRequest(java.time.LocalDateTime estimatedTime) {}
 }

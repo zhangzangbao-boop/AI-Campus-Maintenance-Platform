@@ -45,6 +45,20 @@ spring:
             - Path=/api/users/**
           order: 3
 
+        # 转发到 qiyun-repair-service（报修服务，精确匹配）
+        - id: repair-service-route
+          uri: lb://qiyun-repair-service
+          predicates:
+            - Path=/api/repair-orders/**,/api/tasks/**,/api/staff/**,/api/categories/**,/api/upload/**
+          order: 4
+
+        # 转发到 qiyun-repair-service（管理员工单接口，精确匹配）
+        - id: admin-repair-route
+          uri: lb://qiyun-repair-service
+          predicates:
+            - Path=/api/admin/repair-orders/**,/api/admin/transfer-requests/**
+          order: 5
+
         # 转发到 qiyun-biz-service（兼容原业务接口，匹配所有其他 /api/**）
         - id: biz-service-route
           uri: lb://qiyun-biz-service

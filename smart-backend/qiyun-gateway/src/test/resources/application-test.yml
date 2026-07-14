@@ -30,6 +30,20 @@ spring:
             - Path=/api/auth/**
           order: 1
 
+        # 转发到 qiyun-user-service（管理员用户管理，精确匹配）
+        - id: admin-users-route
+          uri: lb://qiyun-user-service
+          predicates:
+            - Path=/api/admin/users/**
+          order: 2
+
+        # 转发到 qiyun-user-service（用户接口，精确匹配）
+        - id: users-route
+          uri: lb://qiyun-user-service
+          predicates:
+            - Path=/api/users/**
+          order: 3
+
         # 转发到 qiyun-biz-service（兼容原业务接口，匹配所有其他 /api/**）
         - id: biz-service-route
           uri: lb://qiyun-biz-service

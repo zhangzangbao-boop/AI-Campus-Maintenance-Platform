@@ -41,34 +41,31 @@ class GatewayRouteTests {
     }
 
     @Test
-    @DisplayName("user-auth-route目标URI为lb://qiyun-user-service")
-    void userAuthRoute_uriCorrect() {
+    @DisplayName("users-route存在且指向user-service")
+    void usersRoute_exists() {
         List<Route> routes = collectRoutes();
 
-        Route userAuthRoute = routes.stream()
-                .filter(r -> r.getId().equals("user-auth-route"))
+        Route usersRoute = routes.stream()
+                .filter(r -> r.getId().equals("users-route"))
                 .findFirst()
                 .orElse(null);
 
-        assertThat(userAuthRoute).isNotNull();
-        assertThat(userAuthRoute.getUri().toString()).isEqualTo("lb://qiyun-user-service");
+        assertThat(usersRoute).as("users-route应存在").isNotNull();
+        assertThat(usersRoute.getUri().toString()).isEqualTo("lb://qiyun-user-service");
     }
 
     @Test
-    @DisplayName("user-auth-route匹配/api/auth/**")
-    void userAuthRoute_matchesAuthPath() {
+    @DisplayName("admin-users-route存在且指向user-service")
+    void adminUsersRoute_exists() {
         List<Route> routes = collectRoutes();
 
-        Route userAuthRoute = routes.stream()
-                .filter(r -> r.getId().equals("user-auth-route"))
+        Route adminUsersRoute = routes.stream()
+                .filter(r -> r.getId().equals("admin-users-route"))
                 .findFirst()
                 .orElse(null);
 
-        assertThat(userAuthRoute).isNotNull();
-
-        // 验证路由配置包含/api/auth/**路径断言
-        String predicateString = userAuthRoute.getPredicate().toString();
-        assertThat(predicateString).contains("/api/auth/");
+        assertThat(adminUsersRoute).as("admin-users-route应存在").isNotNull();
+        assertThat(adminUsersRoute.getUri().toString()).isEqualTo("lb://qiyun-user-service");
     }
 
     @Test
@@ -100,82 +97,84 @@ class GatewayRouteTests {
     }
 
     @Test
-    @DisplayName("user-auth-route优先级高于biz-service-route")
-    void userAuthRoute_higherPriority() {
+    @DisplayName("路由优先级正确：ai(0) < auth(1) < admin-users(2) < users(3) < biz(10)")
+    void routePriorityCorrect() {
         List<Route> routes = collectRoutes();
 
-        Route userAuthRoute = routes.stream()
-                .filter(r -> r.getId().equals("user-auth-route"))
-                .findFirst()
-                .orElse(null);
-
-        Route bizRoute = routes.stream()
-                .filter(r -> r.getId().equals("biz-service-route"))
-                .findFirst()
-                .orElse(null);
-
-        assertThat(userAuthRoute).isNotNull();
-        assertThat(bizRoute).isNotNull();
-
-        // order值越小优先级越高
-        assertThat(userAuthRoute.getOrder()).isLessThan(bizRoute.getOrder());
-    }
-
-    @Test
-    @DisplayName("ai-service-route优先级高于user-auth-route")
-    void aiServiceRoute_higherPriority() {
-        List<Route> routes = collectRoutes();
-
-        Route aiRoute = routes.stream()
-                .filter(r -> r.getId().equals("ai-service-route"))
-                .findFirst()
-                .orElse(null);
-
-        Route userAuthRoute = routes.stream()
-                .filter(r -> r.getId().equals("user-auth-route"))
-                .findFirst()
-                .orElse(null);
+        Route aiRoute = routes.stream().filter(r -> r.getId().equals("ai-service-route")).findFirst().orElse(null);
+        Route authRoute = routes.stream().filter(r -> r.getId().equals("user-auth-route")).findFirst().orElse(null);
+        Route adminUsersRoute = routes.stream().filter(r -> r.getId().equals("admin-users-route")).findFirst().orElse(null);
+        Route usersRoute = routes.stream().filter(r -> r.getId().equals("users-route")).findFirst().orElse(null);
+        Route bizRoute = routes.stream().filter(r -> r.getId().equals("biz-service-route")).findFirst().orElse(null);
 
         assertThat(aiRoute).isNotNull();
-        assertThat(userAuthRoute).isNotNull();
+        assertThat(authRoute).isNotNull();
+        assertThat(adminUsersRoute).isNotNull();
+        assertThat(usersRoute).isNotNull();
+        assertThat(bizRoute).isNotNull();
 
-        // order值越小优先级越高
-        assertThat(aiRoute.getOrder()).isLessThan(userAuthRoute.getOrder());
+        // 验证优先级顺序
+        assertThat(aiRoute.getOrder()).isEqualTo(0);
+        assertThat(authRoute.getOrder()).isEqualTo(1);
+        assertThat(adminUsersRoute.getOrder()).isEqualTo(2);
+        assertThat(usersRoute.getOrder()).isEqualTo(3);
+        assertThat(bizRoute.getOrder()).isEqualTo(10);
+
+        // 验证优先级关系
+        assertThat(aiRoute.getOrder()).isLessThan(authRoute.getOrder());
+        assertThat(authRoute.getOrder()).isLessThan(adminUsersRoute.getOrder());
+        assertThat(adminUsersRoute.getOrder()).isLessThan(usersRoute.getOrder());
+        assertThat(usersRoute.getOrder()).isLessThan(bizRoute.getOrder());
     }
 
     @Test
-    @DisplayName("/api/users/**没有被精确转到user-service")
-    void usersApi_notRoutedToUserService() {
+    @DisplayName("/api/admin/stats不转user-service")
+    void adminStats_notRoutedToUserService() {
         List<Route> routes = collectRoutes();
 
-        // /api/users/** 应该匹配biz-service-route（order: 10），不是user-auth-route
-        Route userAuthRoute = routes.stream()
-                .filter(r -> r.getId().equals("user-auth-route"))
+        Route adminUsersRoute = routes.stream()
+                .filter(r -> r.getId().equals("admin-users-route"))
                 .findFirst()
                 .orElse(null);
 
-        assertThat(userAuthRoute).isNotNull();
+        assertThat(adminUsersRoute).isNotNull();
 
-        // 验证user-auth-route的路径断言只匹配/api/auth/**
-        String predicateString = userAuthRoute.getPredicate().toString();
-        assertThat(predicateString).doesNotContain("/api/users/");
+        // 验证admin-users-route只匹配/api/admin/users/**
+        String predicateString = adminUsersRoute.getPredicate().toString();
+        assertThat(predicateString).contains("/api/admin/users/");
+        assertThat(predicateString).doesNotContain("/api/admin/stats");
     }
 
     @Test
-    @DisplayName("/api/admin/users/**没有被精确转到user-service")
-    void adminUsersApi_notRoutedToUserService() {
+    @DisplayName("/api/admin/repair-orders不转user-service")
+    void adminRepairOrders_notRoutedToUserService() {
         List<Route> routes = collectRoutes();
 
-        Route userAuthRoute = routes.stream()
-                .filter(r -> r.getId().equals("user-auth-route"))
+        Route adminUsersRoute = routes.stream()
+                .filter(r -> r.getId().equals("admin-users-route"))
                 .findFirst()
                 .orElse(null);
 
-        assertThat(userAuthRoute).isNotNull();
+        assertThat(adminUsersRoute).isNotNull();
 
-        // 验证user-auth-route的路径断言不包含/api/admin/users
-        String predicateString = userAuthRoute.getPredicate().toString();
-        assertThat(predicateString).doesNotContain("/api/admin/");
+        String predicateString = adminUsersRoute.getPredicate().toString();
+        assertThat(predicateString).doesNotContain("/api/admin/repair-orders");
+    }
+
+    @Test
+    @DisplayName("/api/admin/feedbacks不转user-service")
+    void adminFeedbacks_notRoutedToUserService() {
+        List<Route> routes = collectRoutes();
+
+        Route adminUsersRoute = routes.stream()
+                .filter(r -> r.getId().equals("admin-users-route"))
+                .findFirst()
+                .orElse(null);
+
+        assertThat(adminUsersRoute).isNotNull();
+
+        String predicateString = adminUsersRoute.getPredicate().toString();
+        assertThat(predicateString).doesNotContain("/api/admin/feedbacks");
     }
 
     @Test
@@ -201,37 +200,7 @@ class GatewayRouteTests {
     }
 
     @Test
-    @DisplayName("路由顺序正确：ai(0) < auth(1) < biz(10)")
-    void routeOrderCorrect() {
-        List<Route> routes = collectRoutes();
-
-        Route aiRoute = routes.stream()
-                .filter(r -> r.getId().equals("ai-service-route"))
-                .findFirst()
-                .orElse(null);
-
-        Route userAuthRoute = routes.stream()
-                .filter(r -> r.getId().equals("user-auth-route"))
-                .findFirst()
-                .orElse(null);
-
-        Route bizRoute = routes.stream()
-                .filter(r -> r.getId().equals("biz-service-route"))
-                .findFirst()
-                .orElse(null);
-
-        assertThat(aiRoute).isNotNull();
-        assertThat(userAuthRoute).isNotNull();
-        assertThat(bizRoute).isNotNull();
-
-        // order: ai=0, auth=1, biz=10
-        assertThat(aiRoute.getOrder()).isEqualTo(0);
-        assertThat(userAuthRoute.getOrder()).isEqualTo(1);
-        assertThat(bizRoute.getOrder()).isEqualTo(10);
-    }
-
-    @Test
-    @DisplayName("三个路由全部存在")
+    @DisplayName("五个路由全部存在")
     void allRoutesExist() {
         List<Route> routes = collectRoutes();
 
@@ -239,7 +208,13 @@ class GatewayRouteTests {
                 .map(Route::getId)
                 .toList();
 
-        assertThat(routeIds).contains("ai-service-route", "user-auth-route", "biz-service-route");
+        assertThat(routeIds).contains(
+            "ai-service-route",
+            "user-auth-route",
+            "admin-users-route",
+            "users-route",
+            "biz-service-route"
+        );
     }
 
     private List<Route> collectRoutes() {

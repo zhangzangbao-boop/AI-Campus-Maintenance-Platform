@@ -3,13 +3,19 @@ package com.qiyun.userservice.service;
 import com.qiyun.common.exception.BusinessException;
 import com.qiyun.userservice.domain.entity.User;
 import com.qiyun.userservice.domain.enums.UserRole;
+import com.qiyun.userservice.dto.ResetPasswordResult;
 import com.qiyun.userservice.dto.UserDto;
+import com.qiyun.userservice.dto.request.ChangePasswordRequest;
 import com.qiyun.userservice.dto.request.LoginRequest;
 import com.qiyun.userservice.dto.request.UserRegisterRequest;
+import com.qiyun.userservice.dto.request.UserUpdateRequest;
 import com.qiyun.userservice.dto.response.AuthResponse;
 import com.qiyun.userservice.repository.UserRepository;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -63,6 +69,53 @@ public class UserService implements UserDetailsService {
         return toDto(user);
     }
 
+    @Transactional(readOnly = true)
+    public List<UserDto> listByRole(UserRole role) {
+        return userRepository.findByRoleAndIsActiveTrue(role)
+            .stream()
+            .map(this::toDto)
+            .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserDto> listAll() {
+        return userRepository.findAll()
+            .stream()
+            .map(this::toDto)
+            .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void deactivate(String userId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "用户不存在"));
+        user.setIsActive(false);
+    }
+
+    @Transactional
+    public void activate(String userId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "用户不存在"));
+        user.setIsActive(true);
+    }
+
+    @Transactional
+    public UserDto updateUser(String userId, UserRegisterRequest request) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "用户不存在"));
+
+        if (request.nickname() != null && !request.nickname().isBlank()) {
+            user.setNickname(request.nickname());
+        }
+
+        if (request.contactPhone() != null && !request.contactPhone().isBlank()) {
+            user.setContactPhone(request.contactPhone());
+        }
+
+        userRepository.save(user);
+        return toDto(user);
+    }
+
     public User loadActiveUser(String userId) {
         User user = userRepository.findByUserId(userId)
                 .orElseThrow(() -> new BusinessException("用户不存在"));
@@ -70,6 +123,60 @@ public class UserService implements UserDetailsService {
             throw new BusinessException("用户账户已被禁用");
         }
         return user;
+    }
+
+    @Transactional(readOnly = true)
+    public UserDto getCurrentUser(String userId) {
+        return findById(userId);
+    }
+
+    @Transactional
+    public void changePassword(String userId, ChangePasswordRequest request) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "用户不存在"));
+        if (!passwordEncoder.matches(request.oldPassword(), user.getPasswordHash())) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "原密码不正确");
+        }
+        if (passwordEncoder.matches(request.newPassword(), user.getPasswordHash())) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "新密码不能与原密码相同");
+        }
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        userRepository.save(user);
+    }
+
+    @Transactional
+    public UserDto updateUserInfo(String userId, UserUpdateRequest request) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "用户不存在"));
+
+        if (request.getNickname() != null && !request.getNickname().isBlank()) {
+            user.setNickname(request.getNickname());
+        }
+
+        if (request.getContactPhone() != null && !request.getContactPhone().isBlank()) {
+            user.setContactPhone(request.getContactPhone());
+        }
+
+        // avatarUrl允许为空，不再强制必填
+        if (request.getAvatarUrl() != null) {
+            user.setAvatarUrl(request.getAvatarUrl());
+        }
+
+        userRepository.save(user);
+        return toDto(user);
+    }
+
+    @Transactional
+    public ResetPasswordResult resetPassword(String userId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "用户不存在"));
+
+        // 生成随机密码
+        String newPassword = RandomStringUtils.randomAlphanumeric(8);
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+
+        return new ResetPasswordResult(userId, newPassword);
     }
 
     private UserDto toDto(User user) {

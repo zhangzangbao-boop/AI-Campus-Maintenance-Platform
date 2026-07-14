@@ -522,6 +522,126 @@ class UserPermissionApiTests {
                 .andExpect(status().isForbidden());
     }
 
+    // ==================== 禁用用户Token测试 ====================
+
+    @Test
+    @DisplayName("禁用用户前的Token可以正常访问")
+    void enabledUser_tokenWorks() throws Exception {
+        String userId = generateUniqueUserId();
+        String token = registerAndLogin(userId, "password123", "测试用户", UserRole.STUDENT);
+
+        // 验证Token可以访问
+        mockMvc.perform(get("/api/users/me")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(userId));
+    }
+
+    @Test
+    @DisplayName("禁用用户后旧Token被拒绝")
+    void disabledUser_oldTokenRejected() throws Exception {
+        String userId = generateUniqueUserId();
+        String token = registerAndLogin(userId, "password123", "待禁用用户", UserRole.STUDENT);
+
+        // 验证Token最初可以访问
+        mockMvc.perform(get("/api/users/me")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+
+        // 禁用用户
+        userService.deactivate(userId);
+
+        // 使用旧Token访问被拒绝
+        mockMvc.perform(get("/api/users/me")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("禁用用户不能访问管理员接口")
+    void disabledUser_cannotAccessAdminEndpoint() throws Exception {
+        String userId = generateUniqueUserId();
+        String token = registerAndLogin(userId, "password123", "待禁用管理员", UserRole.ADMIN);
+
+        // 验证管理员Token最初可以访问
+        mockMvc.perform(get("/api/admin/users")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+
+        // 禁用管理员
+        userService.deactivate(userId);
+
+        // 使用旧Token访问管理员接口被拒绝
+        mockMvc.perform(get("/api/admin/users")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("重新启用用户后未过期Token恢复有效")
+    void reenabledUser_tokenRestored() throws Exception {
+        String userId = generateUniqueUserId();
+        String token = registerAndLogin(userId, "password123", "待禁用用户", UserRole.STUDENT);
+
+        // 禁用用户
+        userService.deactivate(userId);
+
+        // Token被拒绝
+        mockMvc.perform(get("/api/users/me")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+
+        // 重新启用用户
+        userService.activate(userId);
+
+        // 未过期Token恢复有效
+        mockMvc.perform(get("/api/users/me")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(userId));
+    }
+
+    @Test
+    @DisplayName("禁用一个用户不影响其他用户")
+    void disableOneUser_doesNotAffectOthers() throws Exception {
+        String userId1 = generateUniqueUserId();
+        String userId2 = generateUniqueUserId();
+
+        String token1 = registerAndLogin(userId1, "password123", "用户1", UserRole.STUDENT);
+        String token2 = registerAndLogin(userId2, "password123", "用户2", UserRole.STUDENT);
+
+        // 禁用用户1
+        userService.deactivate(userId1);
+
+        // 用户1的Token被拒绝
+        mockMvc.perform(get("/api/users/me")
+                        .header("Authorization", "Bearer " + token1))
+                .andExpect(status().isUnauthorized());
+
+        // 用户2的Token仍然有效
+        mockMvc.perform(get("/api/users/me")
+                        .header("Authorization", "Bearer " + token2))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(userId2));
+    }
+
+    @Test
+    @DisplayName("禁用用户仍然不能登录")
+    void disabledUser_cannotLogin() throws Exception {
+        String userId = generateUniqueUserId();
+        registerAndLogin(userId, "password123", "测试用户", UserRole.STUDENT);
+
+        // 禁用用户
+        userService.deactivate(userId);
+
+        // 尝试登录失败
+        LoginRequest loginRequest = new LoginRequest(userId, "password123");
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginRequest)))
+                .andExpect(status().isUnauthorized());
+    }
+
     // ==================== SecurityConfig路径保护测试 ====================
 
     @Test

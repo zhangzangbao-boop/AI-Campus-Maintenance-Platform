@@ -1,11 +1,13 @@
 package com.ligong.reportingcenter.controller;
 
+import com.ligong.reportingcenter.domain.enums.UserRole;
 import com.ligong.reportingcenter.dto.UserDto;
 import com.ligong.reportingcenter.dto.request.LoginRequest;
 import com.ligong.reportingcenter.dto.request.UserRegisterRequest;
 import com.ligong.reportingcenter.dto.response.AuthResponse;
 import com.ligong.reportingcenter.service.UserService;
 import com.ligong.reportingcenter.util.JwtUtil;
+import com.qiyun.common.exception.BusinessException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -26,6 +28,10 @@ public class AuthController {
     @PostMapping("/auth/register")
     @ResponseStatus(HttpStatus.CREATED)
     public UserDto register(@Valid @RequestBody UserRegisterRequest request) {
+        // 公开注册只允许创建学生账号，STAFF和ADMIN必须由管理员创建
+        if (request.role() != UserRole.STUDENT) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "公开注册仅允许创建学生账号");
+        }
         return userService.register(request);
     }
 

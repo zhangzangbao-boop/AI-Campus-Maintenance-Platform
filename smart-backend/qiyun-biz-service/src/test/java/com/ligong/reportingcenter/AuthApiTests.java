@@ -85,9 +85,31 @@ class AuthApiTests {
         assertThat(responseBody).doesNotContain("password").doesNotContain("Password");
     }
 
+    // ==================== S0-01: 匿名注册角色限制测试 ====================
+
     @Test
-    @DisplayName("合法维修工注册成功")
-    void register_staffSuccess() throws Exception {
+    @DisplayName("匿名注册STUDENT成功")
+    void register_studentRoleSuccess() throws Exception {
+        String userId = generateUniqueUserId();
+        UserRegisterRequest request = new UserRegisterRequest(
+                userId,
+                "password123",
+                "测试学生",
+                "13800138001",
+                UserRole.STUDENT
+        );
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.userId").value(userId))
+                .andExpect(jsonPath("$.role").value("STUDENT"));
+    }
+
+    @Test
+    @DisplayName("匿名注册STAFF失败")
+    void register_staffRole_fails() throws Exception {
         String userId = generateUniqueUserId();
         UserRegisterRequest request = new UserRegisterRequest(
                 userId,
@@ -100,14 +122,21 @@ class AuthApiTests {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.userId").value(userId))
-                .andExpect(jsonPath("$.role").value("STAFF"));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").exists())
+                .andExpect(jsonPath("$.message").value("公开注册仅允许创建学生账号"));
+
+        // 验证STAFF账号未创建（通过尝试登录确认不存在）
+        LoginRequest loginRequest = new LoginRequest(userId, "password123");
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginRequest)))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
-    @DisplayName("合法管理员注册成功")
-    void register_adminSuccess() throws Exception {
+    @DisplayName("匿名注册ADMIN失败")
+    void register_adminRole_fails() throws Exception {
         String userId = generateUniqueUserId();
         UserRegisterRequest request = new UserRegisterRequest(
                 userId,
@@ -120,9 +149,16 @@ class AuthApiTests {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.userId").value(userId))
-                .andExpect(jsonPath("$.role").value("ADMIN"));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").exists())
+                .andExpect(jsonPath("$.message").value("公开注册仅允许创建学生账号"));
+
+        // 验证ADMIN账号未创建（通过尝试登录确认不存在）
+        LoginRequest loginRequest = new LoginRequest(userId, "password123");
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginRequest)))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

@@ -26,6 +26,15 @@ chroma:
   top-k: ${RAG_TOP_K:5}
   timeout-seconds: ${CHROMA_TIMEOUT_SECONDS:10}
 
+# Embedding 模型配置
+embedding:
+  enabled: ${EMBEDDING_ENABLED:true}
+  model-path: ${EMBEDDING_MODEL_PATH:}
+  tokenizer-path: ${EMBEDDING_TOKENIZER_PATH:}
+  dimensions: ${EMBEDDING_DIMENSIONS:384}
+  max-sequence-length: ${EMBEDDING_MAX_SEQ_LEN:512}
+  batch-size: ${EMBEDDING_BATCH_SIZE:32}
+
 # 内部服务密钥
 internal:
   service:

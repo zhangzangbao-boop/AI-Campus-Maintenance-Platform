@@ -116,3 +116,15 @@ bin/
 *.sql.bak
 *.sql.gz
 db-backups/
+
+# ========================================
+# AI Models (DO NOT COMMIT)
+# ========================================
+models/
+local-models/
+local-cache/
+*.onnx
+tokenizer.json
+vocab.txt
+tokenizer_config.json
+special_tokens_map.json

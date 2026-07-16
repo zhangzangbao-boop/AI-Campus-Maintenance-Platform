@@ -119,18 +119,25 @@ public class ChromaClientService {
     }
 
     /**
-     * 添加文档到集合
+     * 添加文档到集合（使用预计算的 embedding）
      *
-     * @param id       文档唯一标识
-     * @param document 文档内容
-     * @param metadata 元数据
+     * @param id        文档唯一标识
+     * @param document  文档内容
+     * @param embedding 文档向量
+     * @param metadata  元数据
      * @return 是否成功
      */
-    public boolean addDocument(String id, String document, Map<String, String> metadata) {
+    public boolean addDocument(String id, String document, float[] embedding, Map<String, String> metadata) {
         if (collectionId == null) {
             if (!ensureCollection()) {
                 return false;
             }
+        }
+
+        // 校验 embedding
+        if (embedding == null || embedding.length == 0) {
+            log.error("Embedding 为空，无法添加文档: id={}", id);
+            return false;
         }
 
         try {
@@ -139,6 +146,7 @@ public class ChromaClientService {
             Map<String, Object> body = new HashMap<>();
             body.put("ids", List.of(id));
             body.put("documents", List.of(document));
+            body.put("embeddings", List.of(toBoxedArray(embedding)));
             if (metadata != null && !metadata.isEmpty()) {
                 body.put("metadatas", List.of(metadata));
             }
@@ -159,18 +167,36 @@ public class ChromaClientService {
     }
 
     /**
-     * 更新集合中的文档
+     * 添加文档到集合（兼容旧接口，不推荐使用）
      *
-     * @param id       文档唯一标识
-     * @param document 新文档内容
-     * @param metadata 新元数据
+     * @deprecated Chroma 0.5.20+ 需要提供 embedding，请使用 {@link #addDocument(String, String, float[], Map)}
+     */
+    @Deprecated
+    public boolean addDocument(String id, String document, Map<String, String> metadata) {
+        log.warn("使用已废弃的 addDocument 方法，Chroma 0.5.20+ 需要提供 embedding");
+        return false;
+    }
+
+    /**
+     * 更新集合中的文档（使用预计算的 embedding）
+     *
+     * @param id        文档唯一标识
+     * @param document  新文档内容
+     * @param embedding 文档向量
+     * @param metadata  新元数据
      * @return 是否成功
      */
-    public boolean updateDocument(String id, String document, Map<String, String> metadata) {
+    public boolean updateDocument(String id, String document, float[] embedding, Map<String, String> metadata) {
         if (collectionId == null) {
             if (!ensureCollection()) {
                 return false;
             }
+        }
+
+        // 校验 embedding
+        if (embedding == null || embedding.length == 0) {
+            log.error("Embedding 为空，无法更新文档: id={}", id);
+            return false;
         }
 
         try {
@@ -179,6 +205,7 @@ public class ChromaClientService {
             Map<String, Object> body = new HashMap<>();
             body.put("ids", List.of(id));
             body.put("documents", List.of(document));
+            body.put("embeddings", List.of(toBoxedArray(embedding)));
             if (metadata != null && !metadata.isEmpty()) {
                 body.put("metadatas", List.of(metadata));
             }
@@ -196,6 +223,17 @@ public class ChromaClientService {
             log.error("更新 Chroma 文档失败: id={}, error={}", id, e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * 更新集合中的文档（兼容旧接口，不推荐使用）
+     *
+     * @deprecated Chroma 0.5.20+ 需要提供 embedding，请使用 {@link #updateDocument(String, String, float[], Map)}
+     */
+    @Deprecated
+    public boolean updateDocument(String id, String document, Map<String, String> metadata) {
+        log.warn("使用已废弃的 updateDocument 方法，Chroma 0.5.20+ 需要提供 embedding");
+        return false;
     }
 
     /**
@@ -231,25 +269,31 @@ public class ChromaClientService {
     }
 
     /**
-     * 检索相似文档
+     * 检索相似文档（使用预计算的 embedding）
      *
-     * @param query      查询文本
-     * @param topK       返回数量
-     * @param whereFilter 元数据过滤条件
+     * @param queryEmbedding 查询向量
+     * @param topK           返回数量
+     * @param whereFilter    元数据过滤条件
      * @return 检索结果列表
      */
-    public List<RetrievalResult> query(String query, int topK, Map<String, String> whereFilter) {
+    public List<RetrievalResult> queryWithEmbedding(float[] queryEmbedding, int topK, Map<String, String> whereFilter) {
         if (collectionId == null) {
             if (!ensureCollection()) {
                 return List.of();
             }
         }
 
+        // 校验 embedding
+        if (queryEmbedding == null || queryEmbedding.length == 0) {
+            log.error("Query embedding 为空，无法检索");
+            return List.of();
+        }
+
         try {
             String url = normalizeUrl(config.getUrl());
 
             Map<String, Object> body = new HashMap<>();
-            body.put("query_texts", List.of(query));
+            body.put("query_embeddings", List.of(toBoxedArray(queryEmbedding)));
             body.put("n_results", topK > 0 ? topK : config.getTopK());
             if (whereFilter != null && !whereFilter.isEmpty()) {
                 body.put("where", whereFilter);
@@ -274,6 +318,17 @@ public class ChromaClientService {
             log.error("Chroma 查询异常: {}", e.getMessage(), e);
             return List.of();
         }
+    }
+
+    /**
+     * 检索相似文档（兼容旧接口，不推荐使用）
+     *
+     * @deprecated Chroma 0.5.20+ 需要提供 embedding，请使用 {@link #queryWithEmbedding(float[], int, Map)}
+     */
+    @Deprecated
+    public List<RetrievalResult> query(String query, int topK, Map<String, String> whereFilter) {
+        log.warn("使用已废弃的 query 方法，Chroma 0.5.20+ 需要提供 embedding");
+        return List.of();
     }
 
     /**
@@ -368,6 +423,17 @@ public class ChromaClientService {
             url = url.substring(0, url.length() - 1);
         }
         return url;
+    }
+
+    /**
+     * 将 float[] 转换为 Float[]（用于 JSON 序列化）
+     */
+    private Float[] toBoxedArray(float[] arr) {
+        Float[] boxed = new Float[arr.length];
+        for (int i = 0; i < arr.length; i++) {
+            boxed[i] = arr[i];
+        }
+        return boxed;
     }
 
     /**

@@ -21,6 +21,7 @@ public class RagKnowledgeService {
 
     private final ChromaClientService chromaClientService;
     private final DeepSeekClientService deepSeekClientService;
+    private final EmbeddingService embeddingService;
     private final ChromaConfig chromaConfig;
     private final DeepSeekConfig deepSeekConfig;
 
@@ -36,6 +37,12 @@ public class RagKnowledgeService {
             return RagAnswer.noAnswer("问题不能为空");
         }
 
+        // 检查 Embedding 服务是否可用
+        if (!embeddingService.isAvailable()) {
+            log.warn("Embedding 服务不可用，无法进行 RAG 检索");
+            return RagAnswer.fallback("Embedding 服务暂不可用，请联系管理员配置模型");
+        }
+
         // 检查 Chroma 是否可用
         if (!chromaClientService.isAvailable()) {
             log.warn("Chroma 服务不可用，无法进行 RAG 检索");
@@ -48,6 +55,20 @@ public class RagKnowledgeService {
             return RagAnswer.fallback("知识库初始化失败，请联系管理员");
         }
 
+        // 生成查询 embedding
+        float[] queryEmbedding = embeddingService.embed(question);
+        if (queryEmbedding == null || queryEmbedding.length == 0) {
+            log.error("生成查询 Embedding 失败: question={}", question);
+            return RagAnswer.fallback("向量生成失败，请联系管理员");
+        }
+
+        // 校验维度
+        if (queryEmbedding.length != embeddingService.getDimensions()) {
+            log.error("查询 Embedding 维度不匹配: expected={}, actual={}",
+                embeddingService.getDimensions(), queryEmbedding.length);
+            return RagAnswer.fallback("向量维度不匹配，请联系管理员");
+        }
+
         // 构建过滤条件
         Map<String, String> whereFilter = null;
         if (categoryKey != null && !categoryKey.isBlank()) {
@@ -57,7 +78,7 @@ public class RagKnowledgeService {
 
         // 检索相关文档
         int topK = chromaConfig.getTopK();
-        List<RetrievalResult> results = chromaClientService.query(question, topK, whereFilter);
+        List<RetrievalResult> results = chromaClientService.queryWithEmbedding(queryEmbedding, topK, whereFilter);
 
         if (results.isEmpty()) {
             log.info("RAG 检索无匹配结果: question={}", question);

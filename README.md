@@ -158,6 +158,11 @@ smart-backend/
 | `UPLOAD_DIRECTORY` | ./uploads | 上传文件目录 |
 | `BACKUP_DIRECTORY` | ./backups | 备份目录 |
 | `BACKUP_AUTO_ENABLED` | false | 自动备份开关 |
+| `INTERNAL_SERVICE_SECRET` | - | 内部服务调用密钥（必须配置） |
+| `CHROMA_URL` | http://localhost:8000 | Chroma 向量数据库地址 |
+| `CHROMA_COLLECTION` | campus_maintenance_kb | Chroma 集合名称 |
+| `EMBEDDING_MODEL_PATH` | - | ONNX Embedding 模型路径（RAG 功能必需） |
+| `DEEPSEEK_API_KEY` | - | DeepSeek API 密钥（AI 生成回答） |
 
 ## 快速启动
 
@@ -194,15 +199,42 @@ SOURCE smart-backend/qiyun-repair-service/src/main/resources/full_init_test_data
 ```powershell
 $env:JWT_SECRET="your-at-least-32-characters-jwt-secret-key"
 $env:DB_PASSWORD="your-db-password"
+$env:INTERNAL_SERVICE_SECRET="your-internal-service-secret"
+$env:EMBEDDING_MODEL_PATH="C:\path\to\model.onnx"
 ```
 
 **Linux/Mac**：
 ```bash
 export JWT_SECRET="your-at-least-32-characters-jwt-secret-key"
 export DB_PASSWORD="your-db-password"
+export INTERNAL_SERVICE_SECRET="your-internal-service-secret"
+export EMBEDDING_MODEL_PATH="/path/to/model.onnx"
 ```
 
-### 4. 启动后端服务
+### 4. 启动 Chroma 向量数据库（RAG 功能需要）
+
+```bash
+# 使用 Docker 启动 Chroma
+docker run -d -p 8000:8000 chromadb/chroma:0.5.20
+
+# 或使用 pip 安装并启动
+pip install chromadb==0.5.20
+chroma run --host 0.0.0.0 --port 8000
+```
+
+### 5. 下载 Embedding 模型（RAG 功能需要）
+
+下载 `paraphrase-multilingual-MiniLM-L12-v2` ONNX 模型并配置路径：
+
+```bash
+# 模型下载地址（需自行转换或下载预转换版本）
+# 设置环境变量指向模型文件
+export EMBEDDING_MODEL_PATH="/path/to/model.onnx"
+```
+
+**注意**：如不配置 Embedding 模型，RAG 问答功能将不可用，系统会返回明确的降级提示。
+
+### 6. 启动后端服务
 
 ```bash
 cd smart-backend
@@ -227,7 +259,7 @@ cd ../qiyun-ops-service && mvn spring-boot:run
 cd ../qiyun-ai-service && mvn spring-boot:run
 ```
 
-### 5. 启动前端
+### 7. 启动前端
 
 ```bash
 cd smart-frontend

@@ -66,4 +66,49 @@ class ChromaClientServiceTest {
         assertEquals(0.85, result.similarity());
         assertEquals("测试标题", result.metadata().get("title"));
     }
+
+    @Test
+    @DisplayName("Embedding 向量校验 - 空向量拒绝")
+    void testEmptyEmbeddingRejected() {
+        when(chromaConfig.getUrl()).thenReturn("http://localhost:8000");
+        when(chromaConfig.getTimeoutSeconds()).thenReturn(10);
+
+        ChromaClientService service = new ChromaClientService(chromaConfig, objectMapper);
+
+        // 空向量应该被拒绝
+        assertFalse(service.addDocument("test-id", "test content", null, Map.of()));
+        assertFalse(service.addDocument("test-id", "test content", new float[0], Map.of()));
+    }
+
+    @Test
+    @DisplayName("Embedding 向量校验 - 空查询向量拒绝")
+    void testEmptyQueryEmbeddingRejected() {
+        when(chromaConfig.getUrl()).thenReturn("http://localhost:8000");
+        when(chromaConfig.getTimeoutSeconds()).thenReturn(10);
+
+        ChromaClientService service = new ChromaClientService(chromaConfig, objectMapper);
+
+        // 空查询向量应该返回空列表
+        assertTrue(service.queryWithEmbedding(null, 5, null).isEmpty());
+        assertTrue(service.queryWithEmbedding(new float[0], 5, null).isEmpty());
+    }
+
+    @Test
+    @DisplayName("废弃方法返回安全默认值")
+    @SuppressWarnings("deprecation")
+    void testDeprecatedMethodsReturnSafeDefaults() {
+        when(chromaConfig.getUrl()).thenReturn("http://localhost:8000");
+        when(chromaConfig.getTimeoutSeconds()).thenReturn(10);
+
+        ChromaClientService service = new ChromaClientService(chromaConfig, objectMapper);
+
+        // 废弃的 query 方法应该返回空列表（不执行实际查询）
+        assertTrue(service.query("test query", 5, null).isEmpty());
+
+        // 废弃的 addDocument 方法应该返回 false（不添加）
+        assertFalse(service.addDocument("test-id", "test content", Map.of()));
+
+        // 废弃的 updateDocument 方法应该返回 false（不更新）
+        assertFalse(service.updateDocument("test-id", "test content", Map.of()));
+    }
 }

@@ -27,6 +27,9 @@ class RagKnowledgeServiceTest {
     private DeepSeekClientService deepSeekClientService;
 
     @Mock
+    private EmbeddingService embeddingService;
+
+    @Mock
     private ChromaConfig chromaConfig;
 
     @Mock
@@ -37,7 +40,7 @@ class RagKnowledgeServiceTest {
     @BeforeEach
     void setUp() {
         ragKnowledgeService = new RagKnowledgeService(
-            chromaClientService, deepSeekClientService, chromaConfig, deepSeekConfig
+            chromaClientService, deepSeekClientService, embeddingService, chromaConfig, deepSeekConfig
         );
     }
 
@@ -50,8 +53,20 @@ class RagKnowledgeServiceTest {
     }
 
     @Test
+    @DisplayName("Embedding 服务不可用时返回降级提示")
+    void testEmbeddingUnavailable() {
+        when(embeddingService.isAvailable()).thenReturn(false);
+
+        RagKnowledgeService.RagAnswer answer = ragKnowledgeService.ask("空调不制冷怎么办？", null);
+        assertFalse(answer.success());
+        assertTrue(answer.fallback());
+        assertEquals("Embedding 服务暂不可用，请联系管理员配置模型", answer.message());
+    }
+
+    @Test
     @DisplayName("Chroma 不可用时返回降级提示")
     void testChromaUnavailable() {
+        when(embeddingService.isAvailable()).thenReturn(true);
         when(chromaClientService.isAvailable()).thenReturn(false);
 
         RagKnowledgeService.RagAnswer answer = ragKnowledgeService.ask("空调不制冷怎么办？", null);
@@ -63,9 +78,12 @@ class RagKnowledgeServiceTest {
     @Test
     @DisplayName("无匹配结果时返回提示")
     void testNoMatch() {
+        when(embeddingService.isAvailable()).thenReturn(true);
+        when(embeddingService.getDimensions()).thenReturn(384);
+        when(embeddingService.embed(anyString())).thenReturn(new float[384]);
         when(chromaClientService.isAvailable()).thenReturn(true);
         when(chromaClientService.ensureCollection()).thenReturn(true);
-        when(chromaClientService.query(anyString(), anyInt(), any())).thenReturn(List.of());
+        when(chromaClientService.queryWithEmbedding(any(float[].class), anyInt(), any())).thenReturn(List.of());
 
         RagKnowledgeService.RagAnswer answer = ragKnowledgeService.ask("这是什么？", null);
         assertFalse(answer.success());
@@ -75,11 +93,14 @@ class RagKnowledgeServiceTest {
     @Test
     @DisplayName("低相似度结果被过滤")
     void testLowSimilarityFiltered() {
+        when(embeddingService.isAvailable()).thenReturn(true);
+        when(embeddingService.getDimensions()).thenReturn(384);
+        when(embeddingService.embed(anyString())).thenReturn(new float[384]);
         when(chromaClientService.isAvailable()).thenReturn(true);
         when(chromaClientService.ensureCollection()).thenReturn(true);
 
         RetrievalResult lowSimilarity = new RetrievalResult("kb-1", "测试内容", Map.of("title", "测试"), 0.1);
-        when(chromaClientService.query(anyString(), anyInt(), any())).thenReturn(List.of(lowSimilarity));
+        when(chromaClientService.queryWithEmbedding(any(float[].class), anyInt(), any())).thenReturn(List.of(lowSimilarity));
 
         RagKnowledgeService.RagAnswer answer = ragKnowledgeService.ask("空调不制冷怎么办？", null);
         assertFalse(answer.success());
@@ -89,13 +110,16 @@ class RagKnowledgeServiceTest {
     @Test
     @DisplayName("AI 不可用时返回降级回答")
     void testFallbackAnswer() {
+        when(embeddingService.isAvailable()).thenReturn(true);
+        when(embeddingService.getDimensions()).thenReturn(384);
+        when(embeddingService.embed(anyString())).thenReturn(new float[384]);
         when(chromaClientService.isAvailable()).thenReturn(true);
         when(chromaClientService.ensureCollection()).thenReturn(true);
         when(deepSeekClientService.isAvailable()).thenReturn(false);
 
         Map<String, String> metadata = Map.of("title", "空调故障处理", "categoryKey", "ac");
         RetrievalResult result = new RetrievalResult("kb-1", "检查空调滤网是否堵塞", metadata, 0.85);
-        when(chromaClientService.query(anyString(), anyInt(), any())).thenReturn(List.of(result));
+        when(chromaClientService.queryWithEmbedding(any(float[].class), anyInt(), any())).thenReturn(List.of(result));
 
         RagKnowledgeService.RagAnswer answer = ragKnowledgeService.ask("空调不制冷怎么办？", null);
 
@@ -109,13 +133,16 @@ class RagKnowledgeServiceTest {
     @Test
     @DisplayName("分类过滤参数正确传递")
     void testCategoryFilter() {
+        when(embeddingService.isAvailable()).thenReturn(true);
+        when(embeddingService.getDimensions()).thenReturn(384);
+        when(embeddingService.embed(anyString())).thenReturn(new float[384]);
         when(chromaClientService.isAvailable()).thenReturn(true);
         when(chromaClientService.ensureCollection()).thenReturn(true);
-        when(chromaClientService.query(anyString(), anyInt(), any())).thenReturn(List.of());
+        when(chromaClientService.queryWithEmbedding(any(float[].class), anyInt(), any())).thenReturn(List.of());
 
         ragKnowledgeService.ask("空调问题", "ac");
 
-        verify(chromaClientService).query(anyString(), anyInt(), argThat(filter ->
+        verify(chromaClientService).queryWithEmbedding(any(float[].class), anyInt(), argThat(filter ->
             filter != null && filter.containsKey("categoryKey") && "ac".equals(filter.get("categoryKey"))
         ));
     }
@@ -123,13 +150,16 @@ class RagKnowledgeServiceTest {
     @Test
     @DisplayName("回答包含来源信息")
     void testAnswerContainsSources() {
+        when(embeddingService.isAvailable()).thenReturn(true);
+        when(embeddingService.getDimensions()).thenReturn(384);
+        when(embeddingService.embed(anyString())).thenReturn(new float[384]);
         when(chromaClientService.isAvailable()).thenReturn(true);
         when(chromaClientService.ensureCollection()).thenReturn(true);
         when(deepSeekClientService.isAvailable()).thenReturn(false);
 
         Map<String, String> metadata = Map.of("title", "漏水处理", "categoryKey", "plumbing");
         RetrievalResult result = new RetrievalResult("kb-5", "关闭总阀门，检查漏水点", metadata, 0.92);
-        when(chromaClientService.query(anyString(), anyInt(), any())).thenReturn(List.of(result));
+        when(chromaClientService.queryWithEmbedding(any(float[].class), anyInt(), any())).thenReturn(List.of(result));
 
         RagKnowledgeService.RagAnswer answer = ragKnowledgeService.ask("水管漏水", "plumbing");
 

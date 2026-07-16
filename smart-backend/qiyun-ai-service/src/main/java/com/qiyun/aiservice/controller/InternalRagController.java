@@ -1,6 +1,7 @@
 package com.qiyun.aiservice.controller;
 
 import com.qiyun.aiservice.service.ChromaClientService;
+import com.qiyun.aiservice.service.EmbeddingService;
 import java.util.HashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class InternalRagController {
 
     private final ChromaClientService chromaClientService;
+    private final EmbeddingService embeddingService;
 
     @Value("${internal.service.secret:}")
     private String internalSecret;
@@ -53,6 +55,35 @@ public class InternalRagController {
             ));
         }
 
+        // 检查 Embedding 服务是否可用
+        if (!embeddingService.isAvailable()) {
+            log.error("Embedding 服务不可用，无法同步知识到向量库");
+            return ResponseEntity.status(503).body(Map.of(
+                "code", 503,
+                "message", "Embedding 服务不可用，请联系管理员配置模型"
+            ));
+        }
+
+        // 生成 embedding
+        float[] embedding = embeddingService.embed(request.document());
+        if (embedding == null || embedding.length == 0) {
+            log.error("生成 Embedding 失败: id={}", id);
+            return ResponseEntity.status(500).body(Map.of(
+                "code", 500,
+                "message", "生成向量失败"
+            ));
+        }
+
+        // 校验维度
+        if (embedding.length != embeddingService.getDimensions()) {
+            log.error("Embedding 维度不匹配: expected={}, actual={}",
+                embeddingService.getDimensions(), embedding.length);
+            return ResponseEntity.status(500).body(Map.of(
+                "code", 500,
+                "message", "向量维度不匹配"
+            ));
+        }
+
         String docId = "kb-" + id;
         Map<String, String> metadata = new HashMap<>();
         metadata.put("knowledgeId", String.valueOf(id));
@@ -60,13 +91,13 @@ public class InternalRagController {
         metadata.put("categoryKey", request.categoryKey() != null ? request.categoryKey() : "");
         metadata.put("enabled", String.valueOf(request.enabled() != null ? request.enabled() : true));
 
-        boolean success = chromaClientService.updateDocument(docId, request.document(), metadata);
+        boolean success = chromaClientService.updateDocument(docId, request.document(), embedding, metadata);
 
         if (success) {
             return ResponseEntity.ok(Map.of(
                 "code", 200,
                 "message", "向量更新成功",
-                "data", Map.of("id", docId)
+                "data", Map.of("id", docId, "dimensions", embedding.length)
             ));
         } else {
             return ResponseEntity.status(500).body(Map.of(

@@ -1,0 +1,1422 @@
+{
+  "info": {
+    "_postman_id": "campus-maintenance-api-collection",
+    "name": "校园智慧维修平台 API",
+    "description": "启云校园智慧维修平台后端API集合\n\n**认证说明:**\n- 公开接口无需认证\n- 学生接口需要 STUDENT 角色\n- 维修工接口需要 STAFF 角色\n- 管理员接口需要 ADMIN 角色\n\n**测试账号:**\n- 学生: teststudent / Test@123\n- 管理员: admin / 123456\n\n**网关地址:** http://localhost:8070",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{studentToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8070"
+    },
+    {
+      "key": "studentToken",
+      "value": ""
+    },
+    {
+      "key": "staffToken",
+      "value": ""
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "ticketId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "01-Auth与用户",
+      "item": [
+        {
+          "name": "用户注册",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"teststudent\",\n  \"password\": \"Test@123\",\n  \"nickname\": \"测试学生\",\n  \"contactPhone\": \"13800000001\",\n  \"role\": \"STUDENT\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "register"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "学生登录",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.token) {",
+                  "        pm.collectionVariables.set('studentToken', response.token);",
+                  "        console.log('学生Token已保存');",
+                  "    }",
+                  "}",
+                  "",
+                  "pm.test('状态码应为200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('响应应包含token', function() {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.token).to.exist;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"teststudent\",\n  \"password\": \"Test@123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "管理员登录",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.token) {",
+                  "        pm.collectionVariables.set('adminToken', response.token);",
+                  "        console.log('管理员Token已保存');",
+                  "    }",
+                  "}",
+                  "",
+                  "pm.test('状态码应为200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('响应应包含token', function() {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.token).to.exist;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"admin\",\n  \"password\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "获取当前用户信息",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "me"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "更新用户信息",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nickname\": \"测试学生-修改后\",\n  \"contactPhone\": \"13900000001\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "me"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "修改密码",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"oldPassword\": \"Test@123\",\n  \"newPassword\": \"Test@456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/me/password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "me", "password"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02-报修工单",
+      "item": [
+        {
+          "name": "创建报修工单",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.data && response.data.ticketId) {",
+                  "        pm.collectionVariables.set('ticketId', response.data.ticketId);",
+                  "        console.log('工单ID已保存:', response.data.ticketId);",
+                  "    }",
+                  "}",
+                  "",
+                  "pm.test('状态码应为201', function() {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('响应应包含工单ID', function() {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.data.ticketId).to.exist;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "categoryId",
+                  "value": "1",
+                  "type": "text"
+                },
+                {
+                  "key": "locationText",
+                  "value": "测试地点-宿舍楼A栋101",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "测试报修-水龙头漏水",
+                  "type": "text"
+                },
+                {
+                  "key": "priority",
+                  "value": "medium",
+                  "type": "text",
+                  "disabled": true
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/repair-orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "repair-orders"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "获取我的工单列表",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/repair-orders/my?page=0&size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "repair-orders", "my"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                },
+                {
+                  "key": "status",
+                  "value": "all",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "获取工单详情",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/repair-orders/{{ticketId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "repair-orders", "{{ticketId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "删除工单（仅待接单状态）",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/repair-orders/{{ticketId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "repair-orders", "{{ticketId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "评价工单",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"studentId\": \"teststudent\",\n  \"score\": 5,\n  \"comment\": \"维修及时，服务态度很好\",\n  \"speedRating\": 5,\n  \"qualityRating\": 5,\n  \"attitudeRating\": 5,\n  \"resolved\": true,\n  \"anonymous\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/repair-orders/{{ticketId}}/evaluate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "repair-orders", "{{ticketId}}", "evaluate"]
+            }
+          },
+          "response": []
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{studentToken}}",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "03-维修工任务",
+      "item": [
+        {
+          "name": "获取我的任务列表",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/tasks/my?page=0&size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "tasks", "my"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                },
+                {
+                  "key": "status",
+                  "value": "all",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "获取维修工工作台统计",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/staff/dashboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "staff", "dashboard"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "接单",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/tasks/{{ticketId}}/accept",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "tasks", "{{ticketId}}", "accept"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "到场确认",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"已到达现场，正在检查故障\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tasks/{{ticketId}}/arrive",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "tasks", "{{ticketId}}", "arrive"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "添加维修过程记录",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actionType\": \"REPAIRING\",\n  \"content\": \"更换了损坏的水龙头阀门\",\n  \"imageUrl\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tasks/{{ticketId}}/process-records",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "tasks", "{{ticketId}}", "process-records"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "完成工单",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"repairNotes\": \"更换阀门，测试正常\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tasks/{{ticketId}}/resolve",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "tasks", "{{ticketId}}", "resolve"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "申请转派",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"需要专业电工处理电路问题\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tasks/{{ticketId}}/transfer-request",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "tasks", "{{ticketId}}", "transfer-request"]
+            }
+          },
+          "response": []
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{staffToken}}",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "04-分类与上传",
+      "item": [
+        {
+          "name": "获取分类列表",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('状态码应为200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('响应应为数组', function() {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/categories",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "categories"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "上传图片",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "files",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/upload/images",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "upload", "images"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "新增分类（管理员）",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"测试分类\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/categories",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "categories"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "更新分类（管理员）",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"更新后分类名\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/categories/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "categories", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "删除分类（管理员）",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/categories/99",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "categories", "99"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "05-通知与知识库",
+      "item": [
+        {
+          "name": "获取我的通知列表",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notifications"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "获取未读通知数量",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/unread-count",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notifications", "unread-count"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "标记通知已读",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/1/read",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notifications", "1", "read"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "标记全部通知已读",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/read-all",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notifications", "read-all"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "搜索知识库",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/knowledge-base/search?keyword=维修",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "knowledge-base", "search"],
+              "query": [
+                {
+                  "key": "keyword",
+                  "value": "维修"
+                },
+                {
+                  "key": "categoryKey",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "获取知识库推荐",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/knowledge-base/recommend?text=水龙头漏水",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "knowledge-base", "recommend"],
+              "query": [
+                {
+                  "key": "text",
+                  "value": "水龙头漏水"
+                },
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "06-管理员用户管理",
+      "item": [
+        {
+          "name": "分页获取用户列表",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users?page=0&size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "创建用户（含维修工/管理员）",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"worker001\",\n  \"password\": \"Worker@123\",\n  \"nickname\": \"维修工张三\",\n  \"contactPhone\": \"13700000001\",\n  \"role\": \"STAFF\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "更新用户信息",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"worker001\",\n  \"password\": \"Worker@456\",\n  \"nickname\": \"维修工张三-更新\",\n  \"contactPhone\": \"13700000002\",\n  \"role\": \"STAFF\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users/worker001",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users", "worker001"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "重置用户密码",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users/worker001/reset-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users", "worker001", "reset-password"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "禁用用户",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users/worker001",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users", "worker001"]
+            }
+          },
+          "response": []
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{adminToken}}",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "07-管理员工单管理",
+      "item": [
+        {
+          "name": "分页获取所有工单",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/repair-orders?page=0&size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "repair-orders"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                },
+                {
+                  "key": "status",
+                  "value": "all",
+                  "disabled": true
+                },
+                {
+                  "key": "category",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "keyword",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "分配工单给维修工",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"staffId\": \"worker001\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/repair-orders/{{ticketId}}/assign",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "repair-orders", "{{ticketId}}", "assign"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "获取推荐维修工",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/repair-orders/{{ticketId}}/recommend-staff",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "repair-orders", "{{ticketId}}", "recommend-staff"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "更新工单状态",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"operatorId\": \"admin\",\n  \"newStatus\": \"IN_PROGRESS\",\n  \"rejectionReason\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/repair-orders/{{ticketId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "repair-orders", "{{ticketId}}", "status"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "更新维修备注",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"维修备注内容\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/repair-orders/{{ticketId}}/repair-notes",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "repair-orders", "{{ticketId}}", "repair-notes"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "更新处理备注",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"处理备注内容\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/repair-orders/{{ticketId}}/process-notes",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "repair-orders", "{{ticketId}}", "process-notes"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "设置预计完成时间",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estimatedTime\": \"2026-07-20T18:00:00\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/repair-orders/{{ticketId}}/estimated-completion-time",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "repair-orders", "{{ticketId}}", "estimated-completion-time"]
+            }
+          },
+          "response": []
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{adminToken}}",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "08-统计评价与备份",
+      "item": [
+        {
+          "name": "状态统计",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('状态码应为200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('响应应包含code=200', function() {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.code).to.eql(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/stats/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "stats", "status"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "分类统计",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/stats/category",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "stats", "category"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "地点统计",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/stats/location",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "stats", "location"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "月度趋势",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/stats/monthly",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "stats", "monthly"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "维修工评分统计",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/stats/repairman-rating",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "stats", "repairman-rating"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "平均处理时间",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/stats/processing-time",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "stats", "processing-time"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "SLA概览",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/stats/sla",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "stats", "sla"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "热点分析",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/stats/hotspot",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "stats", "hotspot"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "设施健康",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/stats/facility-health",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "stats", "facility-health"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "获取评价列表",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/feedbacks?page=0&size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "feedbacks"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                },
+                {
+                  "key": "lowRating",
+                  "value": "true",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "创建备份",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/backup/create",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "backup", "create"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "获取备份列表",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/backup/list",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "backup", "list"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "获取备份状态",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/backup/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "backup", "status"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "恢复数据库",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fileName\": \"backup_20260716.sql\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/backup/restore",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "backup", "restore"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "删除备份",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/backup/backup_20260716.sql",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "backup", "backup_20260716.sql"]
+            }
+          },
+          "response": []
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{adminToken}}",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "09-管理员知识库管理",
+      "item": [
+        {
+          "name": "获取知识库列表（含禁用）",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/knowledge-base?includeDisabled=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "knowledge-base"],
+              "query": [
+                {
+                  "key": "includeDisabled",
+                  "value": "true"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "新增知识条目",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categoryKey\": \"水电维修\",\n  \"title\": \"水龙头漏水处理方法\",\n  \"content\": \"检查阀门是否松动...\",\n  \"keywords\": [\"水龙头\", \"漏水\", \"阀门\"],\n  \"enabled\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/knowledge-base",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "knowledge-base"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "更新知识条目",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categoryKey\": \"水电维修\",\n  \"title\": \"水龙头漏水处理方法（更新）\",\n  \"content\": \"检查阀门是否松动，必要时更换...\",\n  \"keywords\": [\"水龙头\", \"漏水\", \"阀门\", \"更换\"],\n  \"enabled\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/knowledge-base/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "knowledge-base", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "删除知识条目",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/knowledge-base/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "knowledge-base", "1"]
+            }
+          },
+          "response": []
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{adminToken}}",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "10-AI接口",
+      "item": [
+        {
+          "name": "智能分析报修单",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"宿舍水龙头漏水，地面已经积水\",\n  \"location\": \"一号宿舍楼 3-305\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/analyze-ticket",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai", "analyze-ticket"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "AI服务健康检查",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai", "health"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

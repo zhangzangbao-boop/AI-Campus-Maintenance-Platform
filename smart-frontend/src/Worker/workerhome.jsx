@@ -9,6 +9,7 @@ import {
   HistoryOutlined,
   PlayCircleOutlined,
   ReloadOutlined,
+  RobotOutlined,
   SettingOutlined,
   ToolOutlined,
   UnorderedListOutlined,
@@ -16,6 +17,7 @@ import {
 import MyTask from "./myTask.jsx";
 import { mytaskService, mytaskUtils } from "./mytaskService.jsx";
 import PersonalInfoEd from "../services/PersonalInfoEd.jsx";
+import KnowledgeQA from "../components/KnowledgeQA";
 import AppShell from "../components/AppShell";
 import { MetricCard, MiniList, PageHero, QuickActionGrid, SectionCard, StatusTag, PriorityTag } from "../components/DashboardWidgets";
 
@@ -228,6 +230,14 @@ const WorkerHome = () => {
       ],
     },
     {
+      key: "tools",
+      label: "工具",
+      type: "group",
+      children: [
+        { key: "knowledge-qa", icon: <RobotOutlined />, label: "维修知识问答" },
+      ],
+    },
+    {
       key: "records",
       label: "记录与设置",
       type: "group",
@@ -308,6 +318,8 @@ const WorkerHome = () => {
       >
         {currentMenu === "dashboard" ? (
           <WorkerDashboard worker={currentWorker} onNavigate={setCurrentMenu} />
+        ) : currentMenu === "knowledge-qa" ? (
+          <KnowledgeQA />
         ) : (
           <div>
             <div className="module-intro">

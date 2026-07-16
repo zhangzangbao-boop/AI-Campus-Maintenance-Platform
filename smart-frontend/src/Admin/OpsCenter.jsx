@@ -118,6 +118,7 @@ const AiServiceTab = () => {
 const KnowledgeBaseTab = () => {
   const [loading, setLoading] = useState(false);
   const [draftLoading, setDraftLoading] = useState(false);
+  const [rebuildLoading, setRebuildLoading] = useState(false);
   const [data, setData] = useState([]);
   const [keyword, setKeyword] = useState("");
   const [editing, setEditing] = useState(null);
@@ -214,6 +215,19 @@ const KnowledgeBaseTab = () => {
     }
   };
 
+  const rebuildIndex = async () => {
+    setRebuildLoading(true);
+    try {
+      const response = await api.admin.rebuildKnowledgeBaseIndex();
+      const count = response?.data?.syncedCount || 0;
+      message.success(`向量索引重建成功，已同步 ${count} 条知识`);
+    } catch (error) {
+      message.error(`重建索引失败：${error.message}`);
+    } finally {
+      setRebuildLoading(false);
+    }
+  };
+
   return (
     <>
       <Space style={{ marginBottom: 12 }} wrap>
@@ -232,6 +246,14 @@ const KnowledgeBaseTab = () => {
         <Button icon={<PlusOutlined />} onClick={openAiDraft}>
           AI 生成知识草稿
         </Button>
+        <Popconfirm
+          title="确认重建向量索引？这将清空现有索引并重新同步所有启用的知识条目。"
+          onConfirm={rebuildIndex}
+        >
+          <Button loading={rebuildLoading}>
+            重建向量索引
+          </Button>
+        </Popconfirm>
       </Space>
       <Table
         loading={loading}

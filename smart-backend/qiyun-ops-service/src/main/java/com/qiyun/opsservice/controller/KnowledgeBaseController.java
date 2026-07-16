@@ -74,6 +74,13 @@ public class KnowledgeBaseController {
         knowledgeBaseService.delete(id);
     }
 
+    @PostMapping("/api/admin/knowledge-base/rebuild-index")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Map<String, Object> rebuildIndex() {
+        int count = knowledgeBaseService.rebuildIndex();
+        return success(Map.of("syncedCount", count), "向量索引重建成功");
+    }
+
     private Map<String, Object> success(Object data, String message) {
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);

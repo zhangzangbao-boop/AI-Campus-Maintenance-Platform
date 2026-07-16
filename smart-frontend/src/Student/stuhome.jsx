@@ -16,6 +16,7 @@ import {
 import MyRepairs from "./MyRepairs";
 import CreateRepairPage from "./CreateRepairPage";
 import PersonalInfoEd from "../services/PersonalInfoEd";
+import KnowledgeQA from "../components/KnowledgeQA";
 import { repairService } from "../services/repairService";
 import AppShell from "../components/AppShell";
 import { MetricCard, MiniList, PageHero, QuickActionGrid, SectionCard, StatusTag } from "../components/DashboardWidgets";
@@ -197,6 +198,7 @@ const Home = () => {
       children: [
         { key: "dashboard", icon: <BarChartOutlined />, label: "学生总览" },
         { key: "create-repair", icon: <PlusOutlined />, label: "立即报修" },
+        { key: "knowledge-qa", icon: <RobotOutlined />, label: "维修知识问答" },
       ],
     },
     {
@@ -299,6 +301,10 @@ const Home = () => {
           }}
         />
       );
+    }
+
+    if (currentMenu === "knowledge-qa") {
+      return <KnowledgeQA />;
     }
 
     const initialFilters = {

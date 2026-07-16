@@ -18,3 +18,15 @@ ai:
   api-key: ${DEEPSEEK_API_KEY:}
   model: ${AI_MODEL:deepseek-chat}
   timeout-seconds: ${AI_TIMEOUT_SECONDS:20}
+
+# Chroma 向量数据库配置
+chroma:
+  url: ${CHROMA_URL:http://localhost:8000}
+  collection: ${CHROMA_COLLECTION:campus_maintenance_kb}
+  top-k: ${RAG_TOP_K:5}
+  timeout-seconds: ${CHROMA_TIMEOUT_SECONDS:10}
+
+# 内部服务密钥
+internal:
+  service:
+    secret: ${INTERNAL_SERVICE_SECRET:}

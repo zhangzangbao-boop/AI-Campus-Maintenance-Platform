@@ -39,6 +39,11 @@ jwt:
   secret: ${JWT_SECRET:}
   expiration-ms: ${JWT_EXPIRATION_MS:86400000}
 
+# 内部服务密钥
+internal:
+  service:
+    secret: ${INTERNAL_SERVICE_SECRET:}
+
 # 备份配置
 backup:
   directory: ${BACKUP_DIRECTORY:./backups}

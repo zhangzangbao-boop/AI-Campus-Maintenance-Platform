@@ -379,6 +379,11 @@ const api = {
         method: "DELETE",
       }),
 
+    rebuildKnowledgeBaseIndex: () =>
+      request("/admin/knowledge-base/rebuild-index", {
+        method: "POST",
+      }),
+
     getTransferRequests: (params) =>
       request(`/admin/transfer-requests${toQueryString(params)}`),
 
@@ -480,6 +485,15 @@ const api = {
       }),
 
     status: () => request("/ai/status"),
+
+    // RAG 知识问答
+    ragAsk: (question, categoryKey) => {
+      const params = new URLSearchParams({ question });
+      if (categoryKey) {
+        params.append('categoryKey', categoryKey);
+      }
+      return request(`/ai/rag/ask?${params.toString()}`);
+    },
   },
 
   knowledgeBase: {

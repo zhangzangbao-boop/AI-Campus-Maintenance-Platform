@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 /**
  * AI 服务 Feign 客户端
  */
-@FeignClient(name = "qiyun-ai-service", path = "/api/ai")
+@FeignClient(name = "qiyun-ai-service", contextId = "aiServiceClient", path = "/api/ai")
 public interface AiServiceClient {
 
     /**

@@ -5,21 +5,91 @@ import com.qiyun.aiservice.dto.AnalyzeTicketResponse;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * AI 工单分析服务 - 基于规则匹配
- * 第一版不调用真实大模型，使用关键词规则匹配
+ * AI 工单分析服务
+ * 优先调用 DeepSeek API，失败时降级到规则引擎
  */
+@Slf4j
 @Service
+@RequiredArgsConstructor
 public class AiAnalyzeService {
+
+    private final DeepSeekClientService deepSeekClientService;
 
     /**
      * 分析工单描述
      */
     public AnalyzeTicketResponse analyze(AnalyzeTicketRequest request) {
         String description = request.description().toLowerCase(Locale.ROOT);
+        String location = request.location();
 
+        // 尝试调用 DeepSeek API
+        if (deepSeekClientService.isAvailable()) {
+            log.info("尝试调用 DeepSeek AI 进行分析");
+            try {
+                AnalyzeTicketResponse aiResponse = analyzeByDeepSeek(description, location);
+                if (aiResponse != null) {
+                    log.info("DeepSeek AI 分析成功: category={}, urgency={}",
+                        aiResponse.category(), aiResponse.urgency());
+                    return aiResponse;
+                }
+                log.warn("DeepSeek AI 返回空结果，降级到规则引擎");
+            } catch (Exception e) {
+                log.error("DeepSeek AI 调用失败，降级到规则引擎: {}", e.getMessage());
+            }
+        } else {
+            log.debug("DeepSeek AI 未启用或未配置，使用规则引擎");
+        }
+
+        // 降级到规则引擎
+        return analyzeByRules(description);
+    }
+
+    /**
+     * 使用 DeepSeek API 分析
+     */
+    private AnalyzeTicketResponse analyzeByDeepSeek(String description, String location) {
+        Map<String, Object> result = deepSeekClientService.analyzeTicket(description, location);
+        if (result == null || result.isEmpty()) {
+            return null;
+        }
+
+        try {
+            String category = getStringValue(result, "category");
+            String urgency = getStringValue(result, "urgency");
+            String suggestion = getStringValue(result, "suggestion");
+            List<String> keywords = getStringListValue(result, "keywords");
+
+            // 验证必要字段
+            if (category == null || category.isBlank()) {
+                category = "其他故障";
+            }
+            if (urgency == null || urgency.isBlank()) {
+                urgency = "一般";
+            }
+            if (suggestion == null || suggestion.isBlank()) {
+                suggestion = "建议现场检查后确定故障原因";
+            }
+            if (keywords == null || keywords.isEmpty()) {
+                keywords = extractKeywords(description);
+            }
+
+            return new AnalyzeTicketResponse(category, urgency, suggestion, keywords);
+        } catch (Exception e) {
+            log.error("解析 DeepSeek 响应失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 使用规则引擎分析（降级方案）
+     */
+    private AnalyzeTicketResponse analyzeByRules(String description) {
         // 1. 根据关键词判断故障分类
         String category = determineCategory(description);
 
@@ -33,6 +103,32 @@ public class AiAnalyzeService {
         List<String> keywords = extractKeywords(description);
 
         return new AnalyzeTicketResponse(category, urgency, suggestion, keywords);
+    }
+
+    /**
+     * 从 Map 中获取字符串值
+     */
+    private String getStringValue(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        return value == null ? null : String.valueOf(value).trim();
+    }
+
+    /**
+     * 从 Map 中获取字符串列表
+     */
+    @SuppressWarnings("unchecked")
+    private List<String> getStringListValue(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        if (value instanceof List<?> list) {
+            List<String> result = new ArrayList<>();
+            for (Object item : list) {
+                if (item != null) {
+                    result.add(String.valueOf(item).trim());
+                }
+            }
+            return result;
+        }
+        return null;
     }
 
     /**
@@ -79,7 +175,7 @@ public class AiAnalyzeService {
     private String determineUrgency(String description) {
         // 高紧急度 - 安全相关
         if (containsAny(description, "漏水", "积水", "触电", "烧焦", "冒烟", "火花",
-                        "异味", "总闸", "消防", "灭火器", "玻璃破裂", "危险")) {
+                        "异味", "总闸", "消防", "灭火器", "玻璃", "危险")) {
             return "紧急";
         }
 

@@ -10,6 +10,11 @@ spring:
       discovery:
         server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
 
-# AI 服务配置（后续接入时完善）
+# AI 服务配置
 ai:
   enabled: ${AI_ENABLED:false}
+  provider: ${AI_PROVIDER:deepseek}
+  base-url: ${AI_BASE_URL:https://api.deepseek.com}
+  api-key: ${DEEPSEEK_API_KEY:}
+  model: ${AI_MODEL:deepseek-chat}
+  timeout-seconds: ${AI_TIMEOUT_SECONDS:20}

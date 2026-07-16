@@ -59,6 +59,8 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 // Actuator
                 .requestMatchers("/actuator/**").permitAll()
+                // WebSocket 端点
+                .requestMatchers("/ws/**").permitAll()
                 // 静态资源
                 .requestMatchers("/static/**", "/assets/**", "/index.html", "/").permitAll()
                 // 知识库公开搜索

@@ -44,6 +44,7 @@ public class TicketService {
     private final UserReferenceRepository userReferenceRepository;
     private final CategoryService categoryService;
     private final NotificationService notificationService;
+    private final NotificationPushService notificationPushService;
     private final FileStorageService fileStorageService;
     private final AiServiceClient aiServiceClient;
 
@@ -440,15 +441,24 @@ public class TicketService {
     }
 
     private void notifyAdminsNewTicket(RepairTicket ticket) {
-        notificationService.notifyAdmins("新报修工单待分配",
-            "工单 #" + ticket.getTicketId() + " 已提交，地点：" + safeText(ticket.getLocationText()) + "，请及时分配维修人员。", ticket);
+        String title = "新报修工单待分配";
+        String content = "工单 #" + ticket.getTicketId() + " 已提交，地点：" + safeText(ticket.getLocationText()) + "，请及时分配维修人员。";
+        notificationService.notifyAdmins(title, content, ticket);
+        // 实时推送
+        List<UserReference> admins = userReferenceRepository.findByRoleAndIsActiveTrue(UserRole.ADMIN);
+        notificationPushService.notifyAndPushBatch(admins, title, content, ticket);
     }
 
     private void notifyTicketAssigned(RepairTicket ticket, UserReference staff) {
-        notificationService.notifyUser(staff, "你有新的维修任务",
-            "工单 #" + ticket.getTicketId() + " 已分配给你，地点：" + safeText(ticket.getLocationText()) + "。", ticket);
-        notificationService.notifyUser(ticket.getStudent(), "报修工单已受理",
-            "你的工单 #" + ticket.getTicketId() + " 已分配给维修人员：" + safeName(staff) + "。", ticket);
+        String staffTitle = "你有新的维修任务";
+        String staffContent = "工单 #" + ticket.getTicketId() + " 已分配给你，地点：" + safeText(ticket.getLocationText()) + "。";
+        notificationService.notifyUser(staff, staffTitle, staffContent, ticket);
+        notificationPushService.notifyAndPush(staff, staffTitle, staffContent, ticket);
+
+        String studentTitle = "报修工单已受理";
+        String studentContent = "你的工单 #" + ticket.getTicketId() + " 已分配给维修人员：" + safeName(staff) + "。";
+        notificationService.notifyUser(ticket.getStudent(), studentTitle, studentContent, ticket);
+        notificationPushService.notifyAndPush(ticket.getStudent(), studentTitle, studentContent, ticket);
     }
 
     private StaffRecommendationDto buildStaffRecommendation(UserReference staff, String targetCategory) {

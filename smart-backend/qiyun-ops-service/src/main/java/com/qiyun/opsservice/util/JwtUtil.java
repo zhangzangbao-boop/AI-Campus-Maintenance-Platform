@@ -41,6 +41,12 @@ public class JwtUtil {
             .build()
             .parseClaimsJws(token)
             .getBody();
+        // user-service生成的是 "role" (单数)，需要兼容
+        Object roleObj = claims.get("role");
+        if (roleObj instanceof String role) {
+            return List.of(role);
+        }
+        // 也支持 "roles" (复数) 格式
         Object rolesObj = claims.get("roles");
         if (rolesObj instanceof List<?> roles) {
             return roles.stream().map(Object::toString).toList();

@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { Badge, Button, Empty, List, Popover, Space, Tag, Tooltip, Typography, message } from "antd";
 import { BellOutlined, CheckOutlined, ReloadOutlined } from "@ant-design/icons";
 import api from "../services/api";
+import websocketService from "../services/websocketService";
 
 const { Text } = Typography;
 
@@ -24,6 +25,57 @@ const NotificationCenter = () => {
   const [loading, setLoading] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // WebSocket 消息处理
+  const handleWebSocketMessage = useCallback((notification) => {
+    // 播放通知提示音（可选）
+    // const audio = new Audio('/notification.mp3');
+    // audio.play().catch(() => {});
+
+    // 弹出提示
+    message.info(`新通知: ${notification.title || '您有新消息'}`);
+
+    // 刷新通知列表
+    fetchNotifications();
+
+    // 更新未读数量
+    setUnreadCount((prev) => prev + 1);
+  }, []);
+
+  // 初始化 WebSocket 连接
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const userStr = localStorage.getItem("user");
+
+    if (token && userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        const userId = user?.userId || user?.id;
+
+        if (userId) {
+          // 连接 WebSocket
+          websocketService.connect(
+            token,
+            userId,
+            handleWebSocketMessage,
+            () => {
+              console.log("[NotificationCenter] WebSocket 连接成功");
+            },
+            (error) => {
+              console.error("[NotificationCenter] WebSocket 连接失败:", error);
+            }
+          );
+        }
+      } catch (e) {
+        console.error("[NotificationCenter] 解析用户信息失败:", e);
+      }
+    }
+
+    // 组件卸载时断开连接
+    return () => {
+      websocketService.disconnect();
+    };
+  }, [handleWebSocketMessage]);
 
   const fetchUnreadCount = async () => {
     try {

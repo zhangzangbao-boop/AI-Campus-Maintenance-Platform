@@ -56,6 +56,7 @@ public class SecurityConfig {
                     response.getWriter().write(objectMapper.writeValueAsString(body));
                 })
             )
+            .securityMatcher(request -> !request.getRequestURI().startsWith("/internal/"))
             .authorizeHttpRequests(auth -> auth
                 // Actuator
                 .requestMatchers("/actuator/**").permitAll()
@@ -70,6 +71,21 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
+    }
+
+    /**
+     * 内部服务接口安全配置（不使用JWT，仅内部密钥认证）
+     */
+    @Bean
+    public SecurityFilterChain internalApiSecurityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .securityMatcher(request -> request.getRequestURI().startsWith("/internal/"))
+            .csrf(csrf -> csrf.disable())
+            .cors(cors -> cors.disable())
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
 
         return http.build();
     }

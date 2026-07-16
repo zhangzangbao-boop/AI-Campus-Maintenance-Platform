@@ -8,6 +8,7 @@ import {
   UserOutlined,
 } from "@ant-design/icons";
 import NotificationCenter from "./NotificationCenter";
+import websocketService from "../services/websocketService";
 import schoolLogo from "../assets/school-logo.png";
 
 const { Header, Sider, Content } = Layout;
@@ -50,8 +51,12 @@ const AppShell = ({
 
   const handleAvatarClick = (event) => {
     if (event.key === "logout") {
+      // 断开 WebSocket 连接
+      websocketService.disconnect();
+      // 清除本地存储
       localStorage.removeItem("token");
       localStorage.removeItem("user");
+      // 跳转到登录页
       window.location.href = "/login";
       return;
     }

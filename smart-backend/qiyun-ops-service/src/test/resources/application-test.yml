@@ -34,6 +34,11 @@ jwt:
   secret: test-jwt-secret-key-for-ops-service-testing-only-minimum-256-bits-required
   expiration-ms: 86400000
 
+# 内部服务认证密钥（仅用于单元测试）
+internal:
+  service:
+    secret: test-internal-secret-for-unit-tests-only
+
 backup:
   directory: ./target/test-backups
 

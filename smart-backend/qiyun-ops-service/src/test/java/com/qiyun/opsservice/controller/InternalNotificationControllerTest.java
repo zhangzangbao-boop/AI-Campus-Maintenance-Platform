@@ -6,6 +6,7 @@ import com.qiyun.opsservice.websocket.WebSocketPushService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -40,10 +41,9 @@ class InternalNotificationControllerTest {
     @MockBean
     private WebSocketPushService webSocketPushService;
 
-    private static final String VALID_SECRET = System.getenv().getOrDefault(
-        "INTERNAL_SERVICE_SECRET",
-        "change-this-secret-in-production"
-    );
+    // 从测试配置读取密钥
+    @Value("${internal.service.secret}")
+    private String validSecret;
 
     @Test
     @DisplayName("单用户推送：认证成功")
@@ -56,7 +56,7 @@ class InternalNotificationControllerTest {
         );
 
         mockMvc.perform(post("/internal/notifications/push")
-                .header("X-Internal-Secret", VALID_SECRET)
+                .header("X-Internal-Secret", validSecret)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isOk())
@@ -112,7 +112,7 @@ class InternalNotificationControllerTest {
         );
 
         mockMvc.perform(post("/internal/notifications/push")
-                .header("X-Internal-Secret", VALID_SECRET)
+                .header("X-Internal-Secret", validSecret)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isBadRequest())
@@ -130,7 +130,7 @@ class InternalNotificationControllerTest {
         );
 
         mockMvc.perform(post("/internal/notifications/push-batch")
-                .header("X-Internal-Secret", VALID_SECRET)
+                .header("X-Internal-Secret", validSecret)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isOk())
@@ -168,7 +168,7 @@ class InternalNotificationControllerTest {
         );
 
         mockMvc.perform(post("/internal/notifications/push-batch")
-                .header("X-Internal-Secret", VALID_SECRET)
+                .header("X-Internal-Secret", validSecret)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isBadRequest())

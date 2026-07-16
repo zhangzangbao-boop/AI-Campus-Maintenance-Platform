@@ -4,8 +4,8 @@ import com.qiyun.opsservice.dto.NotificationDto;
 import com.qiyun.opsservice.websocket.WebSocketPushService;
 import java.util.List;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -20,16 +20,20 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 @RestController
 @RequestMapping("/internal/notifications")
-@RequiredArgsConstructor
 public class InternalNotificationController {
 
     private final WebSocketPushService webSocketPushService;
+    private final String internalSecret;
 
-    // 内部服务密钥，从环境变量读取
-    private static final String INTERNAL_SECRET = System.getenv().getOrDefault(
-        "INTERNAL_SERVICE_SECRET",
-        "change-this-secret-in-production"
-    );
+    public InternalNotificationController(
+            WebSocketPushService webSocketPushService,
+            @Value("${internal.service.secret:}") String internalSecret) {
+        this.webSocketPushService = webSocketPushService;
+        // 优先使用配置，配置为空时尝试环境变量
+        this.internalSecret = (internalSecret != null && !internalSecret.isBlank())
+            ? internalSecret
+            : System.getenv("INTERNAL_SERVICE_SECRET");
+    }
 
     /**
      * 推送通知给单个用户
@@ -40,8 +44,17 @@ public class InternalNotificationController {
             @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
             @RequestBody NotificationPushRequest request) {
 
+        // 验证密钥配置
+        if (internalSecret == null || internalSecret.isBlank()) {
+            log.error("INTERNAL_SERVICE_SECRET 未配置，拒绝内部推送请求");
+            return ResponseEntity.status(500).body(Map.of(
+                "code", 500,
+                "message", "服务配置错误：内部密钥未配置"
+            ));
+        }
+
         // 验证内部密钥
-        if (!INTERNAL_SECRET.equals(secret)) {
+        if (!internalSecret.equals(secret)) {
             log.warn("内部推送接口认证失败");
             return ResponseEntity.status(401).body(Map.of(
                 "code", 401,
@@ -83,8 +96,17 @@ public class InternalNotificationController {
             @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
             @RequestBody NotificationBatchPushRequest request) {
 
+        // 验证密钥配置
+        if (internalSecret == null || internalSecret.isBlank()) {
+            log.error("INTERNAL_SERVICE_SECRET 未配置，拒绝内部批量推送请求");
+            return ResponseEntity.status(500).body(Map.of(
+                "code", 500,
+                "message", "服务配置错误：内部密钥未配置"
+            ));
+        }
+
         // 验证内部密钥
-        if (!INTERNAL_SECRET.equals(secret)) {
+        if (!internalSecret.equals(secret)) {
             log.warn("内部批量推送接口认证失败");
             return ResponseEntity.status(401).body(Map.of(
                 "code", 401,

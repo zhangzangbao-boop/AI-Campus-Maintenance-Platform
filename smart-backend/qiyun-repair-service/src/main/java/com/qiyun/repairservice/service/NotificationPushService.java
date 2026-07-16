@@ -24,11 +24,8 @@ public class NotificationPushService {
     private final NotificationRepository notificationRepository;
     private final OpsServiceClient opsServiceClient;
 
-    // 内部服务密钥
-    private static final String INTERNAL_SECRET = System.getenv().getOrDefault(
-        "INTERNAL_SERVICE_SECRET",
-        "change-this-secret-in-production"
-    );
+    // 内部服务密钥（无默认值，未配置时推送失败但不影响主流程）
+    private static final String INTERNAL_SECRET = System.getenv("INTERNAL_SERVICE_SECRET");
 
     /**
      * 发送通知并实时推送
@@ -88,6 +85,12 @@ public class NotificationPushService {
      * 推送实时通知给单个用户
      */
     private void pushRealTime(String userId, String title, String content, Long ticketId) {
+        // 密钥未配置时跳过推送，记录警告但不抛出异常
+        if (INTERNAL_SECRET == null || INTERNAL_SECRET.isBlank()) {
+            log.warn("INTERNAL_SERVICE_SECRET 未配置，跳过实时推送");
+            return;
+        }
+
         try {
             OpsServiceClient.NotificationPushRequest request =
                 new OpsServiceClient.NotificationPushRequest(userId, title, content, ticketId);
@@ -102,6 +105,12 @@ public class NotificationPushService {
      * 批量推送实时通知
      */
     private void pushRealTimeBatch(List<String> userIds, String title, String content, Long ticketId) {
+        // 密钥未配置时跳过推送，记录警告但不抛出异常
+        if (INTERNAL_SECRET == null || INTERNAL_SECRET.isBlank()) {
+            log.warn("INTERNAL_SERVICE_SECRET 未配置，跳过批量实时推送");
+            return;
+        }
+
         try {
             OpsServiceClient.NotificationBatchPushRequest request =
                 new OpsServiceClient.NotificationBatchPushRequest(userIds, title, content, ticketId);

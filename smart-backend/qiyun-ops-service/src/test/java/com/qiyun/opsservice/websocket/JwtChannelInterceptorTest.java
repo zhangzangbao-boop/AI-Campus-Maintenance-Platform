@@ -11,6 +11,7 @@ import org.springframework.messaging.Message;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.GenericMessage;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 
 import java.util.List;
 
@@ -33,6 +34,8 @@ class JwtChannelInterceptorTest {
     void setUp() {
         interceptor = new JwtChannelInterceptor(jwtUtil);
     }
+
+    // ========== CONNECT 测试 ==========
 
     @Test
     @DisplayName("有效Token认证成功")
@@ -119,5 +122,70 @@ class JwtChannelInterceptorTest {
         assertNotNull(result);
         // 不应调用 JWT 验证
         verify(jwtUtil, never()).validateToken(anyString());
+    }
+
+    // ========== SUBSCRIBE 用户隔离测试 ==========
+
+    @Test
+    @DisplayName("订阅自己的频道成功")
+    void testSubscribeOwnChannelSuccess() {
+        // 订阅自己的频道
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setDestination("/topic/user/user123");
+        // 设置已认证的用户
+        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken("user123", null, List.of());
+        accessor.setUser(auth);
+        Message<byte[]> message = new GenericMessage<>(new byte[0], accessor.getMessageHeaders());
+
+        // 执行拦截
+        Message<?> result = interceptor.preSend(message, null);
+
+        assertNotNull(result);
+    }
+
+    @Test
+    @DisplayName("订阅他人频道抛出异常")
+    void testSubscribeOtherUserChannelThrowsException() {
+        // 尝试 SUBSCRIBE 其他用户的频道
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setDestination("/topic/user/user456");
+        // 设置已认证的用户（与目标频道不一致）
+        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken("user123", null, List.of());
+        accessor.setUser(auth);
+        Message<byte[]> message = new GenericMessage<>(new byte[0], accessor.getMessageHeaders());
+
+        // 执行拦截，期望抛出异常
+        assertThrows(IllegalArgumentException.class, () -> {
+            interceptor.preSend(message, null);
+        });
+    }
+
+    @Test
+    @DisplayName("未认证用户订阅频道抛出异常")
+    void testUnauthenticatedSubscribeThrowsException() {
+        // 不进行 CONNECT，直接 SUBSCRIBE
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setDestination("/topic/user/user123");
+        // 没有设置用户认证信息
+        Message<byte[]> message = new GenericMessage<>(new byte[0], accessor.getMessageHeaders());
+
+        // 执行拦截，期望抛出异常
+        assertThrows(IllegalArgumentException.class, () -> {
+            interceptor.preSend(message, null);
+        });
+    }
+
+    @Test
+    @DisplayName("订阅非用户频道直接通过")
+    void testSubscribeNonUserChannelPassesThrough() {
+        // 订阅公共频道（非 /topic/user/{userId} 格式）
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setDestination("/topic/public");
+        Message<byte[]> message = new GenericMessage<>(new byte[0], accessor.getMessageHeaders());
+
+        // 执行拦截
+        Message<?> result = interceptor.preSend(message, null);
+
+        assertNotNull(result);
     }
 }

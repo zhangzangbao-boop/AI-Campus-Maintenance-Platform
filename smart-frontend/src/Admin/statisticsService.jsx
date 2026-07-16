@@ -390,4 +390,50 @@ export const statisticsService = {
       };
     }
   },
+
+  // 新增：获取SLA超时告警统计
+  getSlaOverview: async () => {
+    try {
+      console.log('开始获取SLA超时告警统计...');
+      const data = await handleApiResponse(() => api.admin.getStatsSla());
+      return {
+        activeCount: Number(data?.activeCount || 0),
+        overdueAcceptCount: Number(data?.overdueAcceptCount || 0),
+        overdueCompletionCount: Number(data?.overdueCompletionCount || 0),
+        warningCount: Number(data?.warningCount || 0),
+        alertTotal: Number(data?.alertTotal || 0),
+        overdueRate: Number(data?.overdueRate || 0),
+        alertTickets: Array.isArray(data?.alertTickets) ? data.alertTickets.map(item => ({
+          ticketId: Number(item.ticketId || 0),
+          status: item.status || '',
+          categoryName: item.categoryName || '未分类',
+          locationText: item.locationText || '未知位置',
+          description: item.description || '',
+          priority: item.priority || 'medium',
+          slaType: item.slaType || '',
+          slaStatus: item.slaStatus || 'NORMAL',
+          slaLabel: item.slaLabel || '',
+          dueAt: item.dueAt || null,
+          remainingHours: Number(item.remainingHours || 0),
+          overdueHours: Number(item.overdueHours || 0),
+          limitHours: Number(item.limitHours || 0),
+          createdAt: item.createdAt || null,
+          assignedAt: item.assignedAt || null,
+        })) : [],
+        rules: Array.isArray(data?.rules) ? data.rules : [],
+      };
+    } catch (error) {
+      console.error('获取SLA超时告警统计失败:', error);
+      return {
+        activeCount: 0,
+        overdueAcceptCount: 0,
+        overdueCompletionCount: 0,
+        warningCount: 0,
+        alertTotal: 0,
+        overdueRate: 0,
+        alertTickets: [],
+        rules: [],
+      };
+    }
+  },
 };

@@ -59,3 +59,9 @@ logging:
   level:
     com.qiyun: DEBUG
     org.springframework.web: INFO
+
+# SLA告警配置
+sla:
+  alert:
+    enabled: ${SLA_ALERT_ENABLED:false}
+    interval-ms: ${SLA_ALERT_INTERVAL_MS:300000}

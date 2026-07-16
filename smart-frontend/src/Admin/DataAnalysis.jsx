@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Row, Col, Card, Table, Tag, Skeleton, Statistic, Alert, Button, Space, Popconfirm, message, Descriptions } from 'antd';
 import { Line } from '@ant-design/charts';
 import { ReloadOutlined } from '@ant-design/icons';
@@ -519,6 +520,24 @@ const DataAnalysis = () => {
           </Card>
         </Col>
       </Row>
+
+      {/* 新增：SLA超时告警面板 */}
+      <Row gutter={[16, 16]} style={{ marginTop: '16px' }}>
+        <Col xs={24}>
+          <Card
+            className="analytics-chart-card analytics-composite-card"
+            title="SLA超时告警"
+            variant="borderless"
+            extra={
+              <div style={{ fontSize: '12px', color: '#666' }}>
+                受理时限和完成时限的实时监控与告警
+              </div>
+            }
+          >
+            <SlaAlertPanel />
+          </Card>
+        </Col>
+      </Row>
     </div>
   );
 };
@@ -614,6 +633,154 @@ const FacilityHealthPanel = ({ data }) => {
           </Card>
         </Col>
       </Row>
+    </div>
+  );
+};
+
+const SlaAlertPanel = () => {
+  const [slaData, setSlaData] = useState({
+    activeCount: 0,
+    overdueAcceptCount: 0,
+    overdueCompletionCount: 0,
+    warningCount: 0,
+    alertTotal: 0,
+    overdueRate: 0,
+    alertTickets: [],
+    rules: [],
+  });
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    loadSlaData();
+  }, []);
+
+  const loadSlaData = async () => {
+    setLoading(true);
+    try {
+      const data = await statisticsService.getSlaOverview();
+      setSlaData(data);
+    } catch (error) {
+      console.error('加载SLA数据失败:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleViewTicket = (ticketId) => {
+    navigate(`/admin/orders?id=${ticketId}`);
+  };
+
+  const columns = [
+    {
+      title: '工单ID',
+      dataIndex: 'ticketId',
+      key: 'ticketId',
+      width: 80,
+      render: (id) => (
+        <Button type="link" size="small" onClick={() => handleViewTicket(id)}>
+          #{id}
+        </Button>
+      ),
+    },
+    { title: '位置', dataIndex: 'locationText', key: 'locationText', ellipsis: true },
+    { title: '分类', dataIndex: 'categoryName', key: 'categoryName', width: 100 },
+    {
+      title: '优先级',
+      dataIndex: 'priority',
+      key: 'priority',
+      width: 80,
+      render: (p) => (
+        <Tag color={p === 'high' ? 'red' : p === 'medium' ? 'orange' : 'green'}>
+          {p === 'high' ? '高' : p === 'medium' ? '中' : '低'}
+        </Tag>
+      ),
+    },
+    {
+      title: 'SLA类型',
+      dataIndex: 'slaLabel',
+      key: 'slaLabel',
+      width: 100,
+    },
+    {
+      title: '状态',
+      dataIndex: 'slaStatus',
+      key: 'slaStatus',
+      width: 90,
+      render: (status) => (
+        <Tag color={status === 'OVERDUE' ? 'red' : 'orange'}>
+          {status === 'OVERDUE' ? '已超时' : '即将超时'}
+        </Tag>
+      ),
+    },
+    {
+      title: '剩余/超时',
+      key: 'timeInfo',
+      width: 100,
+      render: (_, record) => {
+        const hours = record.remainingHours < 0 ? Math.abs(record.overdueHours) : record.remainingHours;
+        const label = record.remainingHours < 0 ? `超时 ${hours}h` : `剩余 ${hours}h`;
+        return (
+          <span style={{ color: record.remainingHours < 0 ? '#dc2626' : '#d97706', fontWeight: 500 }}>
+            {label}
+          </span>
+        );
+      },
+    },
+    {
+      title: '截止时间',
+      dataIndex: 'dueAt',
+      key: 'dueAt',
+      width: 130,
+      render: (t) => t ? new Date(t).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-',
+    },
+  ];
+
+  return (
+    <div>
+      <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+        <Col xs={12} md={4}>
+          <Card size="small" variant="borderless" className="analysis-sub-card">
+            <Statistic title="活跃工单" value={slaData.activeCount} suffix="个" />
+          </Card>
+        </Col>
+        <Col xs={12} md={4}>
+          <Card size="small" variant="borderless" className="analysis-sub-card">
+            <Statistic title="已超时" value={slaData.alertTotal} suffix="个" valueStyle={{ color: '#dc2626' }} />
+          </Card>
+        </Col>
+        <Col xs={12} md={4}>
+          <Card size="small" variant="borderless" className="analysis-sub-card">
+            <Statistic title="受理超时" value={slaData.overdueAcceptCount} suffix="个" valueStyle={{ color: '#ef4444' }} />
+          </Card>
+        </Col>
+        <Col xs={12} md={4}>
+          <Card size="small" variant="borderless" className="analysis-sub-card">
+            <Statistic title="完成超时" value={slaData.overdueCompletionCount} suffix="个" valueStyle={{ color: '#f87171' }} />
+          </Card>
+        </Col>
+        <Col xs={12} md={4}>
+          <Card size="small" variant="borderless" className="analysis-sub-card">
+            <Statistic title="即将超时" value={slaData.warningCount} suffix="个" valueStyle={{ color: '#d97706' }} />
+          </Card>
+        </Col>
+        <Col xs={12} md={4}>
+          <Card size="small" variant="borderless" className="analysis-sub-card">
+            <Statistic title="超时率" value={slaData.overdueRate} suffix="%" precision={1} />
+          </Card>
+        </Col>
+      </Row>
+
+      <Table
+        size="small"
+        loading={loading}
+        dataSource={slaData.alertTickets}
+        rowKey="ticketId"
+        pagination={{ pageSize: 10 }}
+        columns={columns}
+        locale={{ emptyText: '暂无SLA告警' }}
+        scroll={{ x: 900 }}
+      />
     </div>
   );
 };

@@ -1,23 +1,48 @@
-import React, { useState, useEffect } from 'react';
-import { Card, Rate, Button, Space, Tag, Popconfirm, Statistic, Row, Col, Select } from 'antd';
-import { DeleteOutlined, UserOutlined, StarOutlined, MessageOutlined } from '@ant-design/icons';
+import React, { useEffect, useState } from 'react';
+import { Button, Card, Col, Input, Modal, Rate, Row, Select, Space, Statistic, Tag } from 'antd';
+import { EditOutlined, MessageOutlined, StarOutlined, UserOutlined } from '@ant-design/icons';
 import { feedbackService } from './feedbackService';
+
+const followUpOptions = [
+  { value: 'ALL', label: 'All follow-ups' },
+  { value: 'PENDING', label: 'Pending' },
+  { value: 'PROCESSING', label: 'Processing' },
+  { value: 'RESOLVED', label: 'Resolved' },
+];
+
+const followUpMeta = {
+  PENDING: { color: 'red', label: 'Pending' },
+  PROCESSING: { color: 'orange', label: 'Processing' },
+  RESOLVED: { color: 'green', label: 'Resolved' },
+};
+
+const sentimentMeta = {
+  POSITIVE: { color: 'green', label: 'Positive' },
+  NEUTRAL: { color: 'default', label: 'Neutral' },
+  NEGATIVE: { color: 'red', label: 'Negative' },
+};
 
 const FeedbackManagement = () => {
   const [feedbacks, setFeedbacks] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [deletingId, setDeletingId] = useState(null);
   const [sentimentFilter, setSentimentFilter] = useState('ALL');
+  const [followUpFilter, setFollowUpFilter] = useState('ALL');
+  const [editing, setEditing] = useState(null);
+  const [followUpStatus, setFollowUpStatus] = useState('PROCESSING');
+  const [followUpNote, setFollowUpNote] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  // 加载评价数据
   const loadFeedbacks = async () => {
     setLoading(true);
     try {
-      const data = await feedbackService.getAllFeedbacks(sentimentFilter === 'NEGATIVE' ? { sentiment: 'NEGATIVE' } : {});
-      setFeedbacks(data);
-    } catch (error) {
-      console.error('加载评价数据失败:', error);
-      // 错误信息已经在service中显示
+      const params = {};
+      if (sentimentFilter === 'NEGATIVE') {
+        params.sentiment = 'NEGATIVE';
+      }
+      if (followUpFilter !== 'ALL') {
+        params.followUpStatus = followUpFilter;
+      }
+      setFeedbacks(await feedbackService.getAllFeedbacks(params));
     } finally {
       setLoading(false);
     }
@@ -25,241 +50,145 @@ const FeedbackManagement = () => {
 
   useEffect(() => {
     loadFeedbacks();
-  }, [sentimentFilter]);
+  }, [sentimentFilter, followUpFilter]);
 
-  // 删除评价
-  const handleDeleteFeedback = async (feedbackId) => {
-    setDeletingId(feedbackId);
-    
+  const openFollowUp = (feedback) => {
+    setEditing(feedback);
+    setFollowUpStatus(feedback.followUpStatus || 'PROCESSING');
+    setFollowUpNote(feedback.followUpNote || '');
+  };
+
+  const saveFollowUp = async () => {
+    if (!editing) {
+      return;
+    }
+    setSaving(true);
     try {
-      await feedbackService.deleteFeedback(feedbackId);
-      
-      // 从本地状态中移除已删除的评价
-      setFeedbacks(prevFeedbacks => 
-        prevFeedbacks.filter(feedback => feedback.id !== feedbackId)
-      );
-    } catch (error) {
-      console.error('删除评价失败:', error);
-      // 错误信息已经在service中显示
+      await feedbackService.updateFollowUp(editing.id, {
+        status: followUpStatus,
+        note: followUpNote,
+      });
+      setEditing(null);
+      await loadFeedbacks();
     } finally {
-      setDeletingId(null);
+      setSaving(false);
     }
   };
 
-  // 检查是否有不当内容
-  const hasInappropriateContent = (comment) => {
-    if (!comment) return false;
-    const inappropriateWords = ['badword', '脏话', '投诉']; // 示例敏感词
-    return inappropriateWords.some(word => comment.toLowerCase().includes(word.toLowerCase()));
-  };
+  const keywordsOf = (feedback) => Array.isArray(feedback.sentimentKeywords)
+    ? feedback.sentimentKeywords
+    : String(feedback.sentimentKeywords || '').split(/[,\s]+/).filter(Boolean);
 
-  // 渲染每条评价卡片
+  const totalFeedbacks = feedbacks.length;
+  const averageRating = totalFeedbacks > 0
+    ? (feedbacks.reduce((sum, item) => sum + item.rating, 0) / totalFeedbacks).toFixed(1)
+    : 0;
+  const followUpCount = feedbacks.filter(item => item.followUpStatus).length;
+  const negativeCount = feedbacks.filter(item => item.sentiment === 'NEGATIVE' || item.rating <= 2).length;
+
   const renderFeedbackCard = (feedback) => {
-    // 直接使用API返回的维修人员姓名
-    const repairmanName = feedback.repairmanName || '未知维修工';
-    const studentName = feedback.studentName || feedback.studentId || '未知学生';
-
-    // 根据评分设置标签颜色
-    const getRatingTagColor = (rating) => {
-      if (rating >= 4) return 'green';
-      if (rating >= 3) return 'orange';
-      return 'red';
-    };
-
-    const inappropriate = hasInappropriateContent(feedback.comment);
-    const isDeleting = deletingId === feedback.id;
-    const sentimentMeta = {
-      POSITIVE: { color: 'green', label: '\u6b63\u9762' },
-      NEUTRAL: { color: 'default', label: '\u4e2d\u6027' },
-      NEGATIVE: { color: 'red', label: '\u8d1f\u9762' },
-    }[feedback.sentiment] || { color: 'default', label: '\u672a\u5206\u6790' };
-    const sentimentKeywords = Array.isArray(feedback.sentimentKeywords)
-      ? feedback.sentimentKeywords
-      : String(feedback.sentimentKeywords || '').split(/[,\s]+/).filter(Boolean);
+    const sentiment = sentimentMeta[feedback.sentiment] || { color: 'default', label: 'Unanalyzed' };
+    const followUp = followUpMeta[feedback.followUpStatus] || { color: 'default', label: 'Not required' };
+    const keywords = keywordsOf(feedback);
 
     return (
-      <Card
-        key={feedback.id}
-        style={{
-          marginBottom: 16,
-          border: inappropriate ? '1px solid #ff4d4f' : '1px solid #d9d9d9'
-        }}
-        size="small"
-        loading={isDeleting}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <Card key={feedback.id} size="small" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start' }}>
           <div style={{ flex: 1 }}>
-            {/* 评价头部信息 */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <Space>
-                <span style={{ fontWeight: 'bold' }}>评价 #{feedback.id}</span>
-                <Tag color="blue">报修单: {feedback.repairOrderId || '未知'}</Tag>
-                {feedback.anonymous && <Tag color="purple">匿名展示</Tag>}
-                {feedback.resolved !== undefined && feedback.resolved !== null && (
-                  <Tag color={feedback.resolved ? 'green' : 'red'}>
-                    {feedback.resolved ? '已解决' : '未彻底解决'}
-                  </Tag>
-                )}
-              </Space>
-              <Tag color={getRatingTagColor(feedback.rating)}>
-                {feedback.rating}星
+            <Space wrap style={{ marginBottom: 8 }}>
+              <strong>Feedback #{feedback.id}</strong>
+              <Tag color="blue">Ticket {feedback.repairOrderId || '-'}</Tag>
+              <Tag color={feedback.rating >= 4 ? 'green' : feedback.rating >= 3 ? 'orange' : 'red'}>
+                {feedback.rating} stars
               </Tag>
-            </div>
+              <Tag color={sentiment.color}>Sentiment: {sentiment.label}</Tag>
+              <Tag color={followUp.color}>Follow-up: {followUp.label}</Tag>
+            </Space>
 
-            {/* 评分显示 */}
             <div style={{ marginBottom: 8 }}>
               <Rate disabled value={feedback.rating} />
             </div>
 
-            {(feedback.speedRating || feedback.qualityRating || feedback.attitudeRating) && (
-              <Space wrap style={{ marginBottom: 8 }}>
-                {feedback.speedRating && <Tag>速度 {feedback.speedRating} 星</Tag>}
-                {feedback.qualityRating && <Tag>质量 {feedback.qualityRating} 星</Tag>}
-                {feedback.attitudeRating && <Tag>态度 {feedback.attitudeRating} 星</Tag>}
-              </Space>
-            )}
+            <Space wrap style={{ marginBottom: 8 }}>
+              {feedback.speedRating && <Tag>Speed {feedback.speedRating}</Tag>}
+              {feedback.qualityRating && <Tag>Quality {feedback.qualityRating}</Tag>}
+              {feedback.attitudeRating && <Tag>Attitude {feedback.attitudeRating}</Tag>}
+              {typeof feedback.sentimentScore === 'number' && <Tag>Score {Math.round(feedback.sentimentScore * 100)}%</Tag>}
+              {keywords.map(keyword => <Tag key={keyword}>{keyword}</Tag>)}
+            </Space>
 
-            {/* 参与方信息 */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, flexWrap: 'wrap', gap: '8px' }}>
-              <div>
-                <UserOutlined style={{ marginRight: 4 }} />
-                <strong>评价人:</strong> {feedback.anonymous ? '匿名学生' : studentName}
-              </div>
-              <div>
-                <UserOutlined style={{ marginRight: 4 }} />
-                <strong>维修人员:</strong> {repairmanName}
-              </div>
-            </div>
+            <Row gutter={[16, 8]} style={{ marginBottom: 8 }}>
+              <Col xs={24} md={12}>
+                <UserOutlined /> Student: {feedback.anonymous ? 'Anonymous' : (feedback.studentName || feedback.studentId || '-')}
+              </Col>
+              <Col xs={24} md={12}>
+                <UserOutlined /> Staff: {feedback.repairmanName || feedback.repairmanId || '-'}
+              </Col>
+            </Row>
 
-            {/* 评论内容 */}
             {feedback.comment && (
-              <div style={{ 
-                marginBottom: 8, 
-                padding: '8px 12px', 
-                backgroundColor: '#f5f5f5', 
-                borderRadius: 4,
-                border: inappropriate ? '1px solid #ffccc7' : 'none'
-              }}>
-                <div style={{ fontWeight: 'bold', marginBottom: 4, display: 'flex', alignItems: 'center' }}>
-                  <MessageOutlined style={{ marginRight: 4 }} />
-                  评论内容:
-                </div>
-                <div style={{ 
-                  color: inappropriate ? '#ff4d4f' : 'inherit',
-                  fontStyle: inappropriate ? 'italic' : 'normal'
-                }}>
-                  {feedback.comment}
-                </div>
-                {inappropriate && (
-                  <Tag color="red" style={{ marginTop: 4 }}>可能包含不当内容</Tag>
-                )}
+              <div style={{ marginBottom: 8, padding: '8px 12px', backgroundColor: '#f5f5f5', borderRadius: 4 }}>
+                <strong><MessageOutlined /> Comment: </strong>{feedback.comment}
               </div>
             )}
 
-            {/* 时间信息 */}
-            {(feedback.sentiment || feedback.sentimentSummary || sentimentKeywords.length > 0) && (
+            {feedback.sentimentSummary && (
               <div style={{ marginBottom: 8, padding: '8px 12px', backgroundColor: '#fafafa', borderRadius: 4 }}>
-                <Space wrap style={{ marginBottom: 4 }}>
-                  <Tag color={sentimentMeta.color}>Sentiment: {sentimentMeta.label}</Tag>
-                  {typeof feedback.sentimentScore === 'number' && <Tag>Score {Math.round(feedback.sentimentScore * 100)}%</Tag>}
-                  {sentimentKeywords.map(keyword => <Tag key={keyword}>{keyword}</Tag>)}
-                </Space>
-                {feedback.sentimentSummary && <div style={{ color: '#555' }}>{feedback.sentimentSummary}</div>}
+                {feedback.sentimentSummary}
               </div>
             )}
 
-            <div style={{ color: '#666', fontSize: '12px', display: 'flex', alignItems: 'center' }}>
-              <span>评价时间: {feedback.createdAt || feedback.created_at}</span>
-            </div>
+            {feedback.followUpStatus && (
+              <div style={{ marginBottom: 8, padding: '8px 12px', backgroundColor: '#fff7e6', borderRadius: 4 }}>
+                <div><strong>Follow-up record:</strong> {feedback.followUpNote || '-'}</div>
+                <div style={{ color: '#666', fontSize: 12 }}>
+                  Handler: {feedback.followUpOperatorName || feedback.followUpOperatorId || '-'}
+                  {' '}| Updated: {feedback.followUpUpdatedAt || '-'}
+                </div>
+              </div>
+            )}
+
+            <div style={{ color: '#666', fontSize: 12 }}>Created: {feedback.createdAt || '-'}</div>
           </div>
 
-          {/* 删除按钮 */}
-          <div style={{ marginLeft: 16, flexShrink: 0 }}>
-            <Popconfirm
-              title="确定删除这条评价吗？"
-              description="此操作不可恢复"
-              onConfirm={() => handleDeleteFeedback(feedback.id)}
-              okText="确定"
-              cancelText="取消"
-              okType="danger"
-            >
-              <Button 
-                type="primary" 
-                danger 
-                icon={<DeleteOutlined />}
-                size="small"
-                loading={isDeleting}
-                disabled={isDeleting}
-              >
-                {isDeleting ? '删除中' : '删除'}
-              </Button>
-            </Popconfirm>
-          </div>
+          <Button icon={<EditOutlined />} onClick={() => openFollowUp(feedback)}>
+            Handle
+          </Button>
         </div>
       </Card>
     );
   };
 
-  // 统计数据
-  const totalFeedbacks = feedbacks.length;
-  const averageRating = totalFeedbacks > 0 
-    ? (feedbacks.reduce((sum, item) => sum + item.rating, 0) / totalFeedbacks).toFixed(1)
-    : 0;
-  const feedbacksWithComments = feedbacks.filter(f => f.comment && f.comment.trim() !== '').length;
-  const highRatings = feedbacks.filter(f => f.rating >= 4).length;
-
   return (
-    <div style={{ padding: '16px' }}>
-      <h2>评价管理</h2>
-      
-      {/* 统计信息 */}
-      <Row gutter={16} style={{ marginBottom: '24px' }}>
+    <div style={{ padding: 16 }}>
+      <h2>Feedback Management</h2>
+
+      <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={6}>
           <Card size="small">
-            <Statistic
-              title="总评价数"
-              value={totalFeedbacks}
-              prefix={<MessageOutlined />}
-              valueStyle={{ color: '#1890ff' }}
-            />
+            <Statistic title="Total feedback" value={totalFeedbacks} prefix={<MessageOutlined />} />
           </Card>
         </Col>
         <Col xs={24} sm={6}>
           <Card size="small">
-            <Statistic
-              title="平均评分"
-              value={averageRating}
-              prefix={<StarOutlined />}
-              valueStyle={{ color: '#52c41a' }}
-            />
+            <Statistic title="Average rating" value={averageRating} prefix={<StarOutlined />} />
           </Card>
         </Col>
         <Col xs={24} sm={6}>
           <Card size="small">
-            <Statistic
-              title="有文字评价"
-              value={feedbacksWithComments}
-              prefix={<MessageOutlined />}
-              valueStyle={{ color: '#faad14' }}
-            />
+            <Statistic title="Needs attention" value={negativeCount} />
           </Card>
         </Col>
         <Col xs={24} sm={6}>
           <Card size="small">
-            <Statistic
-              title="好评数(4星+)"
-              value={highRatings}
-              prefix={<StarOutlined />}
-              valueStyle={{ color: '#cf1322' }}
-            />
+            <Statistic title="Follow-ups" value={followUpCount} />
           </Card>
         </Col>
       </Row>
 
-      {/* 评价列表 */}
       <Card size="small" style={{ marginBottom: 16 }}>
         <Space wrap>
-          <span>Sentiment Filter</span>
+          <span>Sentiment</span>
           <Select
             value={sentimentFilter}
             style={{ width: 160 }}
@@ -269,27 +198,50 @@ const FeedbackManagement = () => {
               { value: 'NEGATIVE', label: 'Negative only' },
             ]}
           />
+          <span>Follow-up</span>
+          <Select
+            value={followUpFilter}
+            style={{ width: 160 }}
+            onChange={setFollowUpFilter}
+            options={followUpOptions}
+          />
           <Button onClick={loadFeedbacks} loading={loading}>Refresh</Button>
         </Space>
       </Card>
 
       {loading ? (
-        <Card>
-          <div style={{ textAlign: 'center', padding: '40px 0' }}>
-            <span>加载评价数据中...</span>
-          </div>
-        </Card>
+        <Card><div style={{ textAlign: 'center', padding: '40px 0' }}>Loading feedbacks...</div></Card>
       ) : feedbacks.length === 0 ? (
-        <Card>
-          <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
-            暂无评价数据
-          </div>
-        </Card>
+        <Card><div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>No feedback data</div></Card>
       ) : (
-        <div>
-          {feedbacks.map(renderFeedbackCard)}
-        </div>
+        feedbacks.map(renderFeedbackCard)
       )}
+
+      <Modal
+        title={editing ? `Handle feedback #${editing.id}` : 'Handle feedback'}
+        open={Boolean(editing)}
+        onCancel={() => setEditing(null)}
+        onOk={saveFollowUp}
+        confirmLoading={saving}
+        okText="Save"
+      >
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Select
+            value={followUpStatus}
+            onChange={setFollowUpStatus}
+            options={followUpOptions.filter(item => item.value !== 'ALL')}
+            style={{ width: '100%' }}
+          />
+          <Input.TextArea
+            rows={4}
+            value={followUpNote}
+            onChange={event => setFollowUpNote(event.target.value)}
+            placeholder="Processing note"
+            maxLength={1000}
+            showCount
+          />
+        </Space>
+      </Modal>
     </div>
   );
 };

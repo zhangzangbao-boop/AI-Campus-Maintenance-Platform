@@ -96,9 +96,19 @@ CREATE TABLE `repair_feedback` (
     `resolved` BOOLEAN DEFAULT TRUE,
     `anonymous` BOOLEAN DEFAULT FALSE,
     `created_at` DATETIME NOT NULL,
+    `sentiment` VARCHAR(20),
+    `sentiment_score` DOUBLE,
+    `sentiment_keywords` TEXT,
+    `sentiment_summary` TEXT,
+    `sentiment_analyzed_at` DATETIME,
+    `follow_up_status` VARCHAR(20),
+    `follow_up_note` TEXT,
+    `follow_up_operator_id` VARCHAR(255),
+    `follow_up_updated_at` DATETIME,
     FOREIGN KEY (`repair_order_id`) REFERENCES `repair_order`(`id`),
     FOREIGN KEY (`student_number`) REFERENCES `sys_user`(`user_number`),
-    FOREIGN KEY (`repairman_id`) REFERENCES `sys_user`(`user_number`)
+    FOREIGN KEY (`repairman_id`) REFERENCES `sys_user`(`user_number`),
+    FOREIGN KEY (`follow_up_operator_id`) REFERENCES `sys_user`(`user_number`)
 );
 
 CREATE TABLE `repair_order_comment` (

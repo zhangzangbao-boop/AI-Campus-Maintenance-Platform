@@ -143,15 +143,27 @@ CREATE TABLE `repair_feedback` (
     `resolved` BOOLEAN DEFAULT TRUE,
     `anonymous` BOOLEAN DEFAULT FALSE,
     `created_at` DATETIME NOT NULL,
+    `sentiment` VARCHAR(20),
+    `sentiment_score` DOUBLE,
+    `sentiment_keywords` TEXT,
+    `sentiment_summary` TEXT,
+    `sentiment_analyzed_at` DATETIME,
+    `follow_up_status` VARCHAR(20),
+    `follow_up_note` TEXT,
+    `follow_up_operator_id` VARCHAR(255),
+    `follow_up_updated_at` DATETIME,
     CONSTRAINT `fk_repair_feedback_order`
         FOREIGN KEY (`repair_order_id`) REFERENCES `repair_order` (`id`) ON DELETE CASCADE,
     CONSTRAINT `fk_repair_feedback_student`
         FOREIGN KEY (`student_number`) REFERENCES `sys_user` (`user_number`),
     CONSTRAINT `fk_repair_feedback_repairman`
         FOREIGN KEY (`repairman_id`) REFERENCES `sys_user` (`user_number`),
+    CONSTRAINT `fk_repair_feedback_follow_up_operator`
+        FOREIGN KEY (`follow_up_operator_id`) REFERENCES `sys_user` (`user_number`),
     INDEX `idx_repair_feedback_student` (`student_number`),
     INDEX `idx_repair_feedback_staff` (`repairman_id`),
-    INDEX `idx_repair_feedback_created_at` (`created_at`)
+    INDEX `idx_repair_feedback_created_at` (`created_at`),
+    INDEX `idx_repair_feedback_follow_up_status` (`follow_up_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `repair_order_comment` (

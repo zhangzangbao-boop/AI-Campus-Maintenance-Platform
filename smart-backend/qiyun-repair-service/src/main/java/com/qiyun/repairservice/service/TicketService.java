@@ -51,6 +51,7 @@ public class TicketService {
     private final AiServiceClient aiServiceClient;
     private final TicketCompletionSummaryService ticketCompletionSummaryService;
     private final FeedbackSentimentAnalysisService feedbackSentimentAnalysisService;
+    private final FeedbackFollowUpService feedbackFollowUpService;
     private final RatingDtoMapper ratingDtoMapper;
 
     @Transactional
@@ -211,6 +212,7 @@ public class TicketService {
             rating.setResolved(request.resolved());
             rating.setAnonymous(Boolean.TRUE.equals(request.anonymous()));
             rating = ratingRepository.save(rating);
+            feedbackFollowUpService.markPendingIfNeeded(rating.getRatingId());
             triggerFeedbackSentimentIfNeeded(rating.getRatingId());
 
             TicketStatus oldStatus = ticket.getStatus();

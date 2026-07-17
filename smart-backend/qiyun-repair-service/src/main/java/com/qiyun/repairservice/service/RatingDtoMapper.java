@@ -23,6 +23,9 @@ public class RatingDtoMapper {
         String staffName = rating.getStaff() != null
             ? firstText(rating.getStaff().getNickname(), rating.getStaff().getUserId())
             : null;
+        String followUpOperatorName = rating.getFollowUpOperator() != null
+            ? firstText(rating.getFollowUpOperator().getNickname(), rating.getFollowUpOperator().getUserId())
+            : null;
 
         return new RatingDto(
             rating.getRatingId(),
@@ -43,7 +46,12 @@ public class RatingDtoMapper {
             rating.getSentimentScore(),
             parseKeywords(rating.getSentimentKeywords()),
             rating.getSentimentSummary(),
-            rating.getSentimentAnalyzedAt()
+            rating.getSentimentAnalyzedAt(),
+            rating.getFollowUpStatus() != null ? rating.getFollowUpStatus().name() : null,
+            rating.getFollowUpNote(),
+            rating.getFollowUpOperator() != null ? rating.getFollowUpOperator().getUserId() : null,
+            followUpOperatorName,
+            rating.getFollowUpUpdatedAt()
         );
     }
 

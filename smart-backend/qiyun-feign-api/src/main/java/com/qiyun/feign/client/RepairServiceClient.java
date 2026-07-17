@@ -1,8 +1,12 @@
 package com.qiyun.feign.client;
 
+import com.qiyun.feign.dto.FeedbackFollowUpUpdateRequest;
 import java.util.Map;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 
@@ -78,7 +82,15 @@ public interface RepairServiceClient {
         @RequestParam(value = "page", defaultValue = "0") int page,
         @RequestParam(value = "size", defaultValue = "10") int size,
         @RequestParam(value = "lowRating", required = false) Boolean lowRating,
-        @RequestParam(value = "sentiment", required = false) String sentiment
+        @RequestParam(value = "sentiment", required = false) String sentiment,
+        @RequestParam(value = "followUpStatus", required = false) String followUpStatus
+    );
+
+    @PutMapping("/feedbacks/{ratingId}/follow-up")
+    Map<String, Object> updateFeedbackFollowUp(
+        @RequestHeader(value = "Authorization", required = false) String authorization,
+        @PathVariable("ratingId") Long ratingId,
+        @RequestBody FeedbackFollowUpUpdateRequest request
     );
 
     /**

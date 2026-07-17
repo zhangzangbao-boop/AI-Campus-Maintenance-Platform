@@ -12,6 +12,7 @@ public interface RatingRepository extends JpaRepository<Rating, Long> {
     @Query("SELECT r FROM Rating r " +
            "LEFT JOIN FETCH r.student " +
            "LEFT JOIN FETCH r.staff " +
+           "LEFT JOIN FETCH r.followUpOperator " +
            "LEFT JOIN FETCH r.ticket")
     List<Rating> findAllWithDetails();
 

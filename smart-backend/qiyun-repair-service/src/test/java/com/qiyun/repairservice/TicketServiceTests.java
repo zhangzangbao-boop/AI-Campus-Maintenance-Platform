@@ -10,16 +10,20 @@ import com.qiyun.feign.client.AiServiceClient;
 import com.qiyun.feign.dto.AnalyzeTicketResponse;
 import com.qiyun.repairservice.domain.entity.Category;
 import com.qiyun.repairservice.domain.entity.UserReference;
+import com.qiyun.repairservice.domain.enums.FeedbackFollowUpStatus;
 import com.qiyun.repairservice.domain.enums.TicketStatus;
 import com.qiyun.repairservice.domain.enums.UserRole;
 import com.qiyun.repairservice.dto.TicketDetailDto;
 import com.qiyun.repairservice.dto.TicketSummaryDto;
+import com.qiyun.repairservice.dto.request.FeedbackFollowUpUpdateRequest;
 import com.qiyun.repairservice.dto.request.TicketAssignRequest;
 import com.qiyun.repairservice.dto.request.TicketCreateRequest;
 import com.qiyun.repairservice.dto.request.TicketRatingRequest;
 import com.qiyun.repairservice.dto.request.TicketStatusUpdateRequest;
 import com.qiyun.repairservice.repository.CategoryRepository;
+import com.qiyun.repairservice.repository.NotificationRepository;
 import com.qiyun.repairservice.repository.UserReferenceRepository;
+import com.qiyun.repairservice.service.FeedbackFollowUpService;
 import com.qiyun.repairservice.service.FeedbackSentimentAnalysisService;
 import com.qiyun.repairservice.service.TicketService;
 import java.time.LocalDateTime;
@@ -49,6 +53,12 @@ class TicketServiceTests {
 
     @Autowired
     private FeedbackSentimentAnalysisService feedbackSentimentAnalysisService;
+
+    @Autowired
+    private FeedbackFollowUpService feedbackFollowUpService;
+
+    @Autowired
+    private NotificationRepository notificationRepository;
 
     @MockBean
     private AiServiceClient aiServiceClient;
@@ -199,6 +209,48 @@ class TicketServiceTests {
         assertThat(detailDto.rating().sentimentScore()).isBetween(0.0, 1.0);
         assertThat(detailDto.rating().sentimentKeywords()).isNotEmpty();
         assertThat(detailDto.rating().sentimentSummary()).isNotBlank();
+        assertThat(detailDto.rating().followUpStatus()).isEqualTo("PENDING");
+    }
+
+    @Test
+    void testAdminCanResolveLowRatingFollowUpAndNotifyStudent() {
+        Long ticketId = createAssignedAndResolvedTicket();
+        TicketRatingRequest ratingRequest = new TicketRatingRequest(
+            studentId,
+            1,
+            "Still broken",
+            1,
+            1,
+            2,
+            false,
+            false
+        );
+        TicketDetailDto ratedDto = ticketService.rateTicket(ticketId, ratingRequest);
+
+        var updated = feedbackFollowUpService.updateFollowUp(
+            ratedDto.rating().ratingId(),
+            new FeedbackFollowUpUpdateRequest(adminId, FeedbackFollowUpStatus.RESOLVED, "Called student and arranged rework")
+        );
+        UserReference student = userReferenceRepository.findByUserId(studentId).orElseThrow();
+
+        assertThat(ratedDto.rating().followUpStatus()).isEqualTo("PENDING");
+        assertThat(updated.followUpStatus()).isEqualTo("RESOLVED");
+        assertThat(updated.followUpOperatorId()).isEqualTo(adminId);
+        assertThat(updated.followUpUpdatedAt()).isNotNull();
+        assertThat(notificationRepository.findByReceiverOrderByCreatedAtDesc(student))
+            .anyMatch(notification -> "Feedback follow-up resolved".equals(notification.getTitle()));
+        long notificationCount = notificationRepository.findByReceiverOrderByCreatedAtDesc(student).stream()
+            .filter(notification -> "Feedback follow-up resolved".equals(notification.getTitle()))
+            .count();
+
+        feedbackFollowUpService.updateFollowUp(
+            ratedDto.rating().ratingId(),
+            new FeedbackFollowUpUpdateRequest(adminId, FeedbackFollowUpStatus.RESOLVED, "No duplicate notification")
+        );
+
+        assertThat(notificationRepository.findByReceiverOrderByCreatedAtDesc(student).stream()
+            .filter(notification -> "Feedback follow-up resolved".equals(notification.getTitle()))
+            .count()).isEqualTo(notificationCount);
     }
 
     @Test

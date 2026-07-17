@@ -1,7 +1,10 @@
 package com.qiyun.repairservice.domain.entity;
 
+import com.qiyun.repairservice.domain.enums.FeedbackFollowUpStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -86,6 +89,20 @@ public class Rating {
 
     @Column(name = "sentiment_analyzed_at")
     private LocalDateTime sentimentAnalyzedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "follow_up_status", length = 20)
+    private FeedbackFollowUpStatus followUpStatus;
+
+    @Column(name = "follow_up_note", columnDefinition = "TEXT")
+    private String followUpNote;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "follow_up_operator_id", referencedColumnName = "user_number")
+    private UserReference followUpOperator;
+
+    @Column(name = "follow_up_updated_at")
+    private LocalDateTime followUpUpdatedAt;
 
     @PrePersist
     public void onCreate() {

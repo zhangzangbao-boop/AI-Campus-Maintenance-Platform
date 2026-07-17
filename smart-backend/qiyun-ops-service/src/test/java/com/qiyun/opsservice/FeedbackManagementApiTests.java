@@ -21,6 +21,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -47,7 +48,8 @@ class FeedbackManagementApiTests {
         feedbacksResponse.put("code", 200);
         feedbacksResponse.put("message", "获取成功");
         feedbacksResponse.put("data", Map.of("list", java.util.List.of(), "total", 0));
-        when(repairServiceClient.getFeedbacks(any(), anyInt(), anyInt(), any(), any())).thenReturn(feedbacksResponse);
+        when(repairServiceClient.getFeedbacks(any(), anyInt(), anyInt(), any(), any(), any())).thenReturn(feedbacksResponse);
+        when(repairServiceClient.updateFeedbackFollowUp(any(), any(), any())).thenReturn(feedbacksResponse);
 
         adminToken = generateToken("admin01", "ADMIN");
         studentToken = generateToken("student01", "STUDENT");
@@ -100,6 +102,23 @@ class FeedbackManagementApiTests {
     }
 
     @Test
+    void adminCanGetFeedbacksWithFollowUpStatusFilter() throws Exception {
+        mockMvc.perform(get("/api/admin/feedbacks")
+                .param("followUpStatus", "PENDING")
+                .header("Authorization", "Bearer " + adminToken))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    void adminCanUpdateFeedbackFollowUp() throws Exception {
+        mockMvc.perform(put("/api/admin/feedbacks/1001/follow-up")
+                .header("Authorization", "Bearer " + adminToken)
+                .contentType("application/json")
+                .content("{\"status\":\"RESOLVED\",\"note\":\"Called student\"}"))
+            .andExpect(status().isOk());
+    }
+
+    @Test
     void studentCannotGetFeedbacks() throws Exception {
         mockMvc.perform(get("/api/admin/feedbacks")
                 .header("Authorization", "Bearer " + studentToken))
@@ -110,6 +129,24 @@ class FeedbackManagementApiTests {
     void staffCannotGetFeedbacks() throws Exception {
         mockMvc.perform(get("/api/admin/feedbacks")
                 .header("Authorization", "Bearer " + staffToken))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void studentCannotUpdateFeedbackFollowUp() throws Exception {
+        mockMvc.perform(put("/api/admin/feedbacks/1001/follow-up")
+                .header("Authorization", "Bearer " + studentToken)
+                .contentType("application/json")
+                .content("{\"status\":\"RESOLVED\",\"note\":\"Called student\"}"))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void staffCannotUpdateFeedbackFollowUp() throws Exception {
+        mockMvc.perform(put("/api/admin/feedbacks/1001/follow-up")
+                .header("Authorization", "Bearer " + staffToken)
+                .contentType("application/json")
+                .content("{\"status\":\"RESOLVED\",\"note\":\"Called student\"}"))
             .andExpect(status().isForbidden());
     }
 

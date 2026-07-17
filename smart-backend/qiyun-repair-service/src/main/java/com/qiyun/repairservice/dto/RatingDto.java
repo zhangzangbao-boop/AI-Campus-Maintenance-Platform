@@ -22,6 +22,11 @@ public record RatingDto(
     Double sentimentScore,
     List<String> sentimentKeywords,
     String sentimentSummary,
-    LocalDateTime sentimentAnalyzedAt
+    LocalDateTime sentimentAnalyzedAt,
+    String followUpStatus,
+    String followUpNote,
+    String followUpOperatorId,
+    String followUpOperatorName,
+    LocalDateTime followUpUpdatedAt
 ) {
 }

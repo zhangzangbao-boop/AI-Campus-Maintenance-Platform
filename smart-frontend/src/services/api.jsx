@@ -325,6 +325,12 @@ const api = {
         method: "DELETE",
       }),
 
+    updateFeedbackFollowUp: (id, data) =>
+      request(`/admin/feedbacks/${id}/follow-up`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+
     getStatsCategory: () => request("/admin/stats/category"),
 
     getStatsLocation: () => request("/admin/stats/location"),

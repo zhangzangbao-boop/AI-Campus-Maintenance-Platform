@@ -26,6 +26,7 @@ public class FeedbackSentimentAnalysisService {
     private final RatingRepository ratingRepository;
     private final AiServiceClient aiServiceClient;
     private final ObjectMapper objectMapper;
+    private final FeedbackFollowUpService feedbackFollowUpService;
 
     @Async
     @Transactional
@@ -54,6 +55,7 @@ public class FeedbackSentimentAnalysisService {
         rating.setSentimentSummary(firstText(response.summary(), buildSummary(rating.getSentiment())));
         rating.setSentimentAnalyzedAt(LocalDateTime.now());
         ratingRepository.save(rating);
+        feedbackFollowUpService.markPendingIfNeeded(rating.getRatingId());
         return response;
     }
 

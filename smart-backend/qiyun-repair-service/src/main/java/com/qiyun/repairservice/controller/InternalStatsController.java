@@ -5,9 +5,11 @@ import com.qiyun.repairservice.dto.LocationStatsDto;
 import com.qiyun.repairservice.dto.PagedResult;
 import com.qiyun.repairservice.dto.RatingDto;
 import com.qiyun.repairservice.dto.RepairmanRatingStatsDto;
+import com.qiyun.repairservice.dto.request.FeedbackFollowUpUpdateRequest;
 import com.qiyun.repairservice.repository.RatingRepository;
 import com.qiyun.repairservice.repository.TicketRepository;
 import com.qiyun.repairservice.service.FacilityHealthService;
+import com.qiyun.repairservice.service.FeedbackFollowUpService;
 import com.qiyun.repairservice.service.RatingDtoMapper;
 import com.qiyun.repairservice.service.TicketService;
 import java.time.LocalDateTime;
@@ -23,6 +25,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -42,6 +47,7 @@ public class InternalStatsController {
     private final RatingRepository ratingRepository;
     private final FacilityHealthService facilityHealthService;
     private final RatingDtoMapper ratingDtoMapper;
+    private final FeedbackFollowUpService feedbackFollowUpService;
 
     /**
      * 获取工单状态统计
@@ -205,7 +211,8 @@ public class InternalStatsController {
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size,
             @RequestParam(value = "lowRating", required = false) Boolean lowRating,
-            @RequestParam(value = "sentiment", required = false) String sentiment) {
+            @RequestParam(value = "sentiment", required = false) String sentiment,
+            @RequestParam(value = "followUpStatus", required = false) String followUpStatus) {
 
         List<RatingDto> allRatings = ratingRepository.findAllWithDetails().stream()
             .map(ratingDtoMapper::toDto)
@@ -226,6 +233,13 @@ public class InternalStatsController {
                 .collect(Collectors.toList());
         }
 
+        if (followUpStatus != null && !followUpStatus.isBlank()) {
+            String normalizedFollowUpStatus = followUpStatus.trim().toUpperCase();
+            allRatings = allRatings.stream()
+                .filter(r -> normalizedFollowUpStatus.equals(r.followUpStatus()))
+                .collect(Collectors.toList());
+        }
+
         int total = allRatings.size();
         int fromIndex = Math.min(page * size, total);
         int toIndex = Math.min(fromIndex + size, total);
@@ -239,6 +253,18 @@ public class InternalStatsController {
             "list", pagedRatings,
             "total", total
         ));
+        return ResponseEntity.ok(result);
+    }
+
+    @PutMapping("/feedbacks/{ratingId}/follow-up")
+    public ResponseEntity<Map<String, Object>> updateFeedbackFollowUp(
+            @PathVariable Long ratingId,
+            @RequestBody FeedbackFollowUpUpdateRequest request) {
+        RatingDto rating = feedbackFollowUpService.updateFollowUp(ratingId, request);
+        Map<String, Object> result = new HashMap<>();
+        result.put("code", 200);
+        result.put("message", "Updated");
+        result.put("data", rating);
         return ResponseEntity.ok(result);
     }
 

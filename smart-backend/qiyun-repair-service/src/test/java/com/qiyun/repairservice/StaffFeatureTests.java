@@ -205,7 +205,7 @@ class StaffFeatureTests {
         TicketAssignRequest assignRequest = new TicketAssignRequest(adminId, otherStaffId);
         ticketService.assignTicket(ticket2, assignRequest);
         ticketService.updateStatus(ticket2, new TicketStatusUpdateRequest(otherStaffId, TicketStatus.RESOLVED, null));
-        ticketService.updateStatus(ticket2, new TicketStatusUpdateRequest(otherStaffId, TicketStatus.WAITING_FEEDBACK, null));
+        ticketService.confirmCompletion(ticket2, studentId);
 
         // Current staff's dashboard
         StaffDashboardDto dashboard = ticketService.getStaffDashboard(staffId);
@@ -279,10 +279,6 @@ class StaffFeatureTests {
             TicketStatus.RESOLVED,
             null
         ));
-        ticketService.updateStatus(ticketId, new TicketStatusUpdateRequest(
-            staffId,
-            TicketStatus.WAITING_FEEDBACK,
-            null
-        ));
+        ticketService.confirmCompletion(ticketId, studentId);
     }
 }

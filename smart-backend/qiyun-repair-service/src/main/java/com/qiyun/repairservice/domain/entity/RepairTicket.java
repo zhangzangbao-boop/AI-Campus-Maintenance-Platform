@@ -78,6 +78,12 @@ public class RepairTicket {
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 
+    @Column(name = "student_confirmed_at")
+    private LocalDateTime studentConfirmedAt;
+
+    @Column(name = "student_rejection_reason", columnDefinition = "TEXT")
+    private String studentRejectionReason;
+
     @Column(name = "closed_at")
     private LocalDateTime closedAt;
 

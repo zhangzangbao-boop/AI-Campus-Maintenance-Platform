@@ -216,6 +216,17 @@ const api = {
         body: JSON.stringify(requestBody),
       });
     },
+
+    confirmCompletion: (id) =>
+      request(`/repair-orders/${id}/confirm-completion`, {
+        method: "PUT",
+      }),
+
+    rejectCompletion: (id, reason) =>
+      request(`/repair-orders/${id}/reject-completion`, {
+        method: "PUT",
+        body: JSON.stringify({ reason }),
+      }),
   },
 
   repairman: {

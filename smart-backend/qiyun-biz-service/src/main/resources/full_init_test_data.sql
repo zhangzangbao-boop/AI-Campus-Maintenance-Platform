@@ -86,6 +86,8 @@ CREATE TABLE `repair_order` (
     `created_at` DATETIME NOT NULL,
     `assigned_at` DATETIME,
     `completed_at` DATETIME,
+    `student_confirmed_at` DATETIME,
+    `student_rejection_reason` TEXT,
     `closed_at` DATETIME,
     `is_deleted` BOOLEAN NOT NULL DEFAULT FALSE,
     `deleted_at` DATETIME,

@@ -55,6 +55,8 @@ CREATE TABLE `repair_order` (
     `sentiment_analyzed_at` DATETIME,
     `assigned_at` DATETIME,
     `completed_at` DATETIME,
+    `student_confirmed_at` DATETIME,
+    `student_rejection_reason` TEXT,
     `closed_at` DATETIME,
     `is_deleted` BOOLEAN DEFAULT FALSE,
     `deleted_at` DATETIME,

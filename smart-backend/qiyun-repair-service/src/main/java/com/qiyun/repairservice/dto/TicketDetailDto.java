@@ -22,6 +22,8 @@ public record TicketDetailDto(
     LocalDateTime createdAt,
     LocalDateTime assignedAt,
     LocalDateTime completedAt,
+    LocalDateTime studentConfirmedAt,
+    String studentRejectionReason,
     LocalDateTime closedAt,
     List<TicketImageDto> images,
     List<TicketStatusLogDto> logs,

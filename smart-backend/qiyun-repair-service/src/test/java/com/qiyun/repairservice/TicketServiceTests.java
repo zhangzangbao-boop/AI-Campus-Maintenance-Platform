@@ -154,14 +154,17 @@ class TicketServiceTests {
         assertThat(resolvedDto.status()).isEqualTo(TicketStatus.RESOLVED);
         assertThat(resolvedDto.completedAt()).isNotNull();
 
-        // Update to waiting for feedback
+        // Generic status updates cannot skip the student's confirmation.
         TicketStatusUpdateRequest feedbackRequest = new TicketStatusUpdateRequest(
                 staffId,
                 TicketStatus.WAITING_FEEDBACK,
                 null
         );
-        TicketDetailDto feedbackDto = ticketService.updateStatus(ticketId, feedbackRequest);
+        assertThrows(BusinessException.class, () -> ticketService.updateStatus(ticketId, feedbackRequest));
+
+        TicketDetailDto feedbackDto = ticketService.confirmCompletion(ticketId, studentId);
         assertThat(feedbackDto.status()).isEqualTo(TicketStatus.WAITING_FEEDBACK);
+        assertThat(feedbackDto.studentConfirmedAt()).isNotNull();
     }
 
     @Test
@@ -210,6 +213,45 @@ class TicketServiceTests {
         assertThat(detailDto.rating().sentimentKeywords()).isNotEmpty();
         assertThat(detailDto.rating().sentimentSummary()).isNotBlank();
         assertThat(detailDto.rating().followUpStatus()).isEqualTo("PENDING");
+    }
+
+    @Test
+    void testStudentRejectsCompletionReturnsTicketToProcessing() {
+        Long ticketId = createAndAssignTestTicket();
+        ticketService.resolveTicket(ticketId, staffId, "Fixed once");
+        UserReference staff = userReferenceRepository.findByUserId(staffId).orElseThrow();
+
+        TicketDetailDto returned = ticketService.rejectCompletion(ticketId, studentId, "Still leaking");
+
+        assertThat(returned.status()).isEqualTo(TicketStatus.IN_PROGRESS);
+        assertThat(returned.completedAt()).isNull();
+        assertThat(returned.studentConfirmedAt()).isNull();
+        assertThat(returned.studentRejectionReason()).isEqualTo("Still leaking");
+        assertThat(returned.logs()).anyMatch(log ->
+            log.oldStatus() == TicketStatus.RESOLVED && log.newStatus() == TicketStatus.IN_PROGRESS
+        );
+        assertThat(notificationRepository.findByReceiverOrderByCreatedAtDesc(staff))
+            .anyMatch(notification -> "Student returned the repair task".equals(notification.getTitle()));
+    }
+
+    @Test
+    void testOnlyOwnerCanConfirmCompletionAndDuplicateConfirmIsRejected() {
+        Long ticketId = createAndAssignTestTicket();
+        ticketService.resolveTicket(ticketId, staffId, "Fixed");
+        UserReference student = userReferenceRepository.findByUserId(studentId).orElseThrow();
+        UserReference staff = userReferenceRepository.findByUserId(staffId).orElseThrow();
+
+        assertThat(notificationRepository.findByReceiverOrderByCreatedAtDesc(student))
+            .anyMatch(notification -> "Repair completed, please confirm".equals(notification.getTitle()));
+
+        assertThrows(BusinessException.class, () -> ticketService.confirmCompletion(ticketId, "other_student"));
+
+        TicketDetailDto confirmed = ticketService.confirmCompletion(ticketId, studentId);
+        assertThat(confirmed.status()).isEqualTo(TicketStatus.WAITING_FEEDBACK);
+        assertThat(notificationRepository.findByReceiverOrderByCreatedAtDesc(staff))
+            .anyMatch(notification -> "Student confirmed completion".equals(notification.getTitle()));
+
+        assertThrows(BusinessException.class, () -> ticketService.confirmCompletion(ticketId, studentId));
     }
 
     @Test
@@ -401,11 +443,6 @@ class TicketServiceTests {
                 null
         ));
 
-        // Update to waiting for feedback
-        return ticketService.updateStatus(ticketId, new TicketStatusUpdateRequest(
-                staffId,
-                TicketStatus.WAITING_FEEDBACK,
-                null
-        )).ticketId();
+        return ticketService.confirmCompletion(ticketId, studentId).ticketId();
     }
 }

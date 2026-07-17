@@ -87,6 +87,9 @@ const mapOrderSummary = (order = {}) => {
     repairmanId: order.staffId || order.repairmanId || null,
     created_at: order.createdAt || order.created_at || '',
     assigned_at: order.assignedAt || order.assigned_at || '',
+    completed_at: order.completedAt || order.completed_at || '',
+    studentConfirmedAt: order.studentConfirmedAt || order.student_confirmed_at || null,
+    studentRejectionReason: order.studentRejectionReason || order.student_rejection_reason || null,
     estimated_completion_time: order.estimatedCompletionTime || order.estimated_completion_time || '',
     deleted: order.deleted || false,
     deletedAt: order.deletedAt || null,
@@ -198,9 +201,12 @@ export const repairService = {
             created_at: order.createdAt || order.created_at,
             assigned_at: order.assignedAt || order.assigned_at,
             completed_at: order.completedAt || order.completed_at,
+            studentConfirmedAt: order.studentConfirmedAt || order.student_confirmed_at || null,
+            studentRejectionReason: order.studentRejectionReason || order.student_rejection_reason || null,
             repairmanId: order.staffId || order.repairmanId || null,
             repairmanName: order.staffName || null, // 添加维修人员名称
             status: frontendStatus, // 映射状态
+            originalStatus: backendStatus,
             title: title, // 确保标题正确生成，与description区分
             rating: order.ratingScore || order.rating || null, // 映射评价分数
           };
@@ -246,6 +252,8 @@ export const repairService = {
           created_at: orderDetail.createdAt || orderDetail.created_at,
           assigned_at: orderDetail.assignedAt || orderDetail.assigned_at,
           completed_at: orderDetail.completedAt || orderDetail.completed_at,
+          studentConfirmedAt: orderDetail.studentConfirmedAt || orderDetail.student_confirmed_at || null,
+          studentRejectionReason: orderDetail.studentRejectionReason || orderDetail.student_rejection_reason || null,
           closedAt: orderDetail.closedAt || orderDetail.closed_at,
           rejection_reason: orderDetail.rejectionReason || orderDetail.rejection_reason,
           studentID: orderDetail.studentId || orderDetail.studentID,
@@ -253,6 +261,7 @@ export const repairService = {
           repairmanId: orderDetail.staffId || orderDetail.repairmanId || null,
           repairmanName: orderDetail.staffNickname || orderDetail.staffName || null,
           status: mapStatusToFrontend(orderDetail.status), // 映射状态
+          originalStatus: orderDetail.status,
           // 确保 title 正确
           title: (orderDetail.title && orderDetail.title !== orderDetail.description)
             ? orderDetail.title
@@ -572,6 +581,36 @@ export const repairService = {
     } catch (error) {
       console.error('删除报修单失败:', error);
       message.error('删除报修单失败: ' + error.message);
+      throw error;
+    }
+  },
+
+  confirmCompletion: async (orderId) => {
+    try {
+      const response = await api.student.confirmCompletion(orderId);
+      if (response.code === 200) {
+        message.success('确认完成成功');
+        return response.data;
+      }
+      throw new Error(response.message || '确认完成失败');
+    } catch (error) {
+      console.error('确认完成失败:', error);
+      message.error('确认完成失败: ' + error.message);
+      throw error;
+    }
+  },
+
+  rejectCompletion: async (orderId, reason) => {
+    try {
+      const response = await api.student.rejectCompletion(orderId, reason);
+      if (response.code === 200) {
+        message.success('已退回维修处理');
+        return response.data;
+      }
+      throw new Error(response.message || '退回处理失败');
+    } catch (error) {
+      console.error('退回处理失败:', error);
+      message.error('退回处理失败: ' + error.message);
       throw error;
     }
   },

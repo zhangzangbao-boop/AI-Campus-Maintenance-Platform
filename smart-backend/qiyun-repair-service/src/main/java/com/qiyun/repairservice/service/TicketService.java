@@ -196,7 +196,7 @@ public class TicketService {
             }
 
             TicketStatus status = ticket.getStatus();
-            if (status != TicketStatus.WAITING_FEEDBACK && status != TicketStatus.RESOLVED && status != TicketStatus.CLOSED) {
+            if (status != TicketStatus.WAITING_FEEDBACK && status != TicketStatus.CLOSED) {
                 throw new BusinessException("当前状态不可评价");
             }
 
@@ -323,8 +323,62 @@ public class TicketService {
         TicketStatus oldStatus = ticket.getStatus();
         ticket.setStatus(TicketStatus.RESOLVED);
         ticket.setCompletedAt(LocalDateTime.now());
+        ticket.setStudentConfirmedAt(null);
+        ticket.setStudentRejectionReason(null);
         appendStatusLog(ticket, oldStatus, TicketStatus.RESOLVED, staff);
+        notifyStudentToConfirm(ticket);
         triggerCompletionSummaryIfNeeded(ticket);
+        return toDetailDto(ticket);
+    }
+
+    @Transactional
+    public TicketDetailDto confirmCompletion(Long ticketId, String studentId) {
+        RepairTicket ticket = ticketRepository.findByIdWithLock(ticketId)
+            .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        UserReference student = userReferenceRepository.findByUserIdAndIsActiveTrue(studentId)
+            .orElseThrow(() -> new BusinessException("User not found"));
+
+        assertStudentOwnsTicket(ticket, studentId);
+        if (ticket.getStatus() != TicketStatus.RESOLVED) {
+            throw new BusinessException("Only resolved tickets can be confirmed");
+        }
+
+        TicketStatus oldStatus = ticket.getStatus();
+        ticket.setStatus(TicketStatus.WAITING_FEEDBACK);
+        ticket.setStudentConfirmedAt(LocalDateTime.now());
+        ticket.setStudentRejectionReason(null);
+        appendStatusLog(ticket, oldStatus, TicketStatus.WAITING_FEEDBACK, student);
+        notifyStaffCompletionConfirmed(ticket);
+        triggerCompletionSummaryIfNeeded(ticket);
+        return toDetailDto(ticket);
+    }
+
+    @Transactional
+    public TicketDetailDto rejectCompletion(Long ticketId, String studentId, String reason) {
+        RepairTicket ticket = ticketRepository.findByIdWithLock(ticketId)
+            .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        UserReference student = userReferenceRepository.findByUserIdAndIsActiveTrue(studentId)
+            .orElseThrow(() -> new BusinessException("User not found"));
+
+        assertStudentOwnsTicket(ticket, studentId);
+        if (ticket.getStatus() != TicketStatus.RESOLVED) {
+            throw new BusinessException("Only resolved tickets can be returned to processing");
+        }
+        String cleanReason = reason == null ? "" : reason.trim();
+        if (cleanReason.isBlank()) {
+            throw new BusinessException("Reason is required when the issue is not resolved");
+        }
+        if (cleanReason.length() > 500) {
+            cleanReason = cleanReason.substring(0, 500);
+        }
+
+        TicketStatus oldStatus = ticket.getStatus();
+        ticket.setStatus(TicketStatus.IN_PROGRESS);
+        ticket.setCompletedAt(null);
+        ticket.setStudentConfirmedAt(null);
+        ticket.setStudentRejectionReason(cleanReason);
+        appendStatusLog(ticket, oldStatus, TicketStatus.IN_PROGRESS, student);
+        notifyStaffCompletionRejected(ticket, cleanReason);
         return toDetailDto(ticket);
     }
 
@@ -443,7 +497,7 @@ public class TicketService {
         return switch (oldStatus) {
             case WAITING_ACCEPT -> newStatus == TicketStatus.IN_PROGRESS || newStatus == TicketStatus.REJECTED;
             case IN_PROGRESS -> newStatus == TicketStatus.RESOLVED || newStatus == TicketStatus.REJECTED;
-            case RESOLVED -> newStatus == TicketStatus.WAITING_FEEDBACK || newStatus == TicketStatus.CLOSED;
+            case RESOLVED -> newStatus == TicketStatus.CLOSED;
             case WAITING_FEEDBACK -> newStatus == TicketStatus.FEEDBACKED || newStatus == TicketStatus.CLOSED;
             case FEEDBACKED -> newStatus == TicketStatus.CLOSED;
             case REJECTED, CLOSED -> false;
@@ -479,6 +533,33 @@ public class TicketService {
         String studentContent = "你的工单 #" + ticket.getTicketId() + " 已分配给维修人员：" + safeName(staff) + "。";
         notificationService.notifyUser(ticket.getStudent(), studentTitle, studentContent, ticket);
         notificationPushService.notifyAndPush(ticket.getStudent(), studentTitle, studentContent, ticket);
+    }
+
+    private void notifyStudentToConfirm(RepairTicket ticket) {
+        String title = "Repair completed, please confirm";
+        String content = "Ticket #" + ticket.getTicketId() + " has been marked repaired. Please confirm completion or return it with a reason.";
+        notificationService.notifyUser(ticket.getStudent(), title, content, ticket);
+        notificationPushService.notifyAndPush(ticket.getStudent(), title, content, ticket);
+    }
+
+    private void notifyStaffCompletionConfirmed(RepairTicket ticket) {
+        String title = "Student confirmed completion";
+        String content = "Ticket #" + ticket.getTicketId() + " has been confirmed by the student and is now waiting for feedback.";
+        notificationService.notifyUser(ticket.getStaff(), title, content, ticket);
+        notificationPushService.notifyAndPush(ticket.getStaff(), title, content, ticket);
+    }
+
+    private void notifyStaffCompletionRejected(RepairTicket ticket, String reason) {
+        String title = "Student returned the repair task";
+        String content = "Ticket #" + ticket.getTicketId() + " was returned to processing. Reason: " + safeText(reason);
+        notificationService.notifyUser(ticket.getStaff(), title, content, ticket);
+        notificationPushService.notifyAndPush(ticket.getStaff(), title, content, ticket);
+    }
+
+    private void assertStudentOwnsTicket(RepairTicket ticket, String studentId) {
+        if (ticket.getStudent() == null || !Objects.equals(ticket.getStudent().getUserId(), studentId)) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "Only the ticket owner can perform this action");
+        }
     }
 
     private StaffRecommendationDto buildStaffRecommendation(UserReference staff, String targetCategory) {
@@ -530,7 +611,8 @@ public class TicketService {
             ticket.getLocationText(), ticket.getDescription(), ticket.getRejectionReason(),
             ticket.getPriority(), ticket.getRepairNotes(), ticket.getProcessNotes(),
             ticket.getEstimatedCompletionTime(), ticket.getCreatedAt(), ticket.getAssignedAt(),
-            ticket.getCompletedAt(), ticket.getClosedAt(), images, logs, ratingDto,
+            ticket.getCompletedAt(), ticket.getStudentConfirmedAt(), ticket.getStudentRejectionReason(),
+            ticket.getClosedAt(), images, logs, ratingDto,
             ticketCompletionSummaryService.getByTicketId(ticket.getTicketId()));
     }
 

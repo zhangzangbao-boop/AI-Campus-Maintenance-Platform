@@ -91,6 +91,16 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
   const [feedback, setFeedback] = useState("");
   const [evaluating, setEvaluating] = useState(false);
 
+  const isAwaitingStudentConfirmation = (order) => {
+    const originalStatus = order?.originalStatus || order?.status;
+    return originalStatus === 'RESOLVED';
+  };
+
+  const canEvaluateOrder = (order) => {
+    const originalStatus = order?.originalStatus || order?.status;
+    return !order?.rating && (originalStatus === 'WAITING_FEEDBACK' || order?.status === 'to_be_evaluated');
+  };
+
   // 分类选项配置 - 使用 repairService 中的变量名
   const categoryOptions = [
     { value: "waterAndElectricity", label: "水电维修", backendValue: "水电维修" },
@@ -169,6 +179,8 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
           created_at: order.createdAt || order.created_at,
           assigned_at: order.assignedAt || order.assigned_at,
           completed_at: order.completedAt || order.completed_at,
+          studentConfirmedAt: order.studentConfirmedAt || order.student_confirmed_at || null,
+          studentRejectionReason: order.studentRejectionReason || order.student_rejection_reason || null,
           repairmanId: order.staffId || order.repairmanId || null,
           repairmanName: order.staffName || null, // 添加维修人员名称
           status: mappedStatus, // 映射状态
@@ -406,6 +418,58 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
     }
   };
 
+  const refreshAfterCompletionAction = async (orderId) => {
+    await fetchMyRepairs();
+    if (detailModalVisible && selectedOrder) {
+      const detail = await repairService.getRepairOrderById(orderId);
+      setSelectedOrder(detail);
+    }
+    if (onRefresh) {
+      onRefresh();
+    }
+  };
+
+  const handleConfirmCompletion = async (record) => {
+    const orderId = record?.ticketId || record?.id;
+    if (!orderId) {
+      message.error("工单ID不存在");
+      return;
+    }
+    await repairService.confirmCompletion(orderId);
+    await refreshAfterCompletionAction(orderId);
+  };
+
+  const handleRejectCompletion = (record) => {
+    const orderId = record?.ticketId || record?.id;
+    if (!orderId) {
+      message.error("工单ID不存在");
+      return;
+    }
+    let reason = '';
+    Modal.confirm({
+      title: '问题未解决',
+      content: (
+        <TextArea
+          rows={4}
+          maxLength={500}
+          showCount
+          placeholder="请填写未解决原因"
+          onChange={(event) => { reason = event.target.value; }}
+        />
+      ),
+      okText: '提交',
+      cancelText: '取消',
+      async onOk() {
+        if (!reason.trim()) {
+          message.error('请填写未解决原因');
+          return Promise.reject(new Error('reason required'));
+        }
+        await repairService.rejectCompletion(orderId, reason.trim());
+        await refreshAfterCompletionAction(orderId);
+      },
+    });
+  };
+
   // 新增：打开评价模态框
   const handleEvaluate = (record) => {
     setEvaluatingOrder(record);
@@ -563,13 +627,10 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
       console.log('处理中订单详情:', processingOrders.map(o => ({ id: o.id, title: o.title, originalStatus: o.originalStatus })));
     }
 
-    // 学生端"待评价"：RESOLVED（维修完成）或 WAITING_FEEDBACK（等待评价）状态
-    // 注意：从学生视角，RESOLVED 就是"维修工已完成，我需要去评价"
+    // 学生端"待评价"：仅学生确认完成后的 WAITING_FEEDBACK 状态
     const toBeEvaluatedOrders = repairOrders.filter(order => {
       const originalStatus = order.originalStatus || order.status;
-      // RESOLVED 状态：维修工已完成，等待学生评价
-      // WAITING_FEEDBACK 状态：系统标记为等待评价
-      const isToBeEvaluated = originalStatus === 'RESOLVED' || originalStatus === 'WAITING_FEEDBACK' || order.status === 'to_be_evaluated';
+      const isToBeEvaluated = originalStatus === 'WAITING_FEEDBACK' || (order.status === 'to_be_evaluated' && originalStatus !== 'RESOLVED');
       console.log(`订单 ${order.id}: 原始状态="${originalStatus}", 是否待评价=${isToBeEvaluated}`);
       return isToBeEvaluated;
     });
@@ -587,8 +648,8 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
     // 学生端"已完成"：FEEDBACKED（已评价）或 CLOSED（已关闭）状态
     const completedOrders = repairOrders.filter(order => {
       const originalStatus = order.originalStatus || order.status;
-      // 只有已评价或已关闭的才算"已完成"
-      const isCompleted = originalStatus === 'FEEDBACKED' || originalStatus === 'CLOSED' || order.status === 'closed';
+      // RESOLVED 表示维修工已完成，等待学生确认
+      const isCompleted = originalStatus === 'RESOLVED' || originalStatus === 'FEEDBACKED' || originalStatus === 'CLOSED' || order.status === 'closed';
       console.log(`订单 ${order.id}: 原始状态="${originalStatus}", 是否已完成=${isCompleted}`);
       return isCompleted;
     });
@@ -724,11 +785,25 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
             </Popconfirm>
           )}
 
-          {/* 待评价状态可以评价：to_be_evaluated (RESOLVED/WAITING_FEEDBACK) */}
-          {(record.status === "to_be_evaluated" ||
-            (record.status === "closed" && !record.rating) ||
-            (record.status === "completed" && !record.rating)) &&
-           !record.rating && (
+          {isAwaitingStudentConfirmation(record) && (
+            <>
+              <Popconfirm
+                title="确认维修已完成？"
+                onConfirm={() => handleConfirmCompletion(record)}
+                okText="确认"
+                cancelText="取消"
+              >
+                <Button type="link" icon={<CheckCircleOutlined />} size="small">
+                  确认完成
+                </Button>
+              </Popconfirm>
+              <Button type="link" danger size="small" onClick={() => handleRejectCompletion(record)}>
+                问题未解决
+              </Button>
+            </>
+          )}
+
+          {canEvaluateOrder(record) && (
             <Button
               type="link"
               icon={<StarOutlined />}
@@ -1070,6 +1145,16 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
                   {selectedOrder.completed_at ? (typeof selectedOrder.completed_at === 'string' ? selectedOrder.completed_at : new Date(selectedOrder.completed_at).toLocaleString('zh-CN')) : "未完成"}
                 </Space>
               </Descriptions.Item>
+              {selectedOrder.studentConfirmedAt && (
+                <Descriptions.Item label="学生确认时间">
+                  {typeof selectedOrder.studentConfirmedAt === 'string' ? selectedOrder.studentConfirmedAt : new Date(selectedOrder.studentConfirmedAt).toLocaleString('zh-CN')}
+                </Descriptions.Item>
+              )}
+              {selectedOrder.studentRejectionReason && (
+                <Descriptions.Item label="未解决原因">
+                  {selectedOrder.studentRejectionReason}
+                </Descriptions.Item>
+              )}
               {selectedOrder.rejection_reason && (
                 <Descriptions.Item label="驳回原因">
                   {selectedOrder.rejection_reason}
@@ -1165,11 +1250,25 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
                 )}
               </Descriptions>
             ) : (
-              // 如果已完成但未评价，显示评价按钮
-              (selectedOrder.status === "to_be_evaluated" || 
-               selectedOrder.status === "completed" || 
-               selectedOrder.status === "closed") && (
-                <div style={{ marginBottom: 24, textAlign: 'center' }}>
+              <div style={{ marginBottom: 24, textAlign: 'center' }}>
+                {isAwaitingStudentConfirmation(selectedOrder) && (
+                  <Space>
+                    <Popconfirm
+                      title="确认维修已完成？"
+                      onConfirm={() => handleConfirmCompletion(selectedOrder)}
+                      okText="确认"
+                      cancelText="取消"
+                    >
+                      <Button type="primary" icon={<CheckCircleOutlined />}>
+                        确认完成
+                      </Button>
+                    </Popconfirm>
+                    <Button danger onClick={() => handleRejectCompletion(selectedOrder)}>
+                      问题未解决
+                    </Button>
+                  </Space>
+                )}
+                {canEvaluateOrder(selectedOrder) && (
                   <Button
                     type="primary"
                     icon={<StarOutlined />}
@@ -1181,8 +1280,8 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
                   >
                     立即评价
                   </Button>
-                </div>
-              )
+                )}
+              </div>
             )}
           </div>
         ) : (

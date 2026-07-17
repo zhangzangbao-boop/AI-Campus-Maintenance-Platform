@@ -10,6 +10,7 @@ import com.qiyun.repairservice.dto.StaffRecommendationDto;
 import com.qiyun.repairservice.dto.TicketDetailDto;
 import com.qiyun.repairservice.dto.TicketSummaryDto;
 import com.qiyun.repairservice.dto.request.RepairProcessRecordRequest;
+import com.qiyun.repairservice.dto.request.StudentCompletionRejectRequest;
 import com.qiyun.repairservice.dto.request.TicketAssignRequest;
 import com.qiyun.repairservice.dto.request.TicketCreateRequest;
 import com.qiyun.repairservice.dto.request.TicketRatingRequest;
@@ -205,6 +206,21 @@ public class TicketController {
         result.put("message", "删除报修单成功");
         result.put("data", null);
         return result;
+    }
+
+    @PutMapping("/repair-orders/{id}/confirm-completion")
+    @PreAuthorize("hasRole('STUDENT')")
+    public Map<String, Object> confirmCompletion(@PathVariable("id") Long id) {
+        TicketDetailDto detail = ticketService.confirmCompletion(id, currentUserId());
+        return success("Repair completion confirmed", detail);
+    }
+
+    @PutMapping("/repair-orders/{id}/reject-completion")
+    @PreAuthorize("hasRole('STUDENT')")
+    public Map<String, Object> rejectCompletion(@PathVariable("id") Long id,
+                                                @Valid @RequestBody StudentCompletionRejectRequest request) {
+        TicketDetailDto detail = ticketService.rejectCompletion(id, currentUserId(), request.reason());
+        return success("Repair returned to processing", detail);
     }
 
     @PostMapping("/repair-orders/{id}/evaluate")

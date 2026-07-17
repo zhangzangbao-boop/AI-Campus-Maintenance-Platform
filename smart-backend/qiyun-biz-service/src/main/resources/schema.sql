@@ -6,6 +6,7 @@ DROP TABLE IF EXISTS `repair_feedback`;
 DROP TABLE IF EXISTS `repair_order_image`;
 DROP TABLE IF EXISTS `repair_order_status_log`;
 DROP TABLE IF EXISTS `repair_order_comment`;
+DROP TABLE IF EXISTS `repair_process_record_image`;
 DROP TABLE IF EXISTS `repair_process_record`;
 DROP TABLE IF EXISTS `sys_notification`;
 DROP TABLE IF EXISTS `ai_ticket_analysis`;
@@ -145,6 +146,14 @@ CREATE TABLE `repair_process_record` (
     INDEX `idx_repair_process_staff` (`staff_id`),
     INDEX `idx_repair_process_action` (`action_type`),
     INDEX `idx_repair_process_created_at` (`created_at`)
+);
+CREATE TABLE `repair_process_record_image` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+    `process_record_id` BIGINT NOT NULL,
+    `image_url` VARCHAR(500) NOT NULL,
+    `created_at` DATETIME NOT NULL,
+    FOREIGN KEY (`process_record_id`) REFERENCES `repair_process_record`(`id`) ON DELETE CASCADE,
+    INDEX `idx_process_record_image_record` (`process_record_id`)
 );
 
 CREATE TABLE `sys_notification` (

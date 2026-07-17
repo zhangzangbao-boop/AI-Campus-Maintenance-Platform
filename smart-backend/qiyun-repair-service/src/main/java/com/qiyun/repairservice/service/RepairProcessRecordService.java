@@ -2,6 +2,7 @@ package com.qiyun.repairservice.service;
 
 import com.qiyun.common.exception.BusinessException;
 import com.qiyun.repairservice.domain.entity.RepairProcessRecord;
+import com.qiyun.repairservice.domain.entity.RepairProcessRecordImage;
 import com.qiyun.repairservice.domain.entity.RepairTicket;
 import com.qiyun.repairservice.domain.entity.UserReference;
 import com.qiyun.repairservice.domain.enums.RepairProcessActionType;
@@ -10,16 +11,20 @@ import com.qiyun.repairservice.domain.enums.UserRole;
 import com.qiyun.repairservice.dto.RepairProcessRecordDto;
 import com.qiyun.repairservice.dto.request.RepairProcessRecordRequest;
 import com.qiyun.repairservice.dto.request.TicketAssignRequest;
+import com.qiyun.repairservice.repository.RepairProcessRecordImageRepository;
 import com.qiyun.repairservice.repository.RepairProcessRecordRepository;
 import com.qiyun.repairservice.repository.TicketRepository;
 import com.qiyun.repairservice.repository.UserReferenceRepository;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 维修过程记录服务
@@ -30,9 +35,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class RepairProcessRecordService {
 
     private final RepairProcessRecordRepository processRecordRepository;
+    private final RepairProcessRecordImageRepository processRecordImageRepository;
     private final TicketRepository ticketRepository;
     private final UserReferenceRepository userReferenceRepository;
     private final NotificationService notificationService;
+    private final FileStorageService fileStorageService;
     private final TicketService ticketService;
 
     @Transactional(readOnly = true)
@@ -60,7 +67,8 @@ public class RepairProcessRecordService {
         record.setStaff(staff);
         record.setActionType(request.actionType());
         record.setContent(request.content() != null ? request.content().trim() : "");
-        record.setImageUrl(request.imageUrl());
+        List<String> imageUrls = normalizeImageUrls(request);
+        record.setImageUrl(imageUrls.isEmpty() ? request.imageUrl() : imageUrls.get(0));
         record.setCreatedAt(LocalDateTime.now());
 
         // 设置新增字段
@@ -83,7 +91,8 @@ public class RepairProcessRecordService {
             record.setRemarks(request.remarks().trim());
         }
 
-        processRecordRepository.save(record);
+        processRecordRepository.saveAndFlush(record);
+        persistImages(record, imageUrls);
         log.info("新增维修过程记录: ticketId={}, staffId={}, actionType={}",
             ticketId, userId, request.actionType());
 
@@ -92,6 +101,35 @@ public class RepairProcessRecordService {
     }
 
     // ==================== 快捷方法 ====================
+
+    /**
+     * Add a process record with images stored in the same request.
+     */
+    @Transactional
+    public RepairProcessRecordDto addRecordWithImages(Long ticketId, String userId, RepairProcessRecordRequest request, List<MultipartFile> images) {
+        RepairTicket ticket = findTicket(ticketId);
+        UserReference staff = loadActiveUser(userId);
+        assertCanAdd(ticket, staff);
+        List<String> storedUrls = fileStorageService.storeImages(images);
+        try {
+            RepairProcessRecordRequest mergedRequest = new RepairProcessRecordRequest(
+                request.actionType(),
+                request.content(),
+                storedUrls.isEmpty() ? request.imageUrl() : storedUrls.get(0),
+                storedUrls.isEmpty() ? request.imageUrls() : storedUrls,
+                request.arrivedAt(),
+                request.repairDescription(),
+                request.materialsUsed(),
+                request.finishedAt(),
+                request.durationMinutes(),
+                request.remarks()
+            );
+            return addRecord(ticketId, userId, mergedRequest);
+        } catch (RuntimeException e) {
+            fileStorageService.deleteStoredFiles(storedUrls);
+            throw e;
+        }
+    }
 
     /**
      * 记录到场确认
@@ -311,6 +349,7 @@ public class RepairProcessRecordService {
             record.getActionType() != null ? record.getActionType().getDescription() : null,
             record.getContent(),
             record.getImageUrl(),
+            imageUrlsFor(record),
             // 新增字段
             record.getArrivedAt(),
             record.getRepairDescription(),
@@ -322,6 +361,43 @@ public class RepairProcessRecordService {
         );
     }
 
+
+    private List<String> normalizeImageUrls(RepairProcessRecordRequest request) {
+        LinkedHashSet<String> urls = new LinkedHashSet<>();
+        if (request.imageUrl() != null && !request.imageUrl().isBlank()) {
+            urls.add(request.imageUrl().trim());
+        }
+        if (request.imageUrls() != null) {
+            request.imageUrls().stream()
+                .filter(url -> url != null && !url.isBlank())
+                .map(String::trim)
+                .forEach(urls::add);
+        }
+        if (urls.size() > FileStorageService.MAX_IMAGE_COUNT) {
+            throw new BusinessException("每条记录最多上传 " + FileStorageService.MAX_IMAGE_COUNT + " 张图片");
+        }
+        return new ArrayList<>(urls);
+    }
+
+    private void persistImages(RepairProcessRecord record, List<String> imageUrls) {
+        for (String imageUrl : imageUrls) {
+            RepairProcessRecordImage image = new RepairProcessRecordImage();
+            image.setRecord(record);
+            image.setImageUrl(imageUrl);
+            image.setCreatedAt(LocalDateTime.now());
+            processRecordImageRepository.save(image);
+        }
+    }
+
+    private List<String> imageUrlsFor(RepairProcessRecord record) {
+        List<String> urls = new ArrayList<>(processRecordImageRepository.findByRecordOrderByImageIdAsc(record).stream()
+            .map(RepairProcessRecordImage::getImageUrl)
+            .toList());
+        if (urls.isEmpty() && record.getImageUrl() != null && !record.getImageUrl().isBlank()) {
+            urls.add(record.getImageUrl());
+        }
+        return urls;
+    }
     private boolean hasTransferDecision(RepairTicket ticket) {
         if (ticket == null) {
             return true;

@@ -266,6 +266,18 @@ const api = {
         body: JSON.stringify(data),
       }),
 
+    addProcessRecordWithImages: (id, data, files = []) => {
+      const formData = new FormData();
+      formData.append("record", new Blob([JSON.stringify(data)], { type: "application/json" }));
+      files.forEach((file) => {
+        formData.append("images", file);
+      });
+      return request(`/tasks/${id}/process-records/with-images`, {
+        method: "POST",
+        body: formData,
+      });
+    },
+
     requestTransfer: (id, data) =>
       request(`/tasks/${id}/transfer-request`, {
         method: "POST",
@@ -465,6 +477,18 @@ const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
+
+    addWithImages: (ticketId, data, files = []) => {
+      const formData = new FormData();
+      formData.append("record", new Blob([JSON.stringify(data)], { type: "application/json" }));
+      files.forEach((file) => {
+        formData.append("images", file);
+      });
+      return request(`/repair-orders/${ticketId}/process-records/with-images`, {
+        method: "POST",
+        body: formData,
+      });
+    },
   },
 
   ai: {

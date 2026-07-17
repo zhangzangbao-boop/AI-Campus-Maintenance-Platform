@@ -373,6 +373,16 @@ public class TicketController {
         return success("维修过程记录已提交", record);
     }
 
+    @PostMapping(value = "/tasks/{id}/process-records/with-images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('STAFF')")
+    public Map<String, Object> addTaskProcessRecordWithImages(@PathVariable("id") Long id,
+                                                              @Valid @RequestPart("record") RepairProcessRecordRequest request,
+                                                              @RequestPart(value = "images", required = false) List<MultipartFile> images) {
+        assertStaffOwnsTicket(ticketService.getTicketDetail(id));
+        RepairProcessRecordDto record = repairProcessRecordService.addRecordWithImages(id, currentUserId(), request, images);
+        return success("维修过程记录已提交", record);
+    }
+
     @PostMapping("/tasks/{id}/transfer-request")
     @PreAuthorize("hasRole('STAFF')")
     public Map<String, Object> requestTransfer(@PathVariable("id") Long id,

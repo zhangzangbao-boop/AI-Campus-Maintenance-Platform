@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 维修过程记录请求 DTO
@@ -27,6 +28,8 @@ public record RepairProcessRecordRequest(
      * 图片URL
      */
     String imageUrl,
+
+    List<@Size(max = 500, message = "图片URL过长") String> imageUrls,
 
     // ==================== 新增字段 ====================
 
@@ -63,10 +66,24 @@ public record RepairProcessRecordRequest(
     @Size(max = 500, message = "备注不能超过500个字符")
     String remarks
 ) {
+    public RepairProcessRecordRequest(
+        RepairProcessActionType actionType,
+        String content,
+        String imageUrl,
+        LocalDateTime arrivedAt,
+        String repairDescription,
+        String materialsUsed,
+        LocalDateTime finishedAt,
+        Integer durationMinutes,
+        String remarks
+    ) {
+        this(actionType, content, imageUrl, null, arrivedAt, repairDescription, materialsUsed, finishedAt, durationMinutes, remarks);
+    }
+
     /**
      * 简化构造方法（兼容旧接口）
      */
     public RepairProcessRecordRequest(RepairProcessActionType actionType, String content, String imageUrl) {
-        this(actionType, content, imageUrl, null, null, null, null, null, null);
+        this(actionType, content, imageUrl, null, null, null, null, null, null, null);
     }
 }

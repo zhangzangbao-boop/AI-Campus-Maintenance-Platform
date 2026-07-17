@@ -33,6 +33,7 @@ DROP TABLE IF EXISTS `repair_feedback`;
 DROP TABLE IF EXISTS `repair_order_image`;
 DROP TABLE IF EXISTS `repair_order_status_log`;
 DROP TABLE IF EXISTS `repair_order_comment`;
+DROP TABLE IF EXISTS `repair_process_record_image`;
 DROP TABLE IF EXISTS `repair_process_record`;
 DROP TABLE IF EXISTS `sys_notification`;
 DROP TABLE IF EXISTS `ai_ticket_analysis`;
@@ -204,6 +205,15 @@ CREATE TABLE `repair_process_record` (
     INDEX `idx_repair_process_staff` (`staff_id`),
     INDEX `idx_repair_process_action` (`action_type`),
     INDEX `idx_repair_process_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE `repair_process_record_image` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+    `process_record_id` BIGINT NOT NULL,
+    `image_url` VARCHAR(500) NOT NULL,
+    `created_at` DATETIME NOT NULL,
+    CONSTRAINT `fk_process_record_image_record`
+        FOREIGN KEY (`process_record_id`) REFERENCES `repair_process_record` (`id`) ON DELETE CASCADE,
+    INDEX `idx_process_record_image_record` (`process_record_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `sys_notification` (
@@ -831,4 +841,3 @@ SELECT '数据库初始化完成' AS message;
 SELECT `role`, COUNT(*) AS user_count FROM `sys_user` GROUP BY `role`;
 SELECT `status`, COUNT(*) AS ticket_count FROM `repair_order` GROUP BY `status` ORDER BY `status`;
 SELECT '统一登录密码: 123456' AS login_password;
-

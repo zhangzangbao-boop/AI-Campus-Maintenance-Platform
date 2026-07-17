@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -18,7 +19,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequiredArgsConstructor
@@ -39,6 +42,15 @@ public class RepairProcessRecordController {
     public Map<String, Object> add(@PathVariable("ticketId") Long ticketId,
                                    @Valid @RequestBody RepairProcessRecordRequest request) {
         RepairProcessRecordDto record = repairProcessRecordService.addRecord(ticketId, currentUserId(), request);
+        return success("维修过程记录已提交", record);
+    }
+
+    @PostMapping(value = "/with-images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('STAFF')")
+    public Map<String, Object> addWithImages(@PathVariable("ticketId") Long ticketId,
+                                             @Valid @RequestPart("record") RepairProcessRecordRequest request,
+                                             @RequestPart(value = "images", required = false) List<MultipartFile> images) {
+        RepairProcessRecordDto record = repairProcessRecordService.addRecordWithImages(ticketId, currentUserId(), request, images);
         return success("维修过程记录已提交", record);
     }
 

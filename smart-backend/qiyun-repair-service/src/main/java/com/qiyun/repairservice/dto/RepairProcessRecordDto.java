@@ -2,6 +2,7 @@ package com.qiyun.repairservice.dto;
 
 import com.qiyun.repairservice.domain.enums.RepairProcessActionType;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 维修过程记录 DTO
@@ -15,6 +16,7 @@ public record RepairProcessRecordDto(
     String actionTypeDescription,
     String content,
     String imageUrl,
+    List<String> imageUrls,
 
     // 新增字段
     LocalDateTime arrivedAt,

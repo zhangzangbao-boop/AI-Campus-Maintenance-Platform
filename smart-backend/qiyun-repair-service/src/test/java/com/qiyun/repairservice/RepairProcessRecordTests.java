@@ -293,6 +293,27 @@ class RepairProcessRecordTests {
             processRecordService.addRecord(ticketId, studentId, request));
     }
 
+    @Test
+    @DisplayName("Process record keeps multiple image URLs")
+    void testProcessRecordMultipleImageUrls() {
+        RepairProcessRecordRequest request = new RepairProcessRecordRequest(
+            RepairProcessActionType.REPAIRING,
+            "multi image process",
+            null,
+            List.of("/uploads/a.jpg", "/uploads/b.png"),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+        );
+
+        RepairProcessRecordDto record = processRecordService.addRecord(ticketId, staffId, request);
+
+        assertThat(record.imageUrl()).isEqualTo("/uploads/a.jpg");
+        assertThat(record.imageUrls()).containsExactly("/uploads/a.jpg", "/uploads/b.png");
+    }
     // ==================== Helper Methods ====================
 
     private Long createTestTicket(String description) {

@@ -30,6 +30,9 @@ import api from "../services/api";
 
 const { Paragraph, Text } = Typography;
 const { TextArea } = Input;
+const MAX_RECORD_IMAGES = 5;
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 const ACTION_META = {
   ARRIVED: { label: "到场确认", color: "blue", icon: <EnvironmentOutlined /> },
@@ -80,6 +83,13 @@ const getImageUrl = (imageUrl) => {
   return `http://localhost:8070${imageUrl.startsWith("/") ? "" : "/"}${imageUrl}`;
 };
 
+const getRecordImages = (item) => {
+  const urls = Array.isArray(item.imageUrls) && item.imageUrls.length > 0
+    ? item.imageUrls
+    : [item.imageUrl].filter(Boolean);
+  return urls.map(getImageUrl).filter(Boolean);
+};
+
 function RepairProcessRecords({ ticketId, role, editable = false }) {
   const [form] = Form.useForm();
   const [records, setRecords] = useState([]);
@@ -123,14 +133,16 @@ function RepairProcessRecords({ ticketId, role, editable = false }) {
     []
   );
 
-  const uploadImageIfNeeded = async () => {
-    const file = fileList[0]?.originFileObj;
-    if (!file) {
-      return "";
+  const beforeUpload = (file) => {
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      message.error("仅支持 JPG、PNG、WebP 图片");
+      return Upload.LIST_IGNORE;
     }
-    const response = await api.common.uploadImages([file]);
-    const first = Array.isArray(response) ? response[0] : response?.data?.[0];
-    return first?.url || first?.imageUrl || "";
+    if (file.size > MAX_IMAGE_SIZE) {
+      message.error("单张图片不能超过 5MB");
+      return Upload.LIST_IGNORE;
+    }
+    return false;
   };
 
   const handleSubmit = async (values) => {
@@ -141,24 +153,15 @@ function RepairProcessRecords({ ticketId, role, editable = false }) {
 
     setSubmitting(true);
     try {
-      const imageUrl = await uploadImageIfNeeded();
-      if (values.actionType === "ARRIVED") {
-        await api.repairman.arriveTask(ticketId, {
-          content: values.content,
-          imageUrl,
-        });
-      } else if (values.actionType === "TRANSFER_REQUEST") {
-        await api.repairman.requestTransfer(ticketId, {
-          reason: values.content,
-          imageUrl,
-        });
-      } else {
-        await api.repairman.addProcessRecord(ticketId, {
+      const files = fileList.map((item) => item.originFileObj).filter(Boolean);
+      await api.repairman.addProcessRecordWithImages(
+        ticketId,
+        {
           actionType: values.actionType,
           content: values.content,
-          imageUrl,
-        });
-      }
+        },
+        files
+      );
       message.success("维修过程记录已提交");
       form.resetFields();
       setFileList([]);
@@ -209,7 +212,7 @@ function RepairProcessRecords({ ticketId, role, editable = false }) {
                 style={{ marginBottom: canAdd ? 12 : 0 }}
                 renderItem={(item) => {
                   const meta = ACTION_META[item.actionType] || ACTION_META.FINISHED;
-                  const imageUrl = getImageUrl(item.imageUrl);
+                  const imageUrls = getRecordImages(item);
 
                   return (
                     <List.Item
@@ -238,13 +241,20 @@ function RepairProcessRecords({ ticketId, role, editable = false }) {
                             <Paragraph style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>
                               {item.content}
                             </Paragraph>
-                            {imageUrl && (
-                              <Image
-                                width={120}
-                                height={90}
-                                src={imageUrl}
-                                style={{ objectFit: "cover", borderRadius: 6 }}
-                              />
+                            {imageUrls.length > 0 && (
+                              <Image.PreviewGroup>
+                                <Space size={8} wrap>
+                                  {imageUrls.map((url) => (
+                                    <Image
+                                      key={url}
+                                      width={120}
+                                      height={90}
+                                      src={url}
+                                      style={{ objectFit: "cover", borderRadius: 6 }}
+                                    />
+                                  ))}
+                                </Space>
+                              </Image.PreviewGroup>
                             )}
                           </Space>
                         }
@@ -290,13 +300,17 @@ function RepairProcessRecords({ ticketId, role, editable = false }) {
                 </Form.Item>
                 <Form.Item label="现场图片">
                   <Upload
-                    beforeUpload={() => false}
-                    maxCount={1}
-                    accept="image/*"
+                    beforeUpload={beforeUpload}
+                    maxCount={MAX_RECORD_IMAGES}
+                    accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
                     fileList={fileList}
-                    onChange={({ fileList: nextFileList }) => setFileList(nextFileList)}
+                    listType="picture-card"
+                    multiple
+                    onChange={({ fileList: nextFileList }) => setFileList(nextFileList.slice(0, MAX_RECORD_IMAGES))}
                   >
-                    <Button icon={<UploadOutlined />}>选择图片</Button>
+                    {fileList.length >= MAX_RECORD_IMAGES ? null : (
+                      <Button type="text" icon={<UploadOutlined />}>选择图片</Button>
+                    )}
                   </Upload>
                 </Form.Item>
                 <Button type="primary" htmlType="submit" icon={<SendOutlined />} loading={submitting}>

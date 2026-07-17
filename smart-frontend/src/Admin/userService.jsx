@@ -59,6 +59,8 @@ export const userService = {
           number: user.userId || user.id, // 工号就是userId
           name: user.nickname || user.name || '未知',
           phone: user.contactPhone || user.phone || '',
+          responsibleArea: user.responsibleArea || '',
+          specialties: user.specialties || '',
           type: 'repairman',
         }));
       } else if (response.code === 200) {
@@ -68,6 +70,8 @@ export const userService = {
           number: user.userId || user.id,
           name: user.nickname || user.name || '未知',
           phone: user.contactPhone || user.phone || '',
+          responsibleArea: user.responsibleArea || '',
+          specialties: user.specialties || '',
           type: 'repairman',
         })) : [];
       } else {
@@ -96,11 +100,11 @@ export const userService = {
       
       // 构建更新请求，保留原有信息，只更新phone
       const updateRequest = {
-        userId: currentUser.userId || userId,
-        password: 'dummy123', // 后端需要，但不会更新密码（后端只更新nickname和contactPhone）
-        nickname: currentUser.nickname || currentUser.name || '未知',
+        nickname: currentUser.nickname || currentUser.name || '鏈煡',
         contactPhone: userData.phone || userData.contactPhone || currentUser.contactPhone || '',
-        role: currentUser.role || 'STUDENT',
+        avatarUrl: currentUser.avatarUrl || '',
+        responsibleArea: userData.responsibleArea || currentUser.responsibleArea || '',
+        specialties: userData.specialties || currentUser.specialties || '',
       };
       
       console.log('更新请求:', updateRequest);

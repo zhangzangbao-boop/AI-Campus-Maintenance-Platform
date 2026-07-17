@@ -898,9 +898,18 @@ const RepairOrderList = ({ onRefresh, targetOrderId, onTargetOrderHandled }) => 
                               <Tag>待办 {item.activeTaskCount} 单</Tag>
                               <Tag>同类 {item.sameCategoryCompletedCount} 单</Tag>
                             </Space>
+                              {item.areaMatched && <Tag color="cyan">区域匹配</Tag>}
+                              {item.specialtyMatched && <Tag color="purple">专业匹配</Tag>}
                             <div style={{ color: '#64748b', marginTop: 8, lineHeight: 1.6 }}>
                               {item.reason}
                             </div>
+                            {(item.responsibleArea || item.specialties) && (
+                              <div style={{ color: '#475569', marginTop: 6, fontSize: 12 }}>
+                                {item.responsibleArea && <span>{'负责区域：' + item.responsibleArea}</span>}
+                                {item.responsibleArea && item.specialties && <span>{' | '}</span>}
+                                {item.specialties && <span>{'专业特长：' + item.specialties}</span>}
+                              </div>
+                            )}
                           </Col>
                           <Col>
                             <Button

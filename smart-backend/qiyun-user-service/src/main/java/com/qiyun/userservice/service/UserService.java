@@ -106,16 +106,28 @@ public class UserService implements UserDetailsService {
     }
 
     @Transactional
-    public UserDto updateUser(String userId, UserRegisterRequest request) {
+    public UserDto updateUser(String userId, UserUpdateRequest request) {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "用户不存在"));
 
-        if (request.nickname() != null && !request.nickname().isBlank()) {
-            user.setNickname(request.nickname());
+        if (request.getNickname() != null && !request.getNickname().isBlank()) {
+            user.setNickname(request.getNickname());
         }
 
-        if (request.contactPhone() != null && !request.contactPhone().isBlank()) {
-            user.setContactPhone(request.contactPhone());
+        if (request.getContactPhone() != null && !request.getContactPhone().isBlank()) {
+            user.setContactPhone(request.getContactPhone());
+        }
+
+        if (request.getAvatarUrl() != null) {
+            user.setAvatarUrl(request.getAvatarUrl());
+        }
+
+        if (user.getRole() == UserRole.STAFF) {
+            user.setResponsibleArea(cleanStaffText(request.getResponsibleArea()));
+            user.setSpecialties(cleanStaffText(request.getSpecialties()));
+        } else {
+            user.setResponsibleArea(null);
+            user.setSpecialties(null);
         }
 
         userRepository.save(user);
@@ -186,13 +198,24 @@ public class UserService implements UserDetailsService {
     }
 
     private UserDto toDto(User user) {
+        boolean staff = user.getRole() == UserRole.STAFF;
         return new UserDto(
             user.getUserId(),
             user.getNickname(),
             user.getContactPhone(),
             user.getRole(),
-            Boolean.TRUE.equals(user.getIsActive())
+            Boolean.TRUE.equals(user.getIsActive()),
+            staff ? user.getResponsibleArea() : null,
+            staff ? user.getSpecialties() : null
         );
+    }
+
+    private String cleanStaffText(String text) {
+        if (text == null) {
+            return null;
+        }
+        String cleaned = text.trim();
+        return cleaned.isEmpty() ? null : cleaned;
     }
 
     @Override

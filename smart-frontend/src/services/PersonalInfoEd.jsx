@@ -71,6 +71,8 @@ const PersonalInfoEd = ({ visible, onCancel, userInfo, onUpdate }) => {
         username: displayName,
         phone: userInfo.contactPhone || userInfo.phone || '',
         department: department, // 根据role自动设置，不可修改
+        responsibleArea: userInfo.responsibleArea || '',
+        specialties: userInfo.specialties || '',
       });
       // 设置头像 URL，优先使用 avatarUrl，然后是 avatar
       const currentAvatar = userInfo.avatarUrl || userInfo.avatar || null;
@@ -314,12 +316,20 @@ const PersonalInfoEd = ({ visible, onCancel, userInfo, onUpdate }) => {
                     </Form.Item>
 
                     <Form.Item label="部门" name="department">
-                      <Input 
-                        placeholder="部门（根据角色自动设置，不可修改）" 
-                        disabled
-                        style={{ backgroundColor: '#f5f5f5' }}
-                      />
+                      <Input disabled style={{ backgroundColor: '#f5f5f5' }} />
                     </Form.Item>
+
+                    {userInfo?.role === 'STAFF' && (
+                      <>
+                        <Form.Item label="负责区域" name="responsibleArea">
+                          <Input disabled style={{ backgroundColor: '#f5f5f5' }} />
+                        </Form.Item>
+
+                        <Form.Item label="专业特长" name="specialties">
+                          <Input disabled style={{ backgroundColor: '#f5f5f5' }} />
+                        </Form.Item>
+                      </>
+                    )}
 
                     <Form.Item className="profile-editor-actions">
                       <Space>

@@ -13,6 +13,7 @@ import com.qiyun.repairservice.domain.entity.UserReference;
 import com.qiyun.repairservice.domain.enums.FeedbackFollowUpStatus;
 import com.qiyun.repairservice.domain.enums.TicketStatus;
 import com.qiyun.repairservice.domain.enums.UserRole;
+import com.qiyun.repairservice.dto.StaffRecommendationDto;
 import com.qiyun.repairservice.dto.TicketDetailDto;
 import com.qiyun.repairservice.dto.TicketSummaryDto;
 import com.qiyun.repairservice.dto.request.FeedbackFollowUpUpdateRequest;
@@ -296,6 +297,56 @@ class TicketServiceTests {
     }
 
     @Test
+    void testStaffRecommendationPrefersAreaAndSpecialtyMatch() {
+        Long airConditionerCategoryId = ensureCategory("空调维修");
+        createUserIfNotExists("test_staff_area_match", "Area Match Staff", UserRole.STAFF, "13800138101");
+        createUserIfNotExists("test_staff_no_match", "No Match Staff", UserRole.STAFF, "13800138102");
+        UserReference matchedStaff = userReferenceRepository.findByUserId("test_staff_area_match").orElseThrow();
+        matchedStaff.setResponsibleArea("宿舍,三号楼");
+        matchedStaff.setSpecialties("空调维修,制冷");
+        userReferenceRepository.save(matchedStaff);
+        UserReference unmatchedStaff = userReferenceRepository.findByUserId("test_staff_no_match").orElseThrow();
+        unmatchedStaff.setResponsibleArea("食堂");
+        unmatchedStaff.setSpecialties("门窗维修");
+        userReferenceRepository.save(unmatchedStaff);
+
+        TicketDetailDto ticket = ticketService.createTicket(new TicketCreateRequest(
+            studentId,
+            airConditionerCategoryId,
+            "三号楼宿舍 402",
+            "空调不制冷",
+            "medium",
+            List.of()
+        ), null);
+
+        List<StaffRecommendationDto> recommendations = ticketService.recommendStaffForTicket(ticket.ticketId());
+
+        assertThat(recommendations).isNotEmpty();
+        assertThat(recommendations.get(0).staffId()).isEqualTo("test_staff_area_match");
+        assertThat(recommendations.get(0).areaMatched()).isTrue();
+        assertThat(recommendations.get(0).specialtyMatched()).isTrue();
+        assertThat(recommendations.get(0).reason()).contains("区域匹配", "专业匹配");
+    }
+
+    @Test
+    void testStaffRecommendationFallsBackWhenProfileMissing() {
+        Long ticketId = createTestTicket();
+        UserReference staff = userReferenceRepository.findByUserId(staffId).orElseThrow();
+        staff.setResponsibleArea(null);
+        staff.setSpecialties(null);
+        userReferenceRepository.save(staff);
+
+        List<StaffRecommendationDto> recommendations = ticketService.recommendStaffForTicket(ticketId);
+
+        assertThat(recommendations).isNotEmpty();
+        assertThat(recommendations)
+            .anyMatch(item -> item.staffId().equals(staffId)
+                && !item.areaMatched()
+                && !item.specialtyMatched()
+                && item.reason().contains("未维护负责区域/专业特长"));
+    }
+
+    @Test
     void testRegenerateCompletionSummary() {
         Long ticketId = createAndAssignTestTicket();
         ticketService.resolveTicket(ticketId, staffId, "已检查线路并更换损坏开关，恢复正常使用");
@@ -444,5 +495,15 @@ class TicketServiceTests {
         ));
 
         return ticketService.confirmCompletion(ticketId, studentId).ticketId();
+    }
+
+    private Long ensureCategory(String categoryName) {
+        return categoryRepository.findByCategoryName(categoryName)
+            .map(Category::getCategoryId)
+            .orElseGet(() -> {
+                Category category = new Category();
+                category.setCategoryName(categoryName);
+                return categoryRepository.save(category).getCategoryId();
+            });
     }
 }

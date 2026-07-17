@@ -269,10 +269,11 @@ public class TicketService {
         RepairTicket targetTicket = ticketRepository.findById(ticketId)
             .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "工单不存在"));
         String targetCategory = targetTicket.getCategory() != null ? targetTicket.getCategory().getCategoryName() : null;
+        String targetLocation = targetTicket.getLocationText();
 
         List<UserReference> staffUsers = userReferenceRepository.findByRoleAndIsActiveTrue(UserRole.STAFF);
         return staffUsers.stream()
-            .map(staff -> buildStaffRecommendation(staff, targetCategory))
+            .map(staff -> buildStaffRecommendation(staff, targetCategory, targetLocation))
             .sorted(Comparator.comparingDouble(StaffRecommendationDto::score).reversed())
             .toList();
     }
@@ -562,7 +563,7 @@ public class TicketService {
         }
     }
 
-    private StaffRecommendationDto buildStaffRecommendation(UserReference staff, String targetCategory) {
+    private StaffRecommendationDto buildStaffRecommendation(UserReference staff, String targetCategory, String targetLocation) {
         String staffId = staff.getUserId();
         int activeTaskCount = ticketRepository.countActiveTasksByStaffId(staffId).intValue();
         int sameCategoryCompletedCount = targetCategory == null ? 0 :
@@ -577,15 +578,54 @@ public class TicketService {
         double categoryScore = Math.min(sameCategoryCompletedCount, 5) / 5.0 * 25.0;
         double ratingScore = averageRating > 0 ? averageRating / 5.0 * 20.0 : 12.0;
         double speedScore = Math.max(0, 1.0 - Math.min(averageProcessingHours, 120.0) / 120.0) * 20.0;
-        double score = Math.round((loadScore + categoryScore + ratingScore + speedScore) * 10.0) / 10.0;
+        boolean areaMatched = matchesProfileText(staff.getResponsibleArea(), targetLocation);
+        boolean specialtyMatched = matchesProfileText(staff.getSpecialties(), targetCategory);
+        double matchBonus = (areaMatched ? 20.0 : 0.0) + (specialtyMatched ? 20.0 : 0.0);
+        double score = Math.round((loadScore + categoryScore + ratingScore + speedScore + matchBonus) * 10.0) / 10.0;
 
         String reason = "当前待办 " + activeTaskCount + " 单，同类完成 " + sameCategoryCompletedCount + " 单，平均评分 " +
             String.format(Locale.ROOT, "%.1f", averageRating) + "，平均处理 " +
             String.format(Locale.ROOT, "%.1f", averageProcessingHours) + " 小时";
+        List<String> matchReasons = new ArrayList<>();
+        if (areaMatched) {
+            matchReasons.add("区域匹配");
+        }
+        if (specialtyMatched) {
+            matchReasons.add("专业匹配");
+        }
+        if (!matchReasons.isEmpty()) {
+            reason = String.join("、", matchReasons) + "；" + reason;
+        } else if (!hasText(staff.getResponsibleArea()) && !hasText(staff.getSpecialties())) {
+            reason = "未维护负责区域/专业特长，按原有负载和服务质量推荐；" + reason;
+        }
 
         return new StaffRecommendationDto(staff.getUserId(), safeName(staff), staff.getContactPhone(),
             score, activeTaskCount, sameCategoryCompletedCount, completedTaskCount,
-            Math.round(averageRating * 10.0) / 10.0, Math.round(averageProcessingHours * 10.0) / 10.0, reason);
+            Math.round(averageRating * 10.0) / 10.0, Math.round(averageProcessingHours * 10.0) / 10.0,
+            staff.getResponsibleArea(), staff.getSpecialties(), areaMatched, specialtyMatched, reason);
+    }
+
+    private boolean matchesProfileText(String profileText, String targetText) {
+        if (!hasText(profileText) || !hasText(targetText)) {
+            return false;
+        }
+        String normalizedTarget = normalizeMatchText(targetText);
+        for (String token : profileText.split("[,，;；、\\s]+")) {
+            String normalizedToken = normalizeMatchText(token);
+            if (normalizedToken.length() >= 2
+                && (normalizedTarget.contains(normalizedToken) || normalizedToken.contains(normalizedTarget))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String normalizeMatchText(String text) {
+        return text == null ? "" : text.trim().toLowerCase(Locale.ROOT).replace(" ", "");
+    }
+
+    private boolean hasText(String text) {
+        return text != null && !text.isBlank();
     }
 
     private TicketDetailDto toDetailDto(RepairTicket ticket) {

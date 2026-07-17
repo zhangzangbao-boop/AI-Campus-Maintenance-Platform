@@ -4,6 +4,7 @@ import com.qiyun.userservice.dto.PagedResult;
 import com.qiyun.userservice.dto.ResetPasswordResult;
 import com.qiyun.userservice.dto.UserDto;
 import com.qiyun.userservice.dto.request.UserRegisterRequest;
+import com.qiyun.userservice.dto.request.UserUpdateRequest;
 import com.qiyun.userservice.service.UserService;
 import java.util.HashMap;
 import java.util.List;
@@ -63,7 +64,7 @@ public class AdminUserController {
 
     @PutMapping("/{userId}")
     @PreAuthorize("hasRole('ADMIN')")
-    public UserDto updateUser(@PathVariable("userId") String userId, @RequestBody UserRegisterRequest request) {
+    public UserDto updateUser(@PathVariable("userId") String userId, @RequestBody UserUpdateRequest request) {
         UserDto user = userService.updateUser(userId, request);
         log.info("管理员更新用户: userId={}, nickname={}", userId, user.nickname());
         return user;

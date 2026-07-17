@@ -9,5 +9,7 @@ public record UserSummaryDto(
     String nickname,
     String role,
     boolean active,
-    String contactPhone
+    String contactPhone,
+    String responsibleArea,
+    String specialties
 ) {}

@@ -7,6 +7,8 @@ public record UserDto(
     String nickname,
     String contactPhone,
     UserRole role,
-    boolean active
+    boolean active,
+    String responsibleArea,
+    String specialties
 ) {
 }

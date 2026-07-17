@@ -41,6 +41,12 @@ public class User {
     @Column(name = "avatar_url", length = 500)
     private String avatarUrl;
 
+    @Column(name = "responsible_area", length = 500)
+    private String responsibleArea;
+
+    @Column(name = "specialties", length = 500)
+    private String specialties;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

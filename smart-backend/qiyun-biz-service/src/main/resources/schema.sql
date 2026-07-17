@@ -26,6 +26,8 @@ CREATE TABLE `sys_user` (
     `role` VARCHAR(20) NOT NULL,
     `enabled` BOOLEAN DEFAULT TRUE,
     `phone` VARCHAR(20),
+    `responsible_area` VARCHAR(500),
+    `specialties` VARCHAR(500),
     `created_at` DATETIME NOT NULL
 );
 

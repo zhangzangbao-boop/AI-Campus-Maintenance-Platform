@@ -98,6 +98,8 @@ const UserManagement = () => {
     setEditingUser(record);
     form.setFieldsValue({
       phone: record.phone,
+      responsibleArea: record.responsibleArea || '',
+      specialties: record.specialties || '',
       type: record.type
     });
     setEditModalVisible(true);
@@ -213,6 +215,20 @@ const UserManagement = () => {
           {phone}
         </Space>
       ),
+    },
+    {
+      title: '负责区域',
+      dataIndex: 'responsibleArea',
+      key: 'responsibleArea',
+      width: 180,
+      render: (value) => currentUserType === 'repairman' ? (value || '-') : '-',
+    },
+    {
+      title: '专业特长',
+      dataIndex: 'specialties',
+      key: 'specialties',
+      width: 180,
+      render: (value) => currentUserType === 'repairman' ? (value || '-') : '-',
     },
     {
       title: '用户类型',
@@ -445,6 +461,26 @@ const UserManagement = () => {
           >
             <Input placeholder="请输入联系电话" />
           </Form.Item>
+
+          {editingUser?.type === 'repairman' && (
+            <>
+              <Form.Item
+                label="负责区域"
+                name="responsibleArea"
+                extra="可填写多个区域，用逗号分隔"
+              >
+                <Input placeholder="例如：一号宿舍楼,教学楼" maxLength={500} />
+              </Form.Item>
+
+              <Form.Item
+                label="专业特长"
+                name="specialties"
+                extra="可填写多个分类或关键词，用逗号分隔"
+              >
+                <Input placeholder="例如：水电维修,空调维修" maxLength={500} />
+              </Form.Item>
+            </>
+          )}
 
           <Form.Item
             label="用户类型"

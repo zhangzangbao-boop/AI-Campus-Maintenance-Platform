@@ -55,6 +55,8 @@ CREATE TABLE `sys_user` (
     `enabled` BOOLEAN NOT NULL DEFAULT TRUE,
     `phone` VARCHAR(20),
     `avatar_url` VARCHAR(500),
+    `responsible_area` VARCHAR(500),
+    `specialties` VARCHAR(500),
     `created_at` DATETIME NOT NULL,
     `sentiment` VARCHAR(20),
     `sentiment_score` DOUBLE,

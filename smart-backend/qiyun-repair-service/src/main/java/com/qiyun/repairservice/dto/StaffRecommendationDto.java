@@ -10,6 +10,10 @@ public record StaffRecommendationDto(
     int completedTaskCount,
     double averageRating,
     double averageProcessingHours,
+    String responsibleArea,
+    String specialties,
+    boolean areaMatched,
+    boolean specialtyMatched,
     String reason
 ) {
 }

@@ -18,4 +18,10 @@ public class UserUpdateRequest {
     // 头像URL允许为空，不再强制必填
     @Pattern(regexp = "^$|^https?://.*", message = "头像URL格式不正确")
     private String avatarUrl;
+
+    @Size(max = 500, message = "负责区域长度不能超过500")
+    private String responsibleArea;
+
+    @Size(max = 500, message = "专业特长长度不能超过500")
+    private String specialties;
 }

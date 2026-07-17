@@ -1083,6 +1083,17 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
             </Descriptions>
 
             {/* 新增：现场照片展示 */}
+            <Card
+              size="small"
+              title="完成总结"
+              style={{ marginBottom: 24 }}
+            >
+              {selectedOrder.completionSummary?.summary ? (
+                <div style={{ lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{selectedOrder.completionSummary.summary}</div>
+              ) : (
+                <div style={{ color: '#8c8c8c' }}>暂无完成总结</div>
+              )}
+            </Card>
             <RepairTimeline order={selectedOrder} />
             <RepairProcessRecords ticketId={selectedOrder.ticketId || selectedOrder.id} role="STUDENT" />
             <TicketComments ticketId={selectedOrder.ticketId || selectedOrder.id} role="STUDENT" />

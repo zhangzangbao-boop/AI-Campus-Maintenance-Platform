@@ -262,6 +262,7 @@ export const repairService = {
           feedback: orderDetail.rating?.comment || orderDetail.feedback || null,
           ratingTime: orderDetail.rating?.ratedAt || orderDetail.ratingTime || null,
           logs: orderDetail.logs || [],
+          completionSummary: orderDetail.completionSummary || null,
           // 维修备注
           repairNotes: orderDetail.repairNotes || null,
           processNotes: orderDetail.processNotes || null,

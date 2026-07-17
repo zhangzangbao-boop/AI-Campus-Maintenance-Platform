@@ -471,6 +471,23 @@ const MyTask = ({ targetTaskId, onTargetTaskHandled, initialFilters, overdueOnly
   };
 
   // 初始化加载数据
+
+  const handleRegenerateCompletionSummary = async () => {
+    const taskId = selectedTask?.ticketId || selectedTask?.id;
+    if (!taskId) return;
+    setReportGenerating(true);
+    try {
+      const response = await api.ai.regenerateCompletionSummary(taskId);
+      const summary = response?.data || null;
+      setSelectedTask((prev) => prev ? { ...prev, completionSummary: summary } : prev);
+      message.success('完成总结已重新生成');
+    } catch (error) {
+      console.warn('完成总结重新生成失败:', error);
+      message.error(error.message || '完成总结重新生成失败');
+    } finally {
+      setReportGenerating(false);
+    }
+  };
   useEffect(() => {
     if (currentRepairmanId) {
       console.log('========================================');
@@ -1143,6 +1160,18 @@ const MyTask = ({ targetTaskId, onTargetTaskHandled, initialFilters, overdueOnly
               </Descriptions.Item>
             )}
           </Descriptions>
+          <Card
+            size="small"
+            title="完成总结"
+            style={{ marginTop: 16, marginBottom: 16 }}
+            extra={<Button size="small" loading={reportGenerating} onClick={handleRegenerateCompletionSummary}>重新生成</Button>}
+          >
+            {selectedTask.completionSummary?.summary ? (
+              <div style={{ lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{selectedTask.completionSummary.summary}</div>
+            ) : (
+              <div style={{ color: '#8c8c8c' }}>暂无完成总结</div>
+            )}
+          </Card>
           <Card
             size="small"
             title="推荐维修方案"

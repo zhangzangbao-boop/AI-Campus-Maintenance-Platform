@@ -30,6 +30,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 @Slf4j
@@ -47,6 +49,7 @@ public class TicketService {
     private final NotificationPushService notificationPushService;
     private final FileStorageService fileStorageService;
     private final AiServiceClient aiServiceClient;
+    private final TicketCompletionSummaryService ticketCompletionSummaryService;
 
     @Transactional
     public TicketDetailDto createTicket(TicketCreateRequest request, List<MultipartFile> images) {
@@ -169,6 +172,7 @@ public class TicketService {
 
             ticket.setStatus(newStatus);
             appendStatusLog(ticket, oldStatus, newStatus, operator);
+            triggerCompletionSummaryIfNeeded(ticket);
             return toDetailDto(ticket);
         } catch (ObjectOptimisticLockingFailureException e) {
             throw new BusinessException("工单已被其他用户修改，请刷新后重试");
@@ -315,7 +319,18 @@ public class TicketService {
         ticket.setStatus(TicketStatus.RESOLVED);
         ticket.setCompletedAt(LocalDateTime.now());
         appendStatusLog(ticket, oldStatus, TicketStatus.RESOLVED, staff);
+        triggerCompletionSummaryIfNeeded(ticket);
         return toDetailDto(ticket);
+    }
+
+    @Transactional
+    public CompletionSummaryDto regenerateCompletionSummary(Long ticketId) {
+        RepairTicket ticket = ticketRepository.findById(ticketId)
+            .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "工单不存在"));
+        if (!isCompletionSummaryStatus(ticket.getStatus())) {
+            throw new BusinessException("仅已完成或已关闭的工单可重新生成完成总结");
+        }
+        return ticketCompletionSummaryService.regenerate(ticketId);
     }
 
     @Transactional(readOnly = true)
@@ -516,7 +531,32 @@ public class TicketService {
             ticket.getLocationText(), ticket.getDescription(), ticket.getRejectionReason(),
             ticket.getPriority(), ticket.getRepairNotes(), ticket.getProcessNotes(),
             ticket.getEstimatedCompletionTime(), ticket.getCreatedAt(), ticket.getAssignedAt(),
-            ticket.getCompletedAt(), ticket.getClosedAt(), images, logs, ratingDto);
+            ticket.getCompletedAt(), ticket.getClosedAt(), images, logs, ratingDto,
+            ticketCompletionSummaryService.getByTicketId(ticket.getTicketId()));
+    }
+
+    private void triggerCompletionSummaryIfNeeded(RepairTicket ticket) {
+        if (!isCompletionSummaryStatus(ticket.getStatus())) {
+            return;
+        }
+        Long ticketId = ticket.getTicketId();
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    ticketCompletionSummaryService.generateAsync(ticketId);
+                }
+            });
+        } else {
+            ticketCompletionSummaryService.generateAsync(ticketId);
+        }
+    }
+
+    private boolean isCompletionSummaryStatus(TicketStatus status) {
+        return status == TicketStatus.RESOLVED
+            || status == TicketStatus.WAITING_FEEDBACK
+            || status == TicketStatus.CLOSED
+            || status == TicketStatus.FEEDBACKED;
     }
 
     private TicketSummaryDto toSummaryDto(RepairTicket ticket) {

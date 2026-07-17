@@ -181,6 +181,29 @@ class TicketServiceTests {
     }
 
     @Test
+    void testRegenerateCompletionSummary() {
+        Long ticketId = createAndAssignTestTicket();
+        ticketService.resolveTicket(ticketId, staffId, "已检查线路并更换损坏开关，恢复正常使用");
+
+        TicketDetailDto summaryDto = ticketService.getTicketDetail(ticketId);
+        assertThat(summaryDto.completionSummary()).isNull();
+
+        when(aiServiceClient.analyzeTicket(any())).thenReturn(Map.of(
+            "data", Map.of(
+                "category", "电气故障",
+                "urgency", "普通",
+                "suggestion", "建议后续观察开关和线路状态",
+                "keywords", List.of("开关", "线路")
+            )
+        ));
+
+        var completionSummary = ticketService.regenerateCompletionSummary(ticketId);
+
+        assertThat(completionSummary).isNotNull();
+        assertThat(completionSummary.summary()).contains("故障原因", "维修过程", "使用材料", "处理结果", "耗时", "后续建议");
+        assertThat(ticketService.getTicketDetail(ticketId).completionSummary().summary()).isEqualTo(completionSummary.summary());
+    }
+    @Test
     void testListTickets() {
         createTestTicket();
         createTestTicket();

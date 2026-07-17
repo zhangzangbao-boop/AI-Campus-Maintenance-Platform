@@ -163,6 +163,7 @@ export const mytaskService = {
           feedback: task.rating?.comment ?? task.feedback ?? '',
           ratingTime: task.rating?.ratedAt || task.ratingTime || null,
           logs: task.logs || [],
+          completionSummary: task.completionSummary || null,
           // 图片：从 TicketImageDto 列表中提取 imageUrl
           images: Array.isArray(task.images)
             ? task.images

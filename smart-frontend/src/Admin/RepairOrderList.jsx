@@ -344,7 +344,8 @@ const RepairOrderList = ({ onRefresh, targetOrderId, onTargetOrderHandled }) => 
         return;
       }
       const detail = await repairService.getRepairOrderById(id);
-      setAiSummary(null);
+      setAiSummary(detail.completionSummary || null);
+      setAiSummaryLoading(false);
       setDetailData({
         ...detail,
         id: detail.ticketId || detail.id,
@@ -367,15 +368,8 @@ const RepairOrderList = ({ onRefresh, targetOrderId, onTargetOrderHandled }) => 
         repairmanName: detail.repairmanName || detail.staffName || detail.repairman_name || '',
         ratingTime: detail.rating?.ratedAt || detail.ratingTime || null,
         logs: detail.logs || [],
+        completionSummary: detail.completionSummary || null,
       });
-      setAiSummaryLoading(true);
-      api.ai.summarizeTicket(id)
-        .then((response) => setAiSummary(response?.data || null))
-        .catch((error) => {
-          console.warn('AI 工单摘要生成失败:', error);
-          setAiSummary(null);
-        })
-        .finally(() => setAiSummaryLoading(false));
     } catch (err) {
       console.error('获取工单详情失败:', err);
       message.error('获取工单详情失败');
@@ -385,6 +379,23 @@ const RepairOrderList = ({ onRefresh, targetOrderId, onTargetOrderHandled }) => 
     }
   };
 
+  const handleRegenerateCompletionSummary = async () => {
+    const id = detailData?.ticketId || detailData?.id;
+    if (!id) return;
+    setAiSummaryLoading(true);
+    try {
+      const response = await api.ai.regenerateCompletionSummary(id);
+      const summary = response?.data || null;
+      setAiSummary(summary);
+      setDetailData((prev) => prev ? { ...prev, completionSummary: summary } : prev);
+      message.success('完成总结已重新生成');
+    } catch (error) {
+      console.warn('完成总结重新生成失败:', error);
+      message.error(error.message || '完成总结重新生成失败');
+    } finally {
+      setAiSummaryLoading(false);
+    }
+  };
   useEffect(() => {
     if (!targetOrderId) return;
     handleViewDetail({ id: targetOrderId, ticketId: targetOrderId });
@@ -1036,10 +1047,10 @@ const RepairOrderList = ({ onRefresh, targetOrderId, onTargetOrderHandled }) => 
 
           <Card
             size="small"
-            title="AI 工单摘要"
+            title="完成总结"
             loading={aiSummaryLoading}
             style={{ marginBottom: 16 }}
-            extra={aiSummary?.source ? <Tag color="blue">{aiSummary.source}</Tag> : null}
+            extra={<Space><Button size="small" loading={aiSummaryLoading} onClick={handleRegenerateCompletionSummary}>重新生成</Button>{aiSummary?.source ? <Tag color="blue">{aiSummary.source}</Tag> : null}</Space>}
           >
             {aiSummary?.summary ? (
               <div style={{ lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{aiSummary.summary}</div>

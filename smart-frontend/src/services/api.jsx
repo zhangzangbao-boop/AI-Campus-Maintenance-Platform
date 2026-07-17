@@ -478,6 +478,11 @@ const api = {
 
     summarizeTicket: (ticketId) => request(`/ai/ticket/${ticketId}/summary`),
 
+    regenerateCompletionSummary: (ticketId) =>
+      request(`/repair-orders/${ticketId}/completion-summary/regenerate`, {
+        method: "POST",
+      }),
+
     draftKnowledge: (data) =>
       request("/ai/knowledge/draft", {
         method: "POST",

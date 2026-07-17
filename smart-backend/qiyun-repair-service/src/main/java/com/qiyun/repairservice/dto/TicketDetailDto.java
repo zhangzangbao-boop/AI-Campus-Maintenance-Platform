@@ -25,6 +25,7 @@ public record TicketDetailDto(
     LocalDateTime closedAt,
     List<TicketImageDto> images,
     List<TicketStatusLogDto> logs,
-    RatingDto rating
+    RatingDto rating,
+    CompletionSummaryDto completionSummary
 ) {
 }

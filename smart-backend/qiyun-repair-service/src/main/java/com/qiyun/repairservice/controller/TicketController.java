@@ -3,6 +3,7 @@ package com.qiyun.repairservice.controller;
 import com.qiyun.common.exception.BusinessException;
 import com.qiyun.repairservice.domain.enums.RepairProcessActionType;
 import com.qiyun.repairservice.domain.enums.TicketStatus;
+import com.qiyun.repairservice.dto.CompletionSummaryDto;
 import com.qiyun.repairservice.dto.RepairProcessRecordDto;
 import com.qiyun.repairservice.dto.StaffDashboardDto;
 import com.qiyun.repairservice.dto.StaffRecommendationDto;
@@ -170,6 +171,17 @@ public class TicketController {
         result.put("message", "获取成功");
         result.put("data", detail);
         return result;
+    }
+
+    @PostMapping("/repair-orders/{id}/completion-summary/regenerate")
+    @PreAuthorize("hasAnyRole('STAFF','ADMIN')")
+    public Map<String, Object> regenerateCompletionSummary(@PathVariable("id") Long id) {
+        TicketDetailDto detail = ticketService.getTicketDetail(id);
+        if (hasRole("STAFF") && !hasRole("ADMIN")) {
+            assertStaffOwnsTicket(detail);
+        }
+        CompletionSummaryDto summary = ticketService.regenerateCompletionSummary(id);
+        return success("完成总结已重新生成", summary);
     }
 
     @DeleteMapping("/repair-orders/{id}")

@@ -46,6 +46,11 @@ export const feedbackService = {
         attitudeRating: item.attitudeRating ?? null,
         resolved: item.resolved,
         anonymous: item.anonymous,
+        sentiment: item.sentiment ?? null,
+        sentimentScore: item.sentimentScore ?? null,
+        sentimentKeywords: item.sentimentKeywords ?? item.keywords ?? [],
+        sentimentSummary: item.sentimentSummary ?? item.summary ?? '',
+        sentimentAnalyzedAt: item.sentimentAnalyzedAt ?? null,
         // 时间字段
         createdAt: item.ratedAt ?? item.createdAt ?? item.created_at,
       }));

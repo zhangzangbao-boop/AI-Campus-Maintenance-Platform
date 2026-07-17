@@ -1,5 +1,7 @@
 package com.qiyun.aiservice.controller;
 
+import com.qiyun.aiservice.dto.AnalyzeFeedbackSentimentRequest;
+import com.qiyun.aiservice.dto.AnalyzeFeedbackSentimentResponse;
 import com.qiyun.aiservice.dto.AnalyzeTicketRequest;
 import com.qiyun.aiservice.dto.AnalyzeTicketResponse;
 import com.qiyun.aiservice.service.AiAnalyzeService;
@@ -37,6 +39,20 @@ public class AiAnalyzeController {
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
         result.put("message", "AI 分析完成");
+        result.put("data", response);
+
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/analyze-feedback-sentiment")
+    public ResponseEntity<Map<String, Object>> analyzeFeedbackSentiment(
+            @Valid @RequestBody AnalyzeFeedbackSentimentRequest request) {
+
+        AnalyzeFeedbackSentimentResponse response = aiAnalyzeService.analyzeFeedbackSentiment(request);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("code", 200);
+        result.put("message", "AI feedback sentiment analysis completed");
         result.put("data", response);
 
         return ResponseEntity.ok(result);

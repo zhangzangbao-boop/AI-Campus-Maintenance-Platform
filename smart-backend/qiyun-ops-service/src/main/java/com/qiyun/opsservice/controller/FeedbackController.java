@@ -33,8 +33,9 @@ public class FeedbackController {
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size,
-            @RequestParam(value = "lowRating", required = false) Boolean lowRating) {
-        log.info("ADMIN请求获取评价列表: page={}, size={}, lowRating={}", page, size, lowRating);
-        return feedbackService.getFeedbacks(authorization, page, size, lowRating);
+            @RequestParam(value = "lowRating", required = false) Boolean lowRating,
+            @RequestParam(value = "sentiment", required = false) String sentiment) {
+        log.info("ADMIN请求获取评价列表: page={}, size={}, lowRating={}, sentiment={}", page, size, lowRating, sentiment);
+        return feedbackService.getFeedbacks(authorization, page, size, lowRating, sentiment);
     }
 }

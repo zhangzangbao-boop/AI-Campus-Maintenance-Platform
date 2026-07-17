@@ -63,7 +63,7 @@ public class StatisticsApiTests {
         feedbacksResponse.put("code", 200);
         feedbacksResponse.put("message", "获取成功");
         feedbacksResponse.put("data", Map.of("list", java.util.List.of(), "total", 0));
-        when(repairServiceClient.getFeedbacks(any(), anyInt(), anyInt(), any())).thenReturn(feedbacksResponse);
+        when(repairServiceClient.getFeedbacks(any(), anyInt(), anyInt(), any(), any())).thenReturn(feedbacksResponse);
         when(repairServiceClient.getFeedbacksCount(any())).thenReturn(0L);
 
         adminToken = generateToken("admin01", "ADMIN");

@@ -219,4 +219,22 @@ class AiAnalyzeServiceTest {
         assertNotNull(response);
         assertEquals("空调故障", response.category());
     }
+
+
+    @Test
+    @DisplayName("???????????????")
+    void testFeedbackSentimentFallback() {
+        var request = new com.qiyun.aiservice.dto.AnalyzeFeedbackSentimentRequest(
+            "\u7b49\u5f85\u592a\u6162\uff0c\u95ee\u9898\u4ecd\u7136\u6ca1\u89e3\u51b3\uff0c\u6001\u5ea6\u4e5f\u4e0d\u597d"
+        );
+
+        var response = aiAnalyzeService.analyzeFeedbackSentiment(request);
+
+        assertNotNull(response);
+        assertEquals("NEGATIVE", response.sentiment());
+        assertTrue(response.score() >= 0 && response.score() <= 1);
+        assertFalse(response.keywords().isEmpty());
+        assertNotNull(response.summary());
+    }
+
 }

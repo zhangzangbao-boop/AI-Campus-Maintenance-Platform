@@ -47,7 +47,7 @@ class FeedbackManagementApiTests {
         feedbacksResponse.put("code", 200);
         feedbacksResponse.put("message", "获取成功");
         feedbacksResponse.put("data", Map.of("list", java.util.List.of(), "total", 0));
-        when(repairServiceClient.getFeedbacks(any(), anyInt(), anyInt(), any())).thenReturn(feedbacksResponse);
+        when(repairServiceClient.getFeedbacks(any(), anyInt(), anyInt(), any(), any())).thenReturn(feedbacksResponse);
 
         adminToken = generateToken("admin01", "ADMIN");
         studentToken = generateToken("student01", "STUDENT");
@@ -87,6 +87,14 @@ class FeedbackManagementApiTests {
     void adminCanGetFeedbacksWithLowRatingFilter() throws Exception {
         mockMvc.perform(get("/api/admin/feedbacks")
                 .param("lowRating", "true")
+                .header("Authorization", "Bearer " + adminToken))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    void adminCanGetNegativeFeedbacksFilter() throws Exception {
+        mockMvc.perform(get("/api/admin/feedbacks")
+                .param("sentiment", "NEGATIVE")
                 .header("Authorization", "Bearer " + adminToken))
             .andExpect(status().isOk());
     }

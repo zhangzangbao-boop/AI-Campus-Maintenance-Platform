@@ -56,6 +56,11 @@ CREATE TABLE `sys_user` (
     `phone` VARCHAR(20),
     `avatar_url` VARCHAR(500),
     `created_at` DATETIME NOT NULL,
+    `sentiment` VARCHAR(20),
+    `sentiment_score` DOUBLE,
+    `sentiment_keywords` TEXT,
+    `sentiment_summary` TEXT,
+    `sentiment_analyzed_at` DATETIME,
     INDEX `idx_sys_user_role` (`role`),
     INDEX `idx_sys_user_enabled` (`enabled`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

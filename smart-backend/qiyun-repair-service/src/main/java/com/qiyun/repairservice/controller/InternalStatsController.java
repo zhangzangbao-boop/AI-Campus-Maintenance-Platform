@@ -8,6 +8,7 @@ import com.qiyun.repairservice.dto.RepairmanRatingStatsDto;
 import com.qiyun.repairservice.repository.RatingRepository;
 import com.qiyun.repairservice.repository.TicketRepository;
 import com.qiyun.repairservice.service.FacilityHealthService;
+import com.qiyun.repairservice.service.RatingDtoMapper;
 import com.qiyun.repairservice.service.TicketService;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -40,6 +41,7 @@ public class InternalStatsController {
     private final TicketService ticketService;
     private final RatingRepository ratingRepository;
     private final FacilityHealthService facilityHealthService;
+    private final RatingDtoMapper ratingDtoMapper;
 
     /**
      * 获取工单状态统计
@@ -202,10 +204,11 @@ public class InternalStatsController {
     public ResponseEntity<Map<String, Object>> getFeedbacks(
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size,
-            @RequestParam(value = "lowRating", required = false) Boolean lowRating) {
+            @RequestParam(value = "lowRating", required = false) Boolean lowRating,
+            @RequestParam(value = "sentiment", required = false) String sentiment) {
 
         List<RatingDto> allRatings = ratingRepository.findAllWithDetails().stream()
-            .map(this::toDto)
+            .map(ratingDtoMapper::toDto)
             .collect(Collectors.toList());
 
         // 低评分筛选
@@ -216,6 +219,13 @@ public class InternalStatsController {
         }
 
         // 简单分页
+        if (sentiment != null && !sentiment.isBlank()) {
+            String normalizedSentiment = sentiment.trim().toUpperCase();
+            allRatings = allRatings.stream()
+                .filter(r -> normalizedSentiment.equals(r.sentiment()))
+                .collect(Collectors.toList());
+        }
+
         int total = allRatings.size();
         int fromIndex = Math.min(page * size, total);
         int toIndex = Math.min(fromIndex + size, total);
@@ -238,44 +248,5 @@ public class InternalStatsController {
     @GetMapping("/feedbacks/count")
     public ResponseEntity<Long> getFeedbacksCount() {
         return ResponseEntity.ok(ratingRepository.count());
-    }
-
-    /**
-     * 转换Rating为DTO
-     */
-    private RatingDto toDto(com.qiyun.repairservice.domain.entity.Rating rating) {
-        String studentName = null;
-        if (rating.getStudent() != null) {
-            studentName = rating.getStudent().getNickname() != null ?
-                rating.getStudent().getNickname() : rating.getStudent().getUserId();
-        }
-
-        String staffName = null;
-        if (rating.getStaff() != null) {
-            staffName = rating.getStaff().getNickname() != null ?
-                rating.getStaff().getNickname() : rating.getStaff().getUserId();
-        }
-
-        Long repairOrderId = null;
-        if (rating.getTicket() != null) {
-            repairOrderId = rating.getTicket().getTicketId();
-        }
-
-        return new RatingDto(
-            rating.getRatingId(),
-            rating.getScore(),
-            rating.getComment(),
-            rating.getStudent() != null ? rating.getStudent().getUserId() : null,
-            studentName,
-            rating.getStaff() != null ? rating.getStaff().getUserId() : null,
-            staffName,
-            repairOrderId,
-            rating.getSpeedRating(),
-            rating.getQualityRating(),
-            rating.getAttitudeRating(),
-            rating.getResolved(),
-            rating.getAnonymous(),
-            rating.getRatedAt()
-        );
     }
 }

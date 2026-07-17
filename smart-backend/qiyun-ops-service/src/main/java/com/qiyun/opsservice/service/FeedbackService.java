@@ -21,10 +21,10 @@ public class FeedbackService {
     /**
      * 获取评价列表（分页）
      */
-    public Map<String, Object> getFeedbacks(String authorization, int page, int size, Boolean lowRating) {
+    public Map<String, Object> getFeedbacks(String authorization, int page, int size, Boolean lowRating, String sentiment) {
         try {
-            log.debug("调用repair-service获取评价列表: page={}, size={}, lowRating={}", page, size, lowRating);
-            Map<String, Object> result = repairServiceClient.getFeedbacks(authorization, page, size, lowRating);
+            log.debug("调用repair-service获取评价列表: page={}, size={}, lowRating={}, sentiment={}", page, size, lowRating, sentiment);
+            Map<String, Object> result = repairServiceClient.getFeedbacks(authorization, page, size, lowRating, sentiment);
             log.debug("评价列表结果: total={}", result != null && result.get("data") != null ?
                 ((Map<?, ?>) result.get("data")).get("total") : "unknown");
             return result;

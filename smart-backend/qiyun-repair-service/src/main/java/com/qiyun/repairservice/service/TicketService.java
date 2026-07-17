@@ -50,6 +50,8 @@ public class TicketService {
     private final FileStorageService fileStorageService;
     private final AiServiceClient aiServiceClient;
     private final TicketCompletionSummaryService ticketCompletionSummaryService;
+    private final FeedbackSentimentAnalysisService feedbackSentimentAnalysisService;
+    private final RatingDtoMapper ratingDtoMapper;
 
     @Transactional
     public TicketDetailDto createTicket(TicketCreateRequest request, List<MultipartFile> images) {
@@ -208,7 +210,8 @@ public class TicketService {
             rating.setAttitudeRating(request.attitudeRating());
             rating.setResolved(request.resolved());
             rating.setAnonymous(Boolean.TRUE.equals(request.anonymous()));
-            ratingRepository.save(rating);
+            rating = ratingRepository.save(rating);
+            triggerFeedbackSentimentIfNeeded(rating.getRatingId());
 
             TicketStatus oldStatus = ticket.getStatus();
             ticket.setStatus(TicketStatus.FEEDBACKED);
@@ -513,13 +516,7 @@ public class TicketService {
             .collect(Collectors.toList());
 
         RatingDto ratingDto = ratingRepository.findByTicket(ticket)
-            .map(rating -> new RatingDto(rating.getRatingId(), rating.getScore(), rating.getComment(),
-                rating.getStudent() != null ? rating.getStudent().getUserId() : null,
-                rating.getStudent() != null ? rating.getStudent().getNickname() : null,
-                rating.getStaff() != null ? rating.getStaff().getUserId() : null,
-                rating.getStaff() != null ? rating.getStaff().getNickname() : null,
-                ticket.getTicketId(), rating.getSpeedRating(), rating.getQualityRating(),
-                rating.getAttitudeRating(), rating.getResolved(), rating.getAnonymous(), rating.getRatedAt()))
+            .map(ratingDtoMapper::toDto)
             .orElse(null);
 
         return new TicketDetailDto(ticket.getTicketId(), ticket.getStatus(),
@@ -549,6 +546,22 @@ public class TicketService {
             });
         } else {
             ticketCompletionSummaryService.generateAsync(ticketId);
+        }
+    }
+
+    private void triggerFeedbackSentimentIfNeeded(Long ratingId) {
+        if (ratingId == null) {
+            return;
+        }
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    feedbackSentimentAnalysisService.analyzeAsync(ratingId);
+                }
+            });
+        } else {
+            feedbackSentimentAnalysisService.analyzeAsync(ratingId);
         }
     }
 

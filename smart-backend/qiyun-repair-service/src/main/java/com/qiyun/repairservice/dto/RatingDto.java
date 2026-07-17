@@ -1,21 +1,27 @@
 package com.qiyun.repairservice.dto;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 public record RatingDto(
     Long ratingId,
     Integer score,
     String comment,
     String studentId,
-    String studentName,  // 新增：学生姓名
+    String studentName,
     String staffId,
-    String staffName,    // 新增：维修人员姓名
-    Long repairOrderId,  // 新增：报修单ID
+    String staffName,
+    Long repairOrderId,
     Integer speedRating,
     Integer qualityRating,
     Integer attitudeRating,
     Boolean resolved,
     Boolean anonymous,
-    LocalDateTime ratedAt
+    LocalDateTime ratedAt,
+    String sentiment,
+    Double sentimentScore,
+    List<String> sentimentKeywords,
+    String sentimentSummary,
+    LocalDateTime sentimentAnalyzedAt
 ) {
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Rate, Button, Space, Tag, Popconfirm, Statistic, Row, Col } from 'antd';
+import { Card, Rate, Button, Space, Tag, Popconfirm, Statistic, Row, Col, Select } from 'antd';
 import { DeleteOutlined, UserOutlined, StarOutlined, MessageOutlined } from '@ant-design/icons';
 import { feedbackService } from './feedbackService';
 
@@ -7,12 +7,13 @@ const FeedbackManagement = () => {
   const [feedbacks, setFeedbacks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [sentimentFilter, setSentimentFilter] = useState('ALL');
 
   // 加载评价数据
   const loadFeedbacks = async () => {
     setLoading(true);
     try {
-      const data = await feedbackService.getAllFeedbacks();
+      const data = await feedbackService.getAllFeedbacks(sentimentFilter === 'NEGATIVE' ? { sentiment: 'NEGATIVE' } : {});
       setFeedbacks(data);
     } catch (error) {
       console.error('加载评价数据失败:', error);
@@ -24,7 +25,7 @@ const FeedbackManagement = () => {
 
   useEffect(() => {
     loadFeedbacks();
-  }, []);
+  }, [sentimentFilter]);
 
   // 删除评价
   const handleDeleteFeedback = async (feedbackId) => {
@@ -67,6 +68,14 @@ const FeedbackManagement = () => {
 
     const inappropriate = hasInappropriateContent(feedback.comment);
     const isDeleting = deletingId === feedback.id;
+    const sentimentMeta = {
+      POSITIVE: { color: 'green', label: '\u6b63\u9762' },
+      NEUTRAL: { color: 'default', label: '\u4e2d\u6027' },
+      NEGATIVE: { color: 'red', label: '\u8d1f\u9762' },
+    }[feedback.sentiment] || { color: 'default', label: '\u672a\u5206\u6790' };
+    const sentimentKeywords = Array.isArray(feedback.sentimentKeywords)
+      ? feedback.sentimentKeywords
+      : String(feedback.sentimentKeywords || '').split(/[,\s]+/).filter(Boolean);
 
     return (
       <Card
@@ -148,6 +157,17 @@ const FeedbackManagement = () => {
             )}
 
             {/* 时间信息 */}
+            {(feedback.sentiment || feedback.sentimentSummary || sentimentKeywords.length > 0) && (
+              <div style={{ marginBottom: 8, padding: '8px 12px', backgroundColor: '#fafafa', borderRadius: 4 }}>
+                <Space wrap style={{ marginBottom: 4 }}>
+                  <Tag color={sentimentMeta.color}>Sentiment: {sentimentMeta.label}</Tag>
+                  {typeof feedback.sentimentScore === 'number' && <Tag>Score {Math.round(feedback.sentimentScore * 100)}%</Tag>}
+                  {sentimentKeywords.map(keyword => <Tag key={keyword}>{keyword}</Tag>)}
+                </Space>
+                {feedback.sentimentSummary && <div style={{ color: '#555' }}>{feedback.sentimentSummary}</div>}
+              </div>
+            )}
+
             <div style={{ color: '#666', fontSize: '12px', display: 'flex', alignItems: 'center' }}>
               <span>评价时间: {feedback.createdAt || feedback.created_at}</span>
             </div>
@@ -237,6 +257,22 @@ const FeedbackManagement = () => {
       </Row>
 
       {/* 评价列表 */}
+      <Card size="small" style={{ marginBottom: 16 }}>
+        <Space wrap>
+          <span>Sentiment Filter</span>
+          <Select
+            value={sentimentFilter}
+            style={{ width: 160 }}
+            onChange={setSentimentFilter}
+            options={[
+              { value: 'ALL', label: 'All feedback' },
+              { value: 'NEGATIVE', label: 'Negative only' },
+            ]}
+          />
+          <Button onClick={loadFeedbacks} loading={loading}>Refresh</Button>
+        </Space>
+      </Card>
+
       {loading ? (
         <Card>
           <div style={{ textAlign: 'center', padding: '40px 0' }}>

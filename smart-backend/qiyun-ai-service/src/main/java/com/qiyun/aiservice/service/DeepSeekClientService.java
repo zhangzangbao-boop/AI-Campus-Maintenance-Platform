@@ -93,6 +93,30 @@ public class DeepSeekClientService {
         }
     }
 
+    public Map<String, Object> analyzeFeedbackSentiment(String comment) {
+        if (!isAvailable()) {
+            log.debug("DeepSeek AI is not enabled or configured");
+            return null;
+        }
+
+        String systemPrompt = "You are a campus maintenance feedback analyst. "
+            + "Return only JSON with fields: sentiment (POSITIVE, NEUTRAL, NEGATIVE), "
+            + "score (0 to 1 confidence/intensity), keywords (array of 2-5 short Chinese keywords), "
+            + "summary (one short Chinese sentence). Do not include prompts, raw response, or secrets.";
+        String userPrompt = "Feedback comment:\n" + (comment == null ? "" : comment.trim());
+
+        try {
+            String response = chat(systemPrompt, userPrompt, true, 500);
+            if (response == null || response.isBlank()) {
+                return null;
+            }
+            return parseJsonResponse(response);
+        } catch (Exception e) {
+            log.error("DeepSeek feedback sentiment call failed: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
     /**
      * 发送聊天请求
      */

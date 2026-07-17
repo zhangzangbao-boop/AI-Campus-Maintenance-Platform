@@ -20,6 +20,7 @@ import com.qiyun.repairservice.dto.request.TicketRatingRequest;
 import com.qiyun.repairservice.dto.request.TicketStatusUpdateRequest;
 import com.qiyun.repairservice.repository.CategoryRepository;
 import com.qiyun.repairservice.repository.UserReferenceRepository;
+import com.qiyun.repairservice.service.FeedbackSentimentAnalysisService;
 import com.qiyun.repairservice.service.TicketService;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -45,6 +46,9 @@ class TicketServiceTests {
 
     @Autowired
     private CategoryRepository categoryRepository;
+
+    @Autowired
+    private FeedbackSentimentAnalysisService feedbackSentimentAnalysisService;
 
     @MockBean
     private AiServiceClient aiServiceClient;
@@ -178,6 +182,23 @@ class TicketServiceTests {
         assertThat(ratedDto.rating()).isNotNull();
         assertThat(ratedDto.rating().score()).isEqualTo(5);
         assertThat(ratedDto.rating().comment()).isEqualTo("维修很及时，非常满意");
+    }
+
+    @Test
+    void testFeedbackSentimentFallbackAnalysisPersistsResult() {
+        Long ticketId = createAssignedAndResolvedTicket();
+
+        TicketRatingRequest ratingRequest = new TicketRatingRequest(studentId, 2, "\u7b49\u5f85\u592a\u6162\uff0c\u95ee\u9898\u4ecd\u7136\u6ca1\u89e3\u51b3", 2, 2, 3, false, false);
+        TicketDetailDto ratedDto = ticketService.rateTicket(ticketId, ratingRequest);
+
+        var response = feedbackSentimentAnalysisService.analyzeNow(ratedDto.rating().ratingId());
+        TicketDetailDto detailDto = ticketService.getTicketDetail(ticketId);
+
+        assertThat(response.sentiment()).isEqualTo("NEGATIVE");
+        assertThat(detailDto.rating().sentiment()).isEqualTo("NEGATIVE");
+        assertThat(detailDto.rating().sentimentScore()).isBetween(0.0, 1.0);
+        assertThat(detailDto.rating().sentimentKeywords()).isNotEmpty();
+        assertThat(detailDto.rating().sentimentSummary()).isNotBlank();
     }
 
     @Test

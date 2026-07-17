@@ -72,6 +72,21 @@ public class Rating {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime ratedAt;
 
+    @Column(name = "sentiment", length = 20)
+    private String sentiment;
+
+    @Column(name = "sentiment_score")
+    private Double sentimentScore;
+
+    @Column(name = "sentiment_keywords", columnDefinition = "TEXT")
+    private String sentimentKeywords;
+
+    @Column(name = "sentiment_summary", columnDefinition = "TEXT")
+    private String sentimentSummary;
+
+    @Column(name = "sentiment_analyzed_at")
+    private LocalDateTime sentimentAnalyzedAt;
+
     @PrePersist
     public void onCreate() {
         if (ratedAt == null) {

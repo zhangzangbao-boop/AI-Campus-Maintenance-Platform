@@ -3,12 +3,14 @@ package com.qiyun.repairservice.controller;
 import com.qiyun.common.exception.BusinessException;
 import com.qiyun.repairservice.domain.enums.RepairProcessActionType;
 import com.qiyun.repairservice.domain.enums.TicketStatus;
+import com.qiyun.repairservice.dto.AiTicketAnalysisViewDto;
 import com.qiyun.repairservice.dto.CompletionSummaryDto;
 import com.qiyun.repairservice.dto.RepairProcessRecordDto;
 import com.qiyun.repairservice.dto.StaffDashboardDto;
 import com.qiyun.repairservice.dto.StaffRecommendationDto;
 import com.qiyun.repairservice.dto.TicketDetailDto;
 import com.qiyun.repairservice.dto.TicketSummaryDto;
+import com.qiyun.repairservice.dto.request.AiTicketAnalysisCorrectionRequest;
 import com.qiyun.repairservice.dto.request.RepairProcessRecordRequest;
 import com.qiyun.repairservice.dto.request.StudentCompletionRejectRequest;
 import com.qiyun.repairservice.dto.request.TicketAssignRequest;
@@ -163,7 +165,7 @@ public class TicketController {
     @GetMapping("/repair-orders/{id}")
     @PreAuthorize("hasAnyRole('STUDENT','STAFF','ADMIN')")
     public Map<String, Object> detail(@PathVariable("id") Long id) {
-        TicketDetailDto detail = ticketService.getTicketDetail(id);
+        TicketDetailDto detail = ticketService.getTicketDetail(id, hasRole("ADMIN"));
         assertCanReadTicket(detail);
 
         // 返回统一格式的响应
@@ -633,6 +635,14 @@ public class TicketController {
         result.put("message", "维修人员推荐成功");
         result.put("data", recommendations);
         return result;
+    }
+
+    @PutMapping("/admin/repair-orders/{id}/ai-analysis/correction")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Map<String, Object> correctAiAnalysis(@PathVariable("id") Long id,
+                                                 @Valid @RequestBody AiTicketAnalysisCorrectionRequest request) {
+        AiTicketAnalysisViewDto analysis = ticketService.correctAiAnalysis(id, request, currentUserId());
+        return success("AI analysis correction saved", analysis);
     }
 
     @PutMapping("/admin/repair-orders/{id}/status")

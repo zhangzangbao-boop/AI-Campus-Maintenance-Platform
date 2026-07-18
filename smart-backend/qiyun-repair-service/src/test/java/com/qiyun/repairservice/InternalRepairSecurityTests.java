@@ -18,6 +18,7 @@ import java.util.Map;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -127,6 +128,24 @@ class InternalRepairSecurityTests {
         mockMvc.perform(get("/internal/repair/stats/facility-health")
                 .header("Authorization", "Bearer " + adminToken))
             .andExpect(status().isOk());
+    }
+
+    @Test
+    void studentCannotCorrectAiAnalysis() throws Exception {
+        mockMvc.perform(put("/api/admin/repair-orders/1/ai-analysis/correction")
+                .header("Authorization", "Bearer " + studentToken)
+                .contentType("application/json")
+                .content("{\"categoryKey\":\"manual\",\"reason\":\"reviewed\"}"))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void staffCannotCorrectAiAnalysis() throws Exception {
+        mockMvc.perform(put("/api/admin/repair-orders/1/ai-analysis/correction")
+                .header("Authorization", "Bearer " + staffToken)
+                .contentType("application/json")
+                .content("{\"categoryKey\":\"manual\",\"reason\":\"reviewed\"}"))
+            .andExpect(status().isForbidden());
     }
 
     // ========== 内部评价接口 ==========

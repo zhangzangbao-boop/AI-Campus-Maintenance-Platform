@@ -300,6 +300,12 @@ const api = {
     recommendStaff: (orderId) =>
       request(`/admin/repair-orders/${orderId}/recommend-staff`),
 
+    correctAiAnalysis: (orderId, data) =>
+      request(`/admin/repair-orders/${orderId}/ai-analysis/correction`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+
     // 修正驳回工单接口，使用通用状态更新接口
     rejectOrder: (orderId, reason) =>
       request(`/tasks/${orderId}/status`, {

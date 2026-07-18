@@ -1,8 +1,6 @@
 package com.qiyun.repairservice.service;
 
 import com.qiyun.common.exception.BusinessException;
-import com.qiyun.feign.client.AiServiceClient;
-import com.qiyun.feign.dto.AnalyzeTicketRequest;
 import com.qiyun.repairservice.domain.entity.Category;
 import com.qiyun.repairservice.domain.entity.Rating;
 import com.qiyun.repairservice.domain.entity.RepairTicket;
@@ -12,6 +10,7 @@ import com.qiyun.repairservice.domain.entity.UserReference;
 import com.qiyun.repairservice.domain.enums.TicketStatus;
 import com.qiyun.repairservice.domain.enums.UserRole;
 import com.qiyun.repairservice.dto.*;
+import com.qiyun.repairservice.dto.request.AiTicketAnalysisCorrectionRequest;
 import com.qiyun.repairservice.dto.request.TicketAssignRequest;
 import com.qiyun.repairservice.dto.request.TicketCreateRequest;
 import com.qiyun.repairservice.dto.request.TicketRatingRequest;
@@ -48,7 +47,7 @@ public class TicketService {
     private final NotificationService notificationService;
     private final NotificationPushService notificationPushService;
     private final FileStorageService fileStorageService;
-    private final AiServiceClient aiServiceClient;
+    private final AiAnalysisIntegrationService aiAnalysisIntegrationService;
     private final TicketCompletionSummaryService ticketCompletionSummaryService;
     private final FeedbackSentimentAnalysisService feedbackSentimentAnalysisService;
     private final FeedbackFollowUpService feedbackFollowUpService;
@@ -95,7 +94,7 @@ public class TicketService {
 
         // AI analysis (non-blocking)
         try {
-            aiServiceClient.analyzeTicket(new AnalyzeTicketRequest(ticket.getDescription(), ticket.getLocationText()));
+            aiAnalysisIntegrationService.analyzeAndSave(ticket.getTicketId(), ticket.getDescription(), ticket.getLocationText());
         } catch (Exception e) {
             log.warn("AI分析调用失败: ticketId={}, error={}", ticket.getTicketId(), e.getMessage());
         }
@@ -240,9 +239,21 @@ public class TicketService {
 
     @Transactional
     public TicketDetailDto getTicketDetail(Long ticketId) {
+        return getTicketDetail(ticketId, false);
+    }
+
+    @Transactional
+    public TicketDetailDto getTicketDetail(Long ticketId, boolean includeAdminAiFields) {
         RepairTicket ticket = ticketRepository.findById(ticketId)
-            .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "工单不存在"));
-        return toDetailDto(ticket);
+            .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        return toDetailDto(ticket, includeAdminAiFields);
+    }
+
+    @Transactional
+    public AiTicketAnalysisViewDto correctAiAnalysis(Long ticketId, AiTicketAnalysisCorrectionRequest request, String operatorId) {
+        ticketRepository.findById(ticketId)
+            .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        return aiAnalysisIntegrationService.correctAnalysis(ticketId, request, operatorId);
     }
 
     @Transactional(readOnly = true)
@@ -629,6 +640,10 @@ public class TicketService {
     }
 
     private TicketDetailDto toDetailDto(RepairTicket ticket) {
+        return toDetailDto(ticket, false);
+    }
+
+    private TicketDetailDto toDetailDto(RepairTicket ticket, boolean includeAdminAiFields) {
         List<TicketImageDto> images = imageRepository.findByTicket(ticket).stream()
             .map(image -> new TicketImageDto(image.getImageId(), image.getImageUrl(), image.getUploadedAt()))
             .collect(Collectors.toList());
@@ -653,7 +668,8 @@ public class TicketService {
             ticket.getEstimatedCompletionTime(), ticket.getCreatedAt(), ticket.getAssignedAt(),
             ticket.getCompletedAt(), ticket.getStudentConfirmedAt(), ticket.getStudentRejectionReason(),
             ticket.getClosedAt(), images, logs, ratingDto,
-            ticketCompletionSummaryService.getByTicketId(ticket.getTicketId()));
+            ticketCompletionSummaryService.getByTicketId(ticket.getTicketId()),
+            aiAnalysisIntegrationService.getViewByTicketId(ticket.getTicketId(), includeAdminAiFields));
     }
 
     private void triggerCompletionSummaryIfNeeded(RepairTicket ticket) {

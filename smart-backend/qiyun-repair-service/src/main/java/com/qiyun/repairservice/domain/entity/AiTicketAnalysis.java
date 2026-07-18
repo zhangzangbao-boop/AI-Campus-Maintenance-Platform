@@ -64,6 +64,24 @@ public class AiTicketAnalysis {
     @Column(name = "raw_response", columnDefinition = "TEXT")
     private String rawResponse;
 
+    @Column(name = "final_category_key", length = 50)
+    private String finalCategoryKey;
+
+    @Column(name = "final_urgency", length = 20)
+    private String finalUrgency;
+
+    @Column(name = "final_suggestion", columnDefinition = "TEXT")
+    private String finalSuggestion;
+
+    @Column(name = "correction_reason", columnDefinition = "TEXT")
+    private String correctionReason;
+
+    @Column(name = "corrected_by", length = 255)
+    private String correctedBy;
+
+    @Column(name = "corrected_at")
+    private LocalDateTime correctedAt;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

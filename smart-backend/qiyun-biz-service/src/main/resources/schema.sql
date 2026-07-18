@@ -11,6 +11,7 @@ DROP TABLE IF EXISTS `repair_process_record`;
 DROP TABLE IF EXISTS `campus_announcement`;
 DROP TABLE IF EXISTS `fault_trend_alert`;
 DROP TABLE IF EXISTS `sys_notification`;
+DROP TABLE IF EXISTS `ai_ticket_analysis_correction`;
 DROP TABLE IF EXISTS `ai_ticket_analysis`;
 DROP TABLE IF EXISTS `repair_knowledge_base`;
 DROP TABLE IF EXISTS `sys_system_config`;
@@ -254,19 +255,49 @@ CREATE TABLE `repair_knowledge_base` (
 
 CREATE TABLE `ai_ticket_analysis` (
     `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+    `ticket_id` BIGINT,
     `source_text` TEXT,
     `title` VARCHAR(200),
     `category_key` VARCHAR(50),
     `location_text` VARCHAR(200),
     `priority` VARCHAR(20),
+    `urgency` VARCHAR(20),
+    `suggestion` TEXT,
+    `keywords` TEXT,
     `summary` TEXT,
     `safety_tips` TEXT,
     `provider` VARCHAR(80),
     `model` VARCHAR(120),
     `raw_response` TEXT,
+    `final_category_key` VARCHAR(50),
+    `final_urgency` VARCHAR(20),
+    `final_suggestion` TEXT,
+    `correction_reason` TEXT,
+    `corrected_by` VARCHAR(255),
+    `corrected_at` DATETIME,
     `created_at` DATETIME NOT NULL,
+    INDEX `idx_ai_analysis_ticket` (`ticket_id`),
     INDEX `idx_ai_analysis_category` (`category_key`),
     INDEX `idx_ai_analysis_created_at` (`created_at`)
+);
+
+CREATE TABLE `ai_ticket_analysis_correction` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+    `analysis_id` BIGINT NOT NULL,
+    `ticket_id` BIGINT NOT NULL,
+    `previous_category_key` VARCHAR(50),
+    `previous_urgency` VARCHAR(20),
+    `previous_suggestion` TEXT,
+    `new_category_key` VARCHAR(50),
+    `new_urgency` VARCHAR(20),
+    `new_suggestion` TEXT,
+    `reason` TEXT NOT NULL,
+    `corrected_by` VARCHAR(255) NOT NULL,
+    `corrected_at` DATETIME NOT NULL,
+    FOREIGN KEY (`analysis_id`) REFERENCES `ai_ticket_analysis`(`id`) ON DELETE CASCADE,
+    INDEX `idx_ai_correction_analysis` (`analysis_id`),
+    INDEX `idx_ai_correction_ticket` (`ticket_id`),
+    INDEX `idx_ai_correction_corrected_at` (`corrected_at`)
 );
 
 -- 插入初始数据（如果已存在则忽略，避免重复插入错误）

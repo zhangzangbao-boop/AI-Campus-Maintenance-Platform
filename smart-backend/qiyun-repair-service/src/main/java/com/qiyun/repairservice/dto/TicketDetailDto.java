@@ -28,6 +28,7 @@ public record TicketDetailDto(
     List<TicketImageDto> images,
     List<TicketStatusLogDto> logs,
     RatingDto rating,
-    CompletionSummaryDto completionSummary
+    CompletionSummaryDto completionSummary,
+    AiTicketAnalysisViewDto aiAnalysis
 ) {
 }

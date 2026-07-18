@@ -39,8 +39,10 @@ const RepairOrderList = ({ onRefresh, targetOrderId, onTargetOrderHandled }) => 
   const [detailData, setDetailData] = useState(null);
   const [aiSummary, setAiSummary] = useState(null);
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
+  const [aiCorrectionLoading, setAiCorrectionLoading] = useState(false);
   const [assignForm] = Form.useForm();
   const [rejectForm] = Form.useForm();
+  const [aiCorrectionForm] = Form.useForm();
 
   const mapStatusToFrontend = (status) => {
     if (!status) return 'pending';
@@ -346,6 +348,12 @@ const RepairOrderList = ({ onRefresh, targetOrderId, onTargetOrderHandled }) => 
       const detail = await repairService.getRepairOrderById(id);
       setAiSummary(detail.completionSummary || null);
       setAiSummaryLoading(false);
+      aiCorrectionForm.setFieldsValue({
+        categoryKey: detail.aiAnalysis?.finalCategoryKey,
+        urgency: detail.aiAnalysis?.finalUrgency,
+        suggestion: detail.aiAnalysis?.finalSuggestion,
+        reason: undefined,
+      });
       setDetailData({
         ...detail,
         id: detail.ticketId || detail.id,
@@ -394,6 +402,28 @@ const RepairOrderList = ({ onRefresh, targetOrderId, onTargetOrderHandled }) => 
       message.error(error.message || '完成总结重新生成失败');
     } finally {
       setAiSummaryLoading(false);
+    }
+  };
+
+  const handleCorrectAiAnalysis = async (values) => {
+    const id = detailData?.ticketId || detailData?.id;
+    if (!id) return;
+    setAiCorrectionLoading(true);
+    try {
+      const response = await api.admin.correctAiAnalysis(id, values);
+      const aiAnalysis = response?.data || response;
+      setDetailData((prev) => prev ? { ...prev, aiAnalysis } : prev);
+      aiCorrectionForm.setFieldsValue({
+        categoryKey: aiAnalysis.finalCategoryKey,
+        urgency: aiAnalysis.finalUrgency,
+        suggestion: aiAnalysis.finalSuggestion,
+        reason: undefined,
+      });
+      message.success('AI分析修正已保存');
+    } catch (error) {
+      message.error(error.message || 'AI分析修正保存失败');
+    } finally {
+      setAiCorrectionLoading(false);
     }
   };
   useEffect(() => {
@@ -1053,6 +1083,70 @@ const RepairOrderList = ({ onRefresh, targetOrderId, onTargetOrderHandled }) => 
               {formatTime(detailData.createdAt || detailData.created_at)}
             </Descriptions.Item>
           </Descriptions>
+
+          <Card
+            size="small"
+            title="AI分析与人工修正"
+            style={{ marginBottom: 16 }}
+            extra={detailData.aiAnalysis?.provider ? <Tag color="blue">{detailData.aiAnalysis.provider}</Tag> : null}
+          >
+            {detailData.aiAnalysis ? (
+              <>
+                <Descriptions bordered size="small" column={2} style={{ marginBottom: 12 }}>
+                  <Descriptions.Item label="AI原始分类">{detailData.aiAnalysis.originalCategoryKey || '暂无'}</Descriptions.Item>
+                  <Descriptions.Item label="最终分类"><Tag color="geekblue">{detailData.aiAnalysis.finalCategoryKey || '暂无'}</Tag></Descriptions.Item>
+                  <Descriptions.Item label="AI原始紧急程度">{detailData.aiAnalysis.originalUrgency || '暂无'}</Descriptions.Item>
+                  <Descriptions.Item label="最终紧急程度">{detailData.aiAnalysis.finalUrgency || '暂无'}</Descriptions.Item>
+                  <Descriptions.Item label="AI原始建议" span={2}>{detailData.aiAnalysis.originalSuggestion || '暂无'}</Descriptions.Item>
+                  <Descriptions.Item label="最终采用建议" span={2}>{detailData.aiAnalysis.finalSuggestion || '暂无'}</Descriptions.Item>
+                  <Descriptions.Item label="最近修正人">{detailData.aiAnalysis.correctedBy || '未修正'}</Descriptions.Item>
+                  <Descriptions.Item label="最近修正时间">{detailData.aiAnalysis.correctedAt ? formatTime(detailData.aiAnalysis.correctedAt) : '未修正'}</Descriptions.Item>
+                  <Descriptions.Item label="模型 / Provider" span={2}>{[detailData.aiAnalysis.model, detailData.aiAnalysis.provider].filter(Boolean).join(' / ') || '暂无'}</Descriptions.Item>
+                  <Descriptions.Item label="原始响应" span={2}>
+                    <div style={{ maxHeight: 120, overflow: 'auto', whiteSpace: 'pre-wrap', fontSize: 12 }}>
+                      {detailData.aiAnalysis.rawResponse || '暂无'}
+                    </div>
+                  </Descriptions.Item>
+                </Descriptions>
+
+                <Form form={aiCorrectionForm} layout="vertical" onFinish={handleCorrectAiAnalysis}>
+                  <Row gutter={12}>
+                    <Col xs={24} md={8}><Form.Item label="修正分类" name="categoryKey"><Input /></Form.Item></Col>
+                    <Col xs={24} md={8}>
+                      <Form.Item label="修正紧急程度" name="urgency">
+                        <Select allowClear options={[{ value: '紧急' }, { value: '普通' }, { value: '一般' }]} />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={24} md={8}>
+                      <Form.Item label="修正原因" name="reason" rules={[{ required: true, message: '请填写修正原因' }]}>
+                        <Input placeholder="必填" />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+                  <Form.Item label="处理建议" name="suggestion"><Input.TextArea rows={3} /></Form.Item>
+                  <Button type="primary" htmlType="submit" loading={aiCorrectionLoading}>保存人工修正</Button>
+                </Form>
+
+                <Table
+                  size="small"
+                  style={{ marginTop: 12 }}
+                  rowKey="correctionId"
+                  pagination={false}
+                  scroll={{ x: 900 }}
+                  dataSource={detailData.aiAnalysis.corrections || []}
+                  columns={[
+                    { title: '修正时间', dataIndex: 'correctedAt', render: formatTime },
+                    { title: '修正人', dataIndex: 'correctedBy' },
+                    { title: '修正前分类', dataIndex: 'previousCategoryKey' },
+                    { title: '最终分类', dataIndex: 'newCategoryKey' },
+                    { title: '修正前紧急程度', dataIndex: 'previousUrgency' },
+                    { title: '最终紧急程度', dataIndex: 'newUrgency' },
+                    { title: '修正原因', dataIndex: 'reason' },
+                  ]}
+                />
+              </>
+            ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无AI分析结果" />}
+          </Card>
 
           <Card
             size="small"

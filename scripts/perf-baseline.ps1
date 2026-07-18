@@ -4,6 +4,7 @@ param(
     [string]$Password = $env:QY_PERF_PASSWORD,
     [int]$Concurrency = 5,
     [int]$Iterations = 20,
+    [long]$CategoryId = 1,
     [switch]$SkipCreateTicket
 )
 
@@ -14,7 +15,7 @@ if ([string]::IsNullOrWhiteSpace($BaseUrl) -or [string]::IsNullOrWhiteSpace($Use
         status = "PENDING_FULL_CHAIN_ENVIRONMENT"
         reason = "BaseUrl/UserId/Password are required. No request was sent."
         requiredParameters = @("BaseUrl", "UserId", "Password")
-        example = ".\scripts\perf-baseline.ps1 -BaseUrl http://localhost:8080 -UserId test_student -Password <password> -Concurrency 5 -Iterations 20"
+        example = ".\scripts\perf-baseline.ps1 -BaseUrl http://localhost:8070 -UserId test_student -Password <password> -Concurrency 5 -Iterations 20"
     } | ConvertTo-Json -Depth 4
     exit 0
 }
@@ -43,8 +44,11 @@ function Measure-Scenario {
     for ($i = 0; $i -lt $Concurrency; $i++) {
         $workerIterations = [Math]::Min($perWorker, $Iterations - ($i * $perWorker))
         if ($workerIterations -le 0) { continue }
-        $jobs.Add((Start-Job -ArgumentList $workerIterations, $Name, $BaseUrl, $UserId, $Password, $Token, $AuthHeaders -ScriptBlock {
-            param($WorkerIterations, $ScenarioName, $ScenarioBaseUrl, $ScenarioUserId, $ScenarioPassword, $ScenarioToken, $ScenarioAuthHeaders)
+        $jobs.Add((Start-Job -ArgumentList $workerIterations, $Name, $BaseUrl, $UserId, $Password, $Token, $CategoryId -ScriptBlock {
+            param($WorkerIterations, $ScenarioName, $ScenarioBaseUrl, $ScenarioUserId, $ScenarioPassword, $ScenarioToken, $ScenarioCategoryId)
+
+            Add-Type -AssemblyName System.Net.Http
+            $ScenarioAuthHeaders = @{ Authorization = "Bearer $ScenarioToken" }
 
             function Invoke-ScenarioRequest {
                 switch ($ScenarioName) {
@@ -61,7 +65,7 @@ function Measure-Scenario {
                             $client.DefaultRequestHeaders.Authorization = [System.Net.Http.Headers.AuthenticationHeaderValue]::new("Bearer", $ScenarioToken)
                             $content = [System.Net.Http.MultipartFormDataContent]::new()
                             $content.Add([System.Net.Http.StringContent]::new("Performance baseline ticket"), "title")
-                            $content.Add([System.Net.Http.StringContent]::new("1"), "categoryId")
+                            $content.Add([System.Net.Http.StringContent]::new([string]$ScenarioCategoryId), "categoryId")
                             $content.Add([System.Net.Http.StringContent]::new("Test location"), "locationText")
                             $content.Add([System.Net.Http.StringContent]::new("Created by the repeatable performance baseline script in a test environment."), "description")
                             $content.Add([System.Net.Http.StringContent]::new("MEDIUM"), "priority")

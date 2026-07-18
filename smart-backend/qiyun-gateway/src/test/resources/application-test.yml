@@ -76,7 +76,7 @@ spring:
         - id: admin-ops-route
           uri: lb://qiyun-ops-service
           predicates:
-            - Path=/api/admin/audit-logs/**,/api/admin/system-config/**,/api/admin/backup/**,/api/admin/knowledge-base/**,/api/admin/stats/**,/api/admin/feedbacks/**,/api/admin/announcements/**
+            - Path=/api/admin/audit-logs/**,/api/admin/system-config/**,/api/admin/backup/**,/api/admin/knowledge-base/**,/api/admin/stats/**,/api/admin/feedbacks/**,/api/admin/announcements/**,/api/admin/export,/api/admin/export/**
           order: 8
 
         # 转发到 qiyun-biz-service（兼容原业务接口，匹配所有其他 /api/**）

@@ -231,6 +231,7 @@ class GatewayRouteTests {
         assertThat(predicateString).contains("/api/admin/stats");
         assertThat(predicateString).contains("/api/admin/feedbacks");
         assertThat(predicateString).contains("/api/admin/announcements");
+        assertThat(predicateString).contains("/api/admin/export");
     }
 
     @Test

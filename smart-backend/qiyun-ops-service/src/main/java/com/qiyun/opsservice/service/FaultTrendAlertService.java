@@ -1,5 +1,7 @@
 package com.qiyun.opsservice.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qiyun.feign.client.AiServiceClient;
 import com.qiyun.feign.client.RepairServiceClient;
 import com.qiyun.feign.dto.AnalyzeTicketRequest;
@@ -39,6 +41,12 @@ public class FaultTrendAlertService {
     private static final int THIRTY_DAY_COUNT_THRESHOLD = 6;
     private static final double SEVEN_DAY_GROWTH_THRESHOLD = 50.0;
     private static final double THIRTY_DAY_GROWTH_THRESHOLD = 30.0;
+    private static final String DEFAULT_FAULT_TREND_RULES = """
+        {
+          "sevenDays":{"countThreshold":3,"growthThreshold":50.0},
+          "thirtyDays":{"countThreshold":6,"growthThreshold":30.0}
+        }
+        """;
 
     private final RepairServiceClient repairServiceClient;
     private final AiServiceClient aiServiceClient;
@@ -46,6 +54,8 @@ public class FaultTrendAlertService {
     private final UserReferenceRepository userReferenceRepository;
     private final NotificationRepository notificationRepository;
     private final WebSocketPushService webSocketPushService;
+    private final SystemConfigService systemConfigService;
+    private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
     public FaultTrendDashboardDto dashboard(String authorization) {
@@ -58,8 +68,8 @@ public class FaultTrendAlertService {
                 .map(this::toDto)
                 .toList(),
             LocalDateTime.now(),
-            SEVEN_DAY_COUNT_THRESHOLD,
-            THIRTY_DAY_COUNT_THRESHOLD
+            faultTrendRules().sevenDayCountThreshold(),
+            faultTrendRules().thirtyDayCountThreshold()
         );
     }
 
@@ -74,8 +84,8 @@ public class FaultTrendAlertService {
                 .map(this::toDto)
                 .toList(),
             LocalDateTime.now(),
-            SEVEN_DAY_COUNT_THRESHOLD,
-            THIRTY_DAY_COUNT_THRESHOLD
+            faultTrendRules().sevenDayCountThreshold(),
+            faultTrendRules().thirtyDayCountThreshold()
         );
     }
 
@@ -239,10 +249,11 @@ public class FaultTrendAlertService {
     }
 
     private boolean shouldTrigger(long ticketCount, double growthRate, int periodDays) {
+        FaultTrendRules rules = faultTrendRules();
         if (periodDays == THIRTY_DAY_PERIOD) {
-            return ticketCount >= THIRTY_DAY_COUNT_THRESHOLD && growthRate >= THIRTY_DAY_GROWTH_THRESHOLD;
+            return ticketCount >= rules.thirtyDayCountThreshold() && growthRate >= rules.thirtyDayGrowthThreshold();
         }
-        return ticketCount >= SEVEN_DAY_COUNT_THRESHOLD && growthRate >= SEVEN_DAY_GROWTH_THRESHOLD;
+        return ticketCount >= rules.sevenDayCountThreshold() && growthRate >= rules.sevenDayGrowthThreshold();
     }
 
     private FaultTrendRiskLevel calculateRisk(long ticketCount, double growthRate, int periodDays) {
@@ -303,6 +314,29 @@ public class FaultTrendAlertService {
         return Math.round(Double.parseDouble(String.valueOf(value)) * 100.0) / 100.0;
     }
 
+    private FaultTrendRules faultTrendRules() {
+        try {
+            String json = systemConfigService.getValue(SystemConfigService.FAULT_TREND_RULES, DEFAULT_FAULT_TREND_RULES);
+            JsonNode root = objectMapper.readTree(json);
+            JsonNode sevenDays = root.path("sevenDays");
+            JsonNode thirtyDays = root.path("thirtyDays");
+            return new FaultTrendRules(
+                Math.max(1, sevenDays.path("countThreshold").asInt(SEVEN_DAY_COUNT_THRESHOLD)),
+                Math.max(0.0, sevenDays.path("growthThreshold").asDouble(SEVEN_DAY_GROWTH_THRESHOLD)),
+                Math.max(1, thirtyDays.path("countThreshold").asInt(THIRTY_DAY_COUNT_THRESHOLD)),
+                Math.max(0.0, thirtyDays.path("growthThreshold").asDouble(THIRTY_DAY_GROWTH_THRESHOLD))
+            );
+        } catch (Exception e) {
+            log.warn("读取高频故障阈值失败，使用默认规则: {}", e.getMessage());
+            return new FaultTrendRules(
+                SEVEN_DAY_COUNT_THRESHOLD,
+                SEVEN_DAY_GROWTH_THRESHOLD,
+                THIRTY_DAY_COUNT_THRESHOLD,
+                THIRTY_DAY_GROWTH_THRESHOLD
+            );
+        }
+    }
+
     private record TrendRawItem(
         String location,
         String category,
@@ -313,4 +347,11 @@ public class FaultTrendAlertService {
     ) {}
 
     private record AlertText(String reason, String suggestion) {}
+
+    private record FaultTrendRules(
+        int sevenDayCountThreshold,
+        double sevenDayGrowthThreshold,
+        int thirtyDayCountThreshold,
+        double thirtyDayGrowthThreshold
+    ) {}
 }

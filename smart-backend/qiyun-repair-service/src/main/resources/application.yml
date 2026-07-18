@@ -44,6 +44,11 @@ upload:
 ai:
   enabled: ${AI_ENABLED:true}
 
+# 内部服务密钥
+internal:
+  service:
+    secret: ${INTERNAL_SERVICE_SECRET:}
+
 # Actuator 配置
 management:
   endpoints:

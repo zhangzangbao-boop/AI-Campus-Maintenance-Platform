@@ -3,6 +3,7 @@ package com.qiyun.feign.client;
 import java.util.List;
 import java.util.Map;
 import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -31,6 +32,12 @@ public interface OpsServiceClient {
         @RequestHeader("X-Internal-Secret") String secret,
         @RequestBody NotificationBatchPushRequest request
     );
+
+    /**
+     * 读取报修分析和预警规则配置。
+     */
+    @GetMapping("/system-config/repair-rules")
+    Map<String, Object> getRepairRuleConfig(@RequestHeader("X-Internal-Secret") String secret);
 
     /**
      * 单用户推送请求

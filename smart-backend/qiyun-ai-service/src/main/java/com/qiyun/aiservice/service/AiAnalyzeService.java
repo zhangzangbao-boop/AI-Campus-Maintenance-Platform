@@ -4,11 +4,11 @@ import com.qiyun.aiservice.dto.AnalyzeFeedbackSentimentRequest;
 import com.qiyun.aiservice.dto.AnalyzeFeedbackSentimentResponse;
 import com.qiyun.aiservice.dto.AnalyzeTicketRequest;
 import com.qiyun.aiservice.dto.AnalyzeTicketResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -18,10 +18,19 @@ import org.springframework.stereotype.Service;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class AiAnalyzeService {
 
     private final DeepSeekClientService deepSeekClientService;
+    private final AiRuleConfigService aiRuleConfigService;
+
+    public AiAnalyzeService(DeepSeekClientService deepSeekClientService, AiRuleConfigService aiRuleConfigService) {
+        this.deepSeekClientService = deepSeekClientService;
+        this.aiRuleConfigService = aiRuleConfigService;
+    }
+
+    public AiAnalyzeService(DeepSeekClientService deepSeekClientService) {
+        this(deepSeekClientService, new AiRuleConfigService(new ObjectMapper()));
+    }
 
     /**
      * 分析工单描述
@@ -276,34 +285,10 @@ public class AiAnalyzeService {
      * 根据关键词判断故障分类
      */
     private String determineCategory(String description) {
-        // 空调相关
-        if (containsAny(description, "空调", "制冷", "制热", "风机", "遥控器")) {
-            return "空调故障";
-        }
-
-        // 漏水/管道相关
-        if (containsAny(description, "漏水", "滴水", "水管", "水龙头", "下水", "地漏", "积水", "堵塞")) {
-            return "管道故障";
-        }
-
-        // 电力相关
-        if (containsAny(description, "断电", "跳闸", "插座", "电路", "电线", "开关", "照明", "灯", "频闪")) {
-            return "电力故障";
-        }
-
-        // 网络相关
-        if (containsAny(description, "网络", "wifi", "无线", "网口", "断线", "校园网", "无法连接")) {
-            return "网络故障";
-        }
-
-        // 家具相关
-        if (containsAny(description, "桌", "椅", "床", "柜", "门锁", "家具")) {
-            return "家具故障";
-        }
-
-        // 门窗相关
-        if (containsAny(description, "门", "窗", "玻璃", "闭门器")) {
-            return "门窗故障";
+        for (AiRuleConfigService.KeywordRule rule : aiRuleConfigService.rules().categoryRules()) {
+            if (containsAny(description, rule.keywords().toArray(String[]::new))) {
+                return rule.result();
+            }
         }
 
         // 默认分类
@@ -314,16 +299,10 @@ public class AiAnalyzeService {
      * 根据关键词判断紧急程度
      */
     private String determineUrgency(String description) {
-        // 高紧急度 - 安全相关
-        if (containsAny(description, "漏水", "积水", "触电", "烧焦", "冒烟", "火花",
-                        "异味", "总闸", "消防", "灭火器", "玻璃", "危险")) {
-            return "紧急";
-        }
-
-        // 中紧急度 - 影响使用
-        if (containsAny(description, "无法使用", "不能用", "断线", "频闪", "损坏",
-                        "不制冷", "堵塞", "松动", "脱落")) {
-            return "普通";
+        for (AiRuleConfigService.KeywordRule rule : aiRuleConfigService.rules().urgencyRules()) {
+            if (containsAny(description, rule.keywords().toArray(String[]::new))) {
+                return rule.result();
+            }
         }
 
         // 低紧急度 - 一般问题

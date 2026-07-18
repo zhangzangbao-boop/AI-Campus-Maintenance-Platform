@@ -29,6 +29,7 @@ public class SlaAlertService {
     private final SlaAlertRepository slaAlertRepository;
     private final UserReferenceRepository userReferenceRepository;
     private final NotificationPushService notificationPushService;
+    private final RepairRuleConfigService repairRuleConfigService;
 
     /**
      * 执行SLA检查，处理即将超时和已超时的工单
@@ -116,8 +117,10 @@ public class SlaAlertService {
      */
     private SlaCheckResult checkTicketSla(RepairTicket ticket, LocalDateTime now) {
         String priority = normalizePriority(ticket.getPriority());
-        long responseHours = responseLimitHours(priority);
-        long completionHours = completionLimitHours(priority);
+        RepairRuleConfigService.SlaRules rules = repairRuleConfigService.slaRules();
+        RepairRuleConfigService.SlaPriorityRule priorityRule = rules.priority(priority);
+        long responseHours = priorityRule.responseHours();
+        long completionHours = priorityRule.completionHours();
 
         LocalDateTime startAt;
         LocalDateTime dueAt;
@@ -143,7 +146,7 @@ public class SlaAlertService {
         }
 
         boolean overdue = now.isAfter(dueAt);
-        long warningThreshold = Math.max(1, Math.round(limitHours * 0.25));
+        long warningThreshold = Math.max(1, Math.round(limitHours * rules.warningRatio()));
         boolean warning = !overdue && !now.isBefore(dueAt.minusHours(warningThreshold));
 
         if (!overdue && !warning) {
@@ -261,22 +264,6 @@ public class SlaAlertService {
             return normalized;
         }
         return "medium";
-    }
-
-    private long responseLimitHours(String priority) {
-        return switch (priority) {
-            case "high" -> 2;
-            case "low" -> 24;
-            default -> 8;
-        };
-    }
-
-    private long completionLimitHours(String priority) {
-        return switch (priority) {
-            case "high" -> 24;
-            case "low" -> 168;
-            default -> 72;
-        };
     }
 
     /**

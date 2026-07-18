@@ -3,7 +3,9 @@ package com.qiyun.aiservice;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qiyun.aiservice.config.DeepSeekConfig;
 import com.qiyun.aiservice.service.AiAnalyzeService;
+import com.qiyun.aiservice.service.AiRuleConfigService;
 import com.qiyun.aiservice.service.DeepSeekClientService;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -11,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 /**
  * AI 分析服务测试
@@ -21,6 +24,7 @@ class AiAnalyzeServiceTest {
     private AiAnalyzeService aiAnalyzeService;
     private DeepSeekClientService deepSeekClientService;
     private DeepSeekConfig config;
+    private AiRuleConfigService aiRuleConfigService;
 
     @BeforeEach
     void setUp() {
@@ -31,7 +35,22 @@ class AiAnalyzeServiceTest {
         // 创建服务
         ObjectMapper objectMapper = new ObjectMapper();
         deepSeekClientService = new DeepSeekClientService(config, objectMapper);
-        aiAnalyzeService = new AiAnalyzeService(deepSeekClientService);
+        aiRuleConfigService = mock(AiRuleConfigService.class);
+        lenient().when(aiRuleConfigService.rules()).thenReturn(new AiRuleConfigService.AiRules(
+            List.of(
+                new AiRuleConfigService.KeywordRule("空调故障", List.of("空调", "制冷", "制热", "风机", "遥控器")),
+                new AiRuleConfigService.KeywordRule("管道故障", List.of("漏水", "滴水", "水管", "水龙头", "下水", "地漏", "积水", "堵塞")),
+                new AiRuleConfigService.KeywordRule("电力故障", List.of("断电", "跳闸", "插座", "电路", "电线", "开关", "照明", "灯", "频闪")),
+                new AiRuleConfigService.KeywordRule("网络故障", List.of("网络", "wifi", "无线", "网口", "断线", "校园网", "无法连接")),
+                new AiRuleConfigService.KeywordRule("家具故障", List.of("桌", "椅", "床", "柜", "门锁", "家具")),
+                new AiRuleConfigService.KeywordRule("门窗故障", List.of("门", "窗", "玻璃", "闭门器"))
+            ),
+            List.of(
+                new AiRuleConfigService.KeywordRule("紧急", List.of("漏水", "积水", "触电", "烧焦", "冒烟", "火花", "异味", "总闸", "消防", "灭火器", "玻璃", "危险")),
+                new AiRuleConfigService.KeywordRule("普通", List.of("无法使用", "不能用", "断线", "频闪", "损坏", "不制冷", "堵塞", "松动", "脱落"))
+            )
+        ));
+        aiAnalyzeService = new AiAnalyzeService(deepSeekClientService, aiRuleConfigService);
     }
 
     @Test
@@ -218,6 +237,26 @@ class AiAnalyzeServiceTest {
 
         assertNotNull(response);
         assertEquals("空调故障", response.category());
+    }
+
+    @Test
+    @DisplayName("配置化规则动态影响分类")
+    void configurableRulesAffectCategory() {
+        when(aiRuleConfigService.rules()).thenReturn(new AiRuleConfigService.AiRules(
+            List.of(new AiRuleConfigService.KeywordRule("墙面故障", List.of("墙皮"))),
+            List.of(new AiRuleConfigService.KeywordRule("普通", List.of("脱落")))
+        ));
+
+        var request = new com.qiyun.aiservice.dto.AnalyzeTicketRequest(
+            "墙皮脱落，需要粉刷",
+            "7号楼走廊"
+        );
+
+        var response = aiAnalyzeService.analyze(request);
+
+        assertNotNull(response);
+        assertEquals("墙面故障", response.category());
+        assertEquals("普通", response.urgency());
     }
 
 

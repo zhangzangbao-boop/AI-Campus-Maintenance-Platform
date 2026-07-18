@@ -39,3 +39,7 @@ embedding:
 internal:
   service:
     secret: ${INTERNAL_SERVICE_SECRET:}
+
+ops:
+  service:
+    base-url: ${OPS_SERVICE_BASE_URL:http://localhost:9005}

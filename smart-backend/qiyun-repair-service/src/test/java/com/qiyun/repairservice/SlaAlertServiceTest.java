@@ -8,8 +8,10 @@ import com.qiyun.repairservice.domain.enums.UserRole;
 import com.qiyun.repairservice.repository.SlaAlertRepository;
 import com.qiyun.repairservice.repository.TicketRepository;
 import com.qiyun.repairservice.repository.UserReferenceRepository;
+import com.qiyun.repairservice.service.RepairRuleConfigService;
 import com.qiyun.repairservice.service.SlaAlertService;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.DisplayName;
@@ -39,8 +41,20 @@ class SlaAlertServiceTest {
     @Mock
     private com.qiyun.repairservice.service.NotificationPushService notificationPushService;
 
+    @Mock
+    private RepairRuleConfigService repairRuleConfigService;
+
     @InjectMocks
     private SlaAlertService slaAlertService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUpRules() {
+        lenient().when(repairRuleConfigService.slaRules()).thenReturn(new RepairRuleConfigService.SlaRules(0.25, Map.of(
+            "high", new RepairRuleConfigService.SlaPriorityRule(2, 24),
+            "medium", new RepairRuleConfigService.SlaPriorityRule(8, 72),
+            "low", new RepairRuleConfigService.SlaPriorityRule(24, 168)
+        )));
+    }
 
     private RepairTicket createTicket(Long id, TicketStatus status, String priority, LocalDateTime createdAt, LocalDateTime assignedAt) {
         RepairTicket ticket = new RepairTicket();
@@ -240,5 +254,27 @@ class SlaAlertServiceTest {
 
         assertEquals(1, result.get("warningCount"));
         assertEquals(0, result.get("overdueCount"));
+    }
+
+    @Test
+    @DisplayName("配置化SLA规则动态影响告警")
+    void configurableSlaRulesAffectAlert() {
+        when(repairRuleConfigService.slaRules()).thenReturn(new RepairRuleConfigService.SlaRules(0.25, Map.of(
+            "high", new RepairRuleConfigService.SlaPriorityRule(2, 24),
+            "medium", new RepairRuleConfigService.SlaPriorityRule(4, 72),
+            "low", new RepairRuleConfigService.SlaPriorityRule(24, 168)
+        )));
+        LocalDateTime now = LocalDateTime.now();
+        RepairTicket ticket = createTicket(1L, TicketStatus.WAITING_ACCEPT, "medium", now.minusHours(5), null);
+
+        when(ticketRepository.findAll()).thenReturn(List.of(ticket));
+        when(slaAlertRepository.existsByTicketIdAndAlertLevel(anyLong(), anyString())).thenReturn(false);
+        when(slaAlertRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(userReferenceRepository.findByRoleAndIsActiveTrue(UserRole.ADMIN)).thenReturn(List.of(new UserReference()));
+        when(ticketRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        Map<String, Integer> result = slaAlertService.checkAndAlert();
+
+        assertEquals(1, result.get("overdueCount"));
     }
 }

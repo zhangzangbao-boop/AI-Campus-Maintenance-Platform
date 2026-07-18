@@ -382,13 +382,13 @@ const SystemConfigTab = () => {
 
   const openEdit = (record) => {
     setEditing(record);
-    form.setFieldsValue(record);
+    form.setFieldsValue(toConfigFormValues(record));
   };
 
   const submit = async () => {
     const values = await form.validateFields();
     try {
-      await api.admin.updateSystemConfig(editing.configKey, values);
+      await api.admin.updateSystemConfig(editing.configKey, toConfigRequest(editing, values));
       message.success("配置已保存");
       setEditing(null);
       loadData();
@@ -410,7 +410,13 @@ const SystemConfigTab = () => {
         pagination={{ pageSize: 10 }}
         columns={[
           { title: "配置项", dataIndex: "configKey", key: "configKey", width: 220 },
-          { title: "配置值", dataIndex: "configValue", key: "configValue", ellipsis: true },
+          {
+            title: "配置值",
+            dataIndex: "configValue",
+            key: "configValue",
+            ellipsis: true,
+            render: (value, record) => summarizeConfigValue(record.configKey, value),
+          },
           { title: "说明", dataIndex: "description", key: "description", ellipsis: true },
           { title: "更新人", dataIndex: "updatedBy", key: "updatedBy", width: 100 },
           {
@@ -428,20 +434,234 @@ const SystemConfigTab = () => {
         onCancel={() => setEditing(null)}
         onOk={submit}
         destroyOnHidden
+        width={760}
       >
         <Form form={form} layout="vertical">
           <Form.Item name="configKey" label="配置项">
             <Input disabled />
           </Form.Item>
-          <Form.Item name="configValue" label="配置值">
-            <Input.TextArea rows={3} />
-          </Form.Item>
+          {renderConfigEditor(editing)}
           <Form.Item name="description" label="说明">
             <Input.TextArea rows={3} />
           </Form.Item>
         </Form>
       </Modal>
     </>
+  );
+};
+
+const RULE_CONFIG_KEYS = new Set([
+  "ai.ticket.category-keywords",
+  "ai.ticket.urgency-rules",
+  "sla.ticket.rules",
+  "fault-trend.rules",
+]);
+
+const parseJson = (value, fallback) => {
+  try {
+    return value ? JSON.parse(value) : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const splitKeywords = (value) => String(value || "")
+  .split(/[,，、\s]+/)
+  .map((item) => item.trim())
+  .filter(Boolean);
+
+const toConfigFormValues = (record) => {
+  if (!record || !RULE_CONFIG_KEYS.has(record.configKey)) {
+    return record;
+  }
+  const base = { configKey: record.configKey, description: record.description };
+  if (record.configKey === "ai.ticket.category-keywords") {
+    return {
+      ...base,
+      categoryRules: parseJson(record.configValue, []).map((item) => ({
+        category: item.category,
+        keywords: Array.isArray(item.keywords) ? item.keywords.join("，") : "",
+      })),
+    };
+  }
+  if (record.configKey === "ai.ticket.urgency-rules") {
+    return {
+      ...base,
+      urgencyRules: parseJson(record.configValue, []).map((item) => ({
+        urgency: item.urgency,
+        keywords: Array.isArray(item.keywords) ? item.keywords.join("，") : "",
+      })),
+    };
+  }
+  if (record.configKey === "sla.ticket.rules") {
+    const rules = parseJson(record.configValue, {});
+    return {
+      ...base,
+      warningRatio: rules.warningRatio ?? 0.25,
+      highResponseHours: rules.priorities?.high?.responseHours ?? 2,
+      highCompletionHours: rules.priorities?.high?.completionHours ?? 24,
+      mediumResponseHours: rules.priorities?.medium?.responseHours ?? 8,
+      mediumCompletionHours: rules.priorities?.medium?.completionHours ?? 72,
+      lowResponseHours: rules.priorities?.low?.responseHours ?? 24,
+      lowCompletionHours: rules.priorities?.low?.completionHours ?? 168,
+    };
+  }
+  const rules = parseJson(record.configValue, {});
+  return {
+    ...base,
+    sevenDayCountThreshold: rules.sevenDays?.countThreshold ?? 3,
+    sevenDayGrowthThreshold: rules.sevenDays?.growthThreshold ?? 50,
+    thirtyDayCountThreshold: rules.thirtyDays?.countThreshold ?? 6,
+    thirtyDayGrowthThreshold: rules.thirtyDays?.growthThreshold ?? 30,
+  };
+};
+
+const toConfigRequest = (editing, values) => {
+  if (!editing || !RULE_CONFIG_KEYS.has(editing.configKey)) {
+    return values;
+  }
+  let configValue;
+  if (editing.configKey === "ai.ticket.category-keywords") {
+    configValue = JSON.stringify((values.categoryRules || []).map((item) => ({
+      category: item.category,
+      keywords: splitKeywords(item.keywords),
+    })), null, 2);
+  } else if (editing.configKey === "ai.ticket.urgency-rules") {
+    configValue = JSON.stringify((values.urgencyRules || []).map((item) => ({
+      urgency: item.urgency,
+      keywords: splitKeywords(item.keywords),
+    })), null, 2);
+  } else if (editing.configKey === "sla.ticket.rules") {
+    configValue = JSON.stringify({
+      warningRatio: values.warningRatio,
+      priorities: {
+        high: { responseHours: values.highResponseHours, completionHours: values.highCompletionHours },
+        medium: { responseHours: values.mediumResponseHours, completionHours: values.mediumCompletionHours },
+        low: { responseHours: values.lowResponseHours, completionHours: values.lowCompletionHours },
+      },
+    }, null, 2);
+  } else {
+    configValue = JSON.stringify({
+      sevenDays: {
+        countThreshold: values.sevenDayCountThreshold,
+        growthThreshold: values.sevenDayGrowthThreshold,
+      },
+      thirtyDays: {
+        countThreshold: values.thirtyDayCountThreshold,
+        growthThreshold: values.thirtyDayGrowthThreshold,
+      },
+    }, null, 2);
+  }
+  return { configValue, description: values.description };
+};
+
+const summarizeConfigValue = (key, value) => {
+  if (key === "ai.ticket.category-keywords") {
+    const rules = parseJson(value, []);
+    return `${rules.length} 个分类映射`;
+  }
+  if (key === "ai.ticket.urgency-rules") {
+    const rules = parseJson(value, []);
+    return `${rules.length} 条紧急程度规则`;
+  }
+  if (key === "sla.ticket.rules") {
+    const rules = parseJson(value, {});
+    return `预警比例 ${Math.round((rules.warningRatio ?? 0.25) * 100)}%，高/中/低 SLA 已配置`;
+  }
+  if (key === "fault-trend.rules") {
+    const rules = parseJson(value, {});
+    return `7天 ${rules.sevenDays?.countThreshold ?? 3} 单，30天 ${rules.thirtyDays?.countThreshold ?? 6} 单`;
+  }
+  return value;
+};
+
+const renderKeywordRuleEditor = (name, labelField, labelText) => (
+  <Form.List name={name}>
+    {(fields, { add, remove }) => (
+      <Space direction="vertical" style={{ width: "100%" }}>
+        {fields.map(({ key, name: fieldName, ...restField }) => (
+          <Space key={key} align="baseline" style={{ display: "flex" }}>
+            <Form.Item
+              {...restField}
+              name={[fieldName, labelField]}
+              label={labelText}
+              rules={[{ required: true, message: `请输入${labelText}` }]}
+            >
+              <Input style={{ width: 160 }} />
+            </Form.Item>
+            <Form.Item
+              {...restField}
+              name={[fieldName, "keywords"]}
+              label="关键词"
+              rules={[{ required: true, message: "请输入关键词" }]}
+            >
+              <Input style={{ width: 420 }} placeholder="多个关键词用逗号、顿号或空格分隔" />
+            </Form.Item>
+            <Button danger onClick={() => remove(fieldName)}>删除</Button>
+          </Space>
+        ))}
+        <Button type="dashed" icon={<PlusOutlined />} onClick={() => add()}>
+          添加规则
+        </Button>
+      </Space>
+    )}
+  </Form.List>
+);
+
+const renderConfigEditor = (editing) => {
+  if (!editing || !RULE_CONFIG_KEYS.has(editing.configKey)) {
+    return (
+      <Form.Item name="configValue" label="配置值">
+        <Input.TextArea rows={3} />
+      </Form.Item>
+    );
+  }
+  if (editing.configKey === "ai.ticket.category-keywords") {
+    return renderKeywordRuleEditor("categoryRules", "category", "分类");
+  }
+  if (editing.configKey === "ai.ticket.urgency-rules") {
+    return renderKeywordRuleEditor("urgencyRules", "urgency", "紧急程度");
+  }
+  if (editing.configKey === "sla.ticket.rules") {
+    return (
+      <>
+        <Form.Item name="warningRatio" label="预警比例" rules={[{ required: true, message: "请输入预警比例" }]}>
+          <InputNumber min={0.01} max={0.9} step={0.05} style={{ width: 180 }} />
+        </Form.Item>
+        <Space wrap>
+          {["high", "medium", "low"].map((priority) => (
+            <Card key={priority} size="small" title={`${priority} 优先级`} style={{ width: 220 }}>
+              <Form.Item name={`${priority}ResponseHours`} label="受理时限(小时)" rules={[{ required: true }]}>
+                <InputNumber min={1} max={720} style={{ width: "100%" }} />
+              </Form.Item>
+              <Form.Item name={`${priority}CompletionHours`} label="完成时限(小时)" rules={[{ required: true }]}>
+                <InputNumber min={1} max={2160} style={{ width: "100%" }} />
+              </Form.Item>
+            </Card>
+          ))}
+        </Space>
+      </>
+    );
+  }
+  return (
+    <Space wrap>
+      <Card size="small" title="7天高频故障" style={{ width: 260 }}>
+        <Form.Item name="sevenDayCountThreshold" label="触发单数" rules={[{ required: true }]}>
+          <InputNumber min={1} max={1000} style={{ width: "100%" }} />
+        </Form.Item>
+        <Form.Item name="sevenDayGrowthThreshold" label="增长率阈值(%)" rules={[{ required: true }]}>
+          <InputNumber min={0} max={10000} style={{ width: "100%" }} />
+        </Form.Item>
+      </Card>
+      <Card size="small" title="30天高频故障" style={{ width: 260 }}>
+        <Form.Item name="thirtyDayCountThreshold" label="触发单数" rules={[{ required: true }]}>
+          <InputNumber min={1} max={1000} style={{ width: "100%" }} />
+        </Form.Item>
+        <Form.Item name="thirtyDayGrowthThreshold" label="增长率阈值(%)" rules={[{ required: true }]}>
+          <InputNumber min={0} max={10000} style={{ width: "100%" }} />
+        </Form.Item>
+      </Card>
+    </Space>
   );
 };
 

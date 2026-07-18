@@ -52,6 +52,7 @@ public class TicketService {
     private final FeedbackSentimentAnalysisService feedbackSentimentAnalysisService;
     private final FeedbackFollowUpService feedbackFollowUpService;
     private final RatingDtoMapper ratingDtoMapper;
+    private final RepairRuleConfigService repairRuleConfigService;
 
     @Transactional
     public TicketDetailDto createTicket(TicketCreateRequest request, List<MultipartFile> images) {
@@ -967,8 +968,10 @@ public class TicketService {
 
     private Map<String, Object> buildSlaItem(RepairTicket ticket, LocalDateTime now) {
         String priority = normalizePriority(ticket.getPriority());
-        long responseHours = responseLimitHours(priority);
-        long completionHours = completionLimitHours(priority);
+        RepairRuleConfigService.SlaRules rules = repairRuleConfigService.slaRules();
+        RepairRuleConfigService.SlaPriorityRule priorityRule = rules.priority(priority);
+        long responseHours = priorityRule.responseHours();
+        long completionHours = priorityRule.completionHours();
 
         LocalDateTime startAt;
         LocalDateTime dueAt;
@@ -997,7 +1000,7 @@ public class TicketService {
         }
 
         boolean overdue = now.isAfter(dueAt);
-        long warningThreshold = Math.max(1, Math.round(limitHours * 0.25));
+        long warningThreshold = Math.max(1, Math.round(limitHours * rules.warningRatio()));
         boolean warning = !overdue && !now.isBefore(dueAt.minusHours(warningThreshold));
         if (!overdue && !warning) {
             return null;
@@ -1032,9 +1035,10 @@ public class TicketService {
 
     private List<Map<String, Object>> buildSlaRules() {
         List<Map<String, Object>> rules = new ArrayList<>();
-        rules.add(buildSlaRule("high", 2, 24));
-        rules.add(buildSlaRule("medium", 8, 72));
-        rules.add(buildSlaRule("low", 24, 168));
+        RepairRuleConfigService.SlaRules config = repairRuleConfigService.slaRules();
+        rules.add(buildSlaRule("high", config.priority("high").responseHours(), config.priority("high").completionHours()));
+        rules.add(buildSlaRule("medium", config.priority("medium").responseHours(), config.priority("medium").completionHours()));
+        rules.add(buildSlaRule("low", config.priority("low").responseHours(), config.priority("low").completionHours()));
         return rules;
     }
 
@@ -1055,22 +1059,6 @@ public class TicketService {
             return normalized;
         }
         return "medium";
-    }
-
-    private long responseLimitHours(String priority) {
-        return switch (priority) {
-            case "high" -> 2;
-            case "low" -> 24;
-            default -> 8;
-        };
-    }
-
-    private long completionLimitHours(String priority) {
-        return switch (priority) {
-            case "high" -> 24;
-            case "low" -> 168;
-            default -> 72;
-        };
     }
 
     private List<Map<String, Object>> mapHotAreas(List<Object[]> rows) {

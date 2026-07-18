@@ -5,7 +5,7 @@ import {
 } from 'antd';
 import { 
   SearchOutlined, UserOutlined, CloseOutlined, CheckOutlined 
-  , ExclamationCircleOutlined, ClockCircleOutlined
+  , ExclamationCircleOutlined, ClockCircleOutlined, DownloadOutlined
 } from '@ant-design/icons';
 import { repairService, repairUtils } from '../services/repairService';
 import api from '../services/api';
@@ -40,6 +40,7 @@ const RepairOrderList = ({ onRefresh, targetOrderId, onTargetOrderHandled }) => 
   const [aiSummary, setAiSummary] = useState(null);
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
   const [aiCorrectionLoading, setAiCorrectionLoading] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
   const [assignForm] = Form.useForm();
   const [rejectForm] = Form.useForm();
   const [aiCorrectionForm] = Form.useForm();
@@ -298,6 +299,25 @@ const RepairOrderList = ({ onRefresh, targetOrderId, onTargetOrderHandled }) => 
     setFilters(newFilters);
     console.log('搜索工单，关键词:', keyword, '完整筛选条件:', newFilters);
     searchRepairOrders(newFilters);
+  };
+
+  const buildExportFilters = () => {
+    const category = filters.category && filters.category !== 'all' && categoryKeyToNameMap[filters.category]
+      ? categoryKeyToNameMap[filters.category]
+      : filters.category;
+    return { ...filters, category };
+  };
+
+  const handleExport = async () => {
+    setExportLoading(true);
+    try {
+      const result = await api.admin.exportData('tickets', buildExportFilters());
+      message.success(`工单明细已导出${result.rowCount ? `，共 ${result.rowCount} 行` : ''}`);
+    } catch (error) {
+      message.error(`导出失败：${error.message}`);
+    } finally {
+      setExportLoading(false);
+    }
   };
 
   // 打开分配模态框
@@ -862,6 +882,9 @@ const RepairOrderList = ({ onRefresh, targetOrderId, onTargetOrderHandled }) => 
                 checkedChildren="是"
                 unCheckedChildren="否"
               />
+              <Button icon={<DownloadOutlined />} loading={exportLoading} onClick={handleExport}>
+                导出当前筛选
+              </Button>
             </Space>
           </Col>
         </Row>

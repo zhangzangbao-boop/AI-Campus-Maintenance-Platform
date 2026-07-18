@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Card, Col, Input, Modal, Rate, Row, Select, Space, Statistic, Tag } from 'antd';
-import { EditOutlined, MessageOutlined, StarOutlined, UserOutlined } from '@ant-design/icons';
+import { Button, Card, Col, Input, Modal, Rate, Row, Select, Space, Statistic, Tag, message } from 'antd';
+import { DownloadOutlined, EditOutlined, MessageOutlined, StarOutlined, UserOutlined } from '@ant-design/icons';
 import { feedbackService } from './feedbackService';
+import api from '../services/api';
 
 const followUpOptions = [
   { value: 'ALL', label: 'All follow-ups' },
@@ -31,6 +32,7 @@ const FeedbackManagement = () => {
   const [followUpStatus, setFollowUpStatus] = useState('PROCESSING');
   const [followUpNote, setFollowUpNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
 
   const loadFeedbacks = async () => {
     setLoading(true);
@@ -72,6 +74,29 @@ const FeedbackManagement = () => {
       await loadFeedbacks();
     } finally {
       setSaving(false);
+    }
+  };
+
+  const currentExportParams = () => {
+    const params = {};
+    if (sentimentFilter === 'NEGATIVE') {
+      params.sentiment = 'NEGATIVE';
+    }
+    if (followUpFilter !== 'ALL') {
+      params.followUpStatus = followUpFilter;
+    }
+    return params;
+  };
+
+  const handleExport = async () => {
+    setExportLoading(true);
+    try {
+      const result = await api.admin.exportData('feedbacks', currentExportParams());
+      message.success(`评价与回访已导出${result.rowCount ? `，共 ${result.rowCount} 行` : ''}`);
+    } catch (error) {
+      message.error(`导出失败：${error.message}`);
+    } finally {
+      setExportLoading(false);
     }
   };
 
@@ -206,6 +231,9 @@ const FeedbackManagement = () => {
             options={followUpOptions}
           />
           <Button onClick={loadFeedbacks} loading={loading}>Refresh</Button>
+          <Button icon={<DownloadOutlined />} onClick={handleExport} loading={exportLoading}>
+            Export
+          </Button>
         </Space>
       </Card>
 

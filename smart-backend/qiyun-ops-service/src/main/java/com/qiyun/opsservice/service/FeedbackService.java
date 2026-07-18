@@ -28,7 +28,7 @@ public class FeedbackService {
                 "List feedbacks: page={}, size={}, lowRating={}, sentiment={}, followUpStatus={}",
                 page, size, lowRating, sentiment, followUpStatus
             );
-            return repairServiceClient.getFeedbacks(authorization, page, size, lowRating, sentiment, followUpStatus);
+            return repairServiceClient.getFeedbacks(authorization, page, size, lowRating, sentiment, followUpStatus, null, null);
         } catch (Exception e) {
             log.error("List feedbacks failed: {}", e.getMessage());
             throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE,

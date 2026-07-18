@@ -2,10 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Row, Col, Card, Table, Tag, Skeleton, Statistic, Alert, Button, Space, Popconfirm, message, Descriptions } from 'antd';
 import { Line } from '@ant-design/charts';
-import { ReloadOutlined } from '@ant-design/icons';
+import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons';
 import { statisticsService } from './statisticsService';
 import { TASK_STATUS } from '../Worker/mytaskService';
 import { backupService } from './backupService';
+import api from '../services/api';
 
 const chartColors = ['#0f62fe', '#00c2d1', '#7c3aed', '#16a34a', '#f59e0b', '#ef4444', '#64748b'];
 
@@ -65,6 +66,7 @@ const DataAnalysis = () => {
   });
   const [loading, setLoading] = useState(true);
   const [backupLoading, setBackupLoading] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
   const [backupList, setBackupList] = useState([]);
   const [backupStatus, setBackupStatus] = useState(null);
   const [lastUpdateTime, setLastUpdateTime] = useState(null); // 新增：记录最后更新时间
@@ -202,6 +204,18 @@ const DataAnalysis = () => {
     }
   };
 
+  const handleExportStats = async () => {
+    setExportLoading(true);
+    try {
+      const result = await api.admin.exportData('stats', {});
+      message.success(`统计数据已导出${result.rowCount ? `，共 ${result.rowCount} 行` : ''}`);
+    } catch (error) {
+      message.error(`导出统计失败: ${error.message}`);
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
   useEffect(() => {
     console.log('========================================');
     console.log('管理员端数据统计 - 组件初始化');
@@ -287,6 +301,9 @@ const DataAnalysis = () => {
             }}
           >
             刷新数据
+          </Button>
+          <Button icon={<DownloadOutlined />} onClick={handleExportStats} loading={exportLoading}>
+            导出统计 CSV
           </Button>
         </Space>
       </div>

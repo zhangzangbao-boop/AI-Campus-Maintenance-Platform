@@ -92,7 +92,21 @@ public interface RepairServiceClient {
         @RequestParam(value = "size", defaultValue = "10") int size,
         @RequestParam(value = "lowRating", required = false) Boolean lowRating,
         @RequestParam(value = "sentiment", required = false) String sentiment,
-        @RequestParam(value = "followUpStatus", required = false) String followUpStatus
+        @RequestParam(value = "followUpStatus", required = false) String followUpStatus,
+        @RequestParam(value = "startDate", required = false) String startDate,
+        @RequestParam(value = "endDate", required = false) String endDate
+    );
+
+    @GetMapping("/tickets/export")
+    Map<String, Object> getTicketsForExport(
+        @RequestHeader(value = "Authorization", required = false) String authorization,
+        @RequestParam(value = "status", required = false) String status,
+        @RequestParam(value = "category", required = false) String category,
+        @RequestParam(value = "keyword", required = false) String keyword,
+        @RequestParam(value = "includeDeleted", defaultValue = "false") boolean includeDeleted,
+        @RequestParam(value = "startDate", required = false) String startDate,
+        @RequestParam(value = "endDate", required = false) String endDate,
+        @RequestParam(value = "limit", defaultValue = "5000") int limit
     );
 
     @PutMapping("/feedbacks/{ratingId}/follow-up")

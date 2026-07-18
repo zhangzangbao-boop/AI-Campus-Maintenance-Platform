@@ -12,7 +12,9 @@ import com.qiyun.repairservice.service.FacilityHealthService;
 import com.qiyun.repairservice.service.FeedbackFollowUpService;
 import com.qiyun.repairservice.service.RatingDtoMapper;
 import com.qiyun.repairservice.service.TicketService;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -259,6 +261,103 @@ public class InternalStatsController {
         return Math.round(((recentCount - previousCount) * 10000.0 / previousCount)) / 100.0;
     }
 
+    @GetMapping("/tickets/export")
+    public ResponseEntity<Map<String, Object>> getTicketsForExport(
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "category", required = false) String category,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "includeDeleted", defaultValue = "false") boolean includeDeleted,
+            @RequestParam(value = "startDate", required = false) String startDate,
+            @RequestParam(value = "endDate", required = false) String endDate,
+            @RequestParam(value = "limit", defaultValue = "5000") int limit) {
+        List<com.qiyun.repairservice.dto.TicketSummaryDto> tickets = filterTickets(
+                status, category, keyword, includeDeleted, startDate, endDate
+            )
+            .stream()
+            .limit(Math.max(1, Math.min(limit, 5000)))
+            .toList();
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("code", 200);
+        result.put("message", "获取成功");
+        result.put("data", Map.of(
+            "list", tickets,
+            "total", tickets.size()
+        ));
+        return ResponseEntity.ok(result);
+    }
+
+    private List<com.qiyun.repairservice.dto.TicketSummaryDto> filterTickets(
+            String status,
+            String category,
+            String keyword,
+            boolean includeDeleted,
+            String startDate,
+            String endDate) {
+        java.util.stream.Stream<com.qiyun.repairservice.dto.TicketSummaryDto> stream =
+            ticketService.listAll(includeDeleted).stream();
+        if (status != null && !status.isBlank() && !"all".equalsIgnoreCase(status)) {
+            TicketStatus targetStatus = mapStatusFromFrontend(status);
+            stream = stream.filter(t -> t.status() == targetStatus);
+        }
+        if (category != null && !category.isBlank() && !"all".equalsIgnoreCase(category)) {
+            stream = stream.filter(t -> category.equalsIgnoreCase(t.categoryName()));
+        }
+        if (keyword != null && !keyword.isBlank()) {
+            String searchKeyword = keyword.toLowerCase().trim();
+            stream = stream.filter(t -> {
+                String desc = t.description() != null ? t.description().toLowerCase() : "";
+                String loc = t.locationText() != null ? t.locationText().toLowerCase() : "";
+                String ticketId = t.ticketId() != null ? String.valueOf(t.ticketId()) : "";
+                String studentId = t.studentId() != null ? t.studentId().toLowerCase() : "";
+                String staffId = t.staffId() != null ? t.staffId().toLowerCase() : "";
+                String categoryName = t.categoryName() != null ? t.categoryName().toLowerCase() : "";
+                return desc.contains(searchKeyword)
+                    || loc.contains(searchKeyword)
+                    || ticketId.contains(searchKeyword)
+                    || studentId.contains(searchKeyword)
+                    || staffId.contains(searchKeyword)
+                    || categoryName.contains(searchKeyword);
+            });
+        }
+        LocalDateTime startAt = parseStartDate(startDate);
+        LocalDateTime endAt = parseEndDate(endDate);
+        if (startAt != null) {
+            stream = stream.filter(t -> t.createdAt() != null && !t.createdAt().isBefore(startAt));
+        }
+        if (endAt != null) {
+            stream = stream.filter(t -> t.createdAt() != null && !t.createdAt().isAfter(endAt));
+        }
+        return stream.toList();
+    }
+
+    private LocalDateTime parseStartDate(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return LocalDate.parse(value.trim()).atStartOfDay();
+    }
+
+    private LocalDateTime parseEndDate(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return LocalDate.parse(value.trim()).atTime(LocalTime.MAX);
+    }
+
+    private TicketStatus mapStatusFromFrontend(String frontendStatus) {
+        String status = frontendStatus.toLowerCase();
+        return switch (status) {
+            case "pending" -> TicketStatus.WAITING_ACCEPT;
+            case "processing" -> TicketStatus.IN_PROGRESS;
+            case "completed", "resolved" -> TicketStatus.RESOLVED;
+            case "to_be_evaluated", "waiting_feedback" -> TicketStatus.WAITING_FEEDBACK;
+            case "closed" -> TicketStatus.CLOSED;
+            case "rejected" -> TicketStatus.REJECTED;
+            default -> TicketStatus.valueOf(frontendStatus.toUpperCase());
+        };
+    }
+
     /**
      * 获取评价列表（分页）
      */
@@ -268,11 +367,26 @@ public class InternalStatsController {
             @RequestParam(value = "size", defaultValue = "10") int size,
             @RequestParam(value = "lowRating", required = false) Boolean lowRating,
             @RequestParam(value = "sentiment", required = false) String sentiment,
-            @RequestParam(value = "followUpStatus", required = false) String followUpStatus) {
+            @RequestParam(value = "followUpStatus", required = false) String followUpStatus,
+            @RequestParam(value = "startDate", required = false) String startDate,
+            @RequestParam(value = "endDate", required = false) String endDate) {
 
         List<RatingDto> allRatings = ratingRepository.findAllWithDetails().stream()
             .map(ratingDtoMapper::toDto)
             .collect(Collectors.toList());
+
+        LocalDateTime startAt = parseStartDate(startDate);
+        LocalDateTime endAt = parseEndDate(endDate);
+        if (startAt != null) {
+            allRatings = allRatings.stream()
+                .filter(r -> r.ratedAt() != null && !r.ratedAt().isBefore(startAt))
+                .collect(Collectors.toList());
+        }
+        if (endAt != null) {
+            allRatings = allRatings.stream()
+                .filter(r -> r.ratedAt() != null && !r.ratedAt().isAfter(endAt))
+                .collect(Collectors.toList());
+        }
 
         // 低评分筛选
         if (lowRating != null && lowRating) {

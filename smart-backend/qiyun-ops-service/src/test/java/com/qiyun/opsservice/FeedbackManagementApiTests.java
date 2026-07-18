@@ -48,7 +48,7 @@ class FeedbackManagementApiTests {
         feedbacksResponse.put("code", 200);
         feedbacksResponse.put("message", "获取成功");
         feedbacksResponse.put("data", Map.of("list", java.util.List.of(), "total", 0));
-        when(repairServiceClient.getFeedbacks(any(), anyInt(), anyInt(), any(), any(), any())).thenReturn(feedbacksResponse);
+        when(repairServiceClient.getFeedbacks(any(), anyInt(), anyInt(), any(), any(), any(), any(), any())).thenReturn(feedbacksResponse);
         when(repairServiceClient.updateFeedbackFollowUp(any(), any(), any())).thenReturn(feedbacksResponse);
 
         adminToken = generateToken("admin01", "ADMIN");

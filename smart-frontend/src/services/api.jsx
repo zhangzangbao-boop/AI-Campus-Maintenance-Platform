@@ -130,6 +130,38 @@ const toQueryString = (params) => {
   return str ? `?${str}` : "";
 };
 
+const download = async (endpoint, filenameFallback = "export.csv") => {
+  const token = localStorage.getItem("token");
+  const headers = {};
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  const response = await fetch(`${BASE_URL}${endpoint}`, { headers });
+  if (!response.ok) {
+    let message = `导出失败: ${response.status}`;
+    try {
+      const data = await response.json();
+      message = data.message || message;
+    } catch {
+      // ignore non-json export errors
+    }
+    throw new Error(message);
+  }
+  const blob = await response.blob();
+  const disposition = response.headers.get("content-disposition") || "";
+  const match = disposition.match(/filename\*=UTF-8''([^;]+)/i) || disposition.match(/filename="?([^"]+)"?/i);
+  const filename = match ? decodeURIComponent(match[1]) : filenameFallback;
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  return { filename, rowCount: response.headers.get("X-Export-Row-Count") };
+};
+
 const api = {
   request,
   auth: {
@@ -289,6 +321,9 @@ const api = {
     // 使用后端 AdminController 提供的接口
     getAllOrders: (params) =>
       request(`/admin/repair-orders${toQueryString(params)}`),
+
+    exportData: (type, params) =>
+      download(`/admin/export${toQueryString({ type, ...params })}`, `${type}.csv`),
 
     // 修正分配工单接口，使用后端已有的接口
     assignOrder: (orderId, repairmanId) =>

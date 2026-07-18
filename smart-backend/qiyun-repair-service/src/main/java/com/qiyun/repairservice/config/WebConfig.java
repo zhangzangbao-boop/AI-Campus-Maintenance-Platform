@@ -1,4 +1,4 @@
-package com.ligong.reportingcenter.config;
+package com.qiyun.repairservice.config;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
@@ -13,8 +13,7 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        // 配置静态资源映射，将 /uploads/** 映射到实际的 uploads 目录
         registry.addResourceHandler("/uploads/**")
-                .addResourceLocations("file:" + uploadPath + "/");
+            .addResourceLocations("file:" + uploadPath + "/");
     }
 }

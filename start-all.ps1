@@ -1,62 +1,46 @@
-# 校园报修管理系统 - 一键启动脚本
-# 同时启动前后端服务（需要在两个终端窗口中运行）
+# AI Campus Maintenance Platform - start smart backend and frontend
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "校园报修管理系统 - 一键启动" -ForegroundColor Cyan
+Write-Host "AI Campus Maintenance Platform" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# 检查是否在项目根目录
-$backendPath = Join-Path $PSScriptRoot "backend\start-backend.ps1"
-$frontendPath = Join-Path $PSScriptRoot "frontend\start-frontend.ps1"
+$backendPath = Join-Path $PSScriptRoot "smart-backend\start-services.ps1"
+$frontendPath = Join-Path $PSScriptRoot "smart-frontend\start-frontend.ps1"
 
-if (-not (Test-Path $backendPath)) {
-    Write-Host "错误：找不到后端启动脚本" -ForegroundColor Red
-    Write-Host "请确保在项目根目录运行此脚本" -ForegroundColor Yellow
-    Read-Host "按任意键退出..."
+if (-not (Test-Path -LiteralPath $backendPath)) {
+    Write-Host "Error: smart-backend startup script was not found." -ForegroundColor Red
+    Write-Host "Expected: $backendPath" -ForegroundColor Yellow
+    Read-Host "Press Enter to exit"
     exit 1
 }
 
-if (-not (Test-Path $frontendPath)) {
-    Write-Host "错误：找不到前端启动脚本" -ForegroundColor Red
-    Write-Host "请确保在项目根目录运行此脚本" -ForegroundColor Yellow
-    Read-Host "按任意键退出..."
+if (-not (Test-Path -LiteralPath $frontendPath)) {
+    Write-Host "Error: smart-frontend startup script was not found." -ForegroundColor Red
+    Write-Host "Expected: $frontendPath" -ForegroundColor Yellow
+    Read-Host "Press Enter to exit"
     exit 1
 }
 
-Write-Host "项目结构检查完成" -ForegroundColor Green
+Write-Host "Project structure check passed." -ForegroundColor Green
 Write-Host ""
 
-# 启动后端（新窗口）
-Write-Host "步骤1: 启动后端服务..." -ForegroundColor Yellow
-Start-Process powershell -ArgumentList "-NoExit", "-ExecutionPolicy Bypass", "-File `"$backendPath`""
-Write-Host "后端服务已在新窗口启动" -ForegroundColor Green
-Write-Host "后端地址: http://localhost:8080" -ForegroundColor White
+Write-Host "Step 1: Opening smart-backend service launcher..." -ForegroundColor Yellow
+Start-Process powershell -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$backendPath`""
+Write-Host "Backend launcher opened. Use it to start Gateway and microservices." -ForegroundColor Green
+Write-Host "Gateway URL: http://localhost:8070" -ForegroundColor White
 Write-Host ""
 
-# 等待3秒让后端先启动
-Write-Host "等待后端初始化..." -ForegroundColor Yellow
-Start-Sleep -Seconds 3
-
-# 启动前端（新窗口）
-Write-Host "步骤2: 启动前端服务..." -ForegroundColor Yellow
-Start-Process powershell -ArgumentList "-NoExit", "-ExecutionPolicy Bypass", "-File `"$frontendPath`""
-Write-Host "前端服务已在新窗口启动" -ForegroundColor Green
-Write-Host "前端地址: http://localhost:3000" -ForegroundColor White
+Write-Host "Step 2: Opening smart-frontend dev server..." -ForegroundColor Yellow
+Start-Process powershell -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$frontendPath`""
+Write-Host "Frontend launcher opened." -ForegroundColor Green
+Write-Host "Frontend URL: http://localhost:5173" -ForegroundColor White
 Write-Host ""
 
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "✅ 启动完成！" -ForegroundColor Green
-Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "Access URLs:" -ForegroundColor Yellow
+Write-Host "1. Frontend: http://localhost:5173" -ForegroundColor White
+Write-Host "2. Gateway:  http://localhost:8070" -ForegroundColor White
 Write-Host ""
-Write-Host "访问方式：" -ForegroundColor Yellow
-Write-Host "1. 前端开发地址: http://localhost:3000" -ForegroundColor White
-Write-Host "2. 后端直接访问: http://localhost:8080" -ForegroundColor White
-Write-Host ""
-Write-Host "提示：" -ForegroundColor Yellow
-Write-Host "- 前后端服务已在独立窗口运行" -ForegroundColor White
-Write-Host "- 关闭窗口即可停止服务" -ForegroundColor White
-Write-Host "- 首次启动请等待数据库初始化完成" -ForegroundColor White
-Write-Host ""
+Write-Host "Tip: close the service windows to stop services." -ForegroundColor White
 
-Read-Host "按任意键关闭此窗口（前后端将继续运行）..."
+Read-Host "Press Enter to close this window"

@@ -116,6 +116,8 @@ bin/
 *.sql.bak
 *.sql.gz
 db-backups/
+smart-backend/database-backups/*.sql
+!smart-backend/database-backups/.gitkeep
 
 # ========================================
 # AI Models (DO NOT COMMIT)

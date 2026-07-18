@@ -1,4 +1,4 @@
-server:
+﻿server:
   port: 0
 
 spring:
@@ -16,70 +16,66 @@ spring:
           enabled: false
 
       routes:
-        # 转发到 qiyun-ai-service（优先级最高，精确匹配）
         - id: ai-service-route
           uri: lb://qiyun-ai-service
           predicates:
             - Path=/api/ai/**
           order: 0
 
-        # 转发到 qiyun-user-service（认证服务，精确匹配）
         - id: user-auth-route
           uri: lb://qiyun-user-service
           predicates:
             - Path=/api/auth/**
           order: 1
 
-        # 转发到 qiyun-user-service（管理员用户管理，精确匹配）
         - id: admin-users-route
           uri: lb://qiyun-user-service
           predicates:
             - Path=/api/admin/users/**
           order: 2
 
-        # 转发到 qiyun-user-service（用户接口，精确匹配）
         - id: users-route
           uri: lb://qiyun-user-service
           predicates:
             - Path=/api/users/**
           order: 3
 
-        # 转发到 qiyun-repair-service（报修服务，精确匹配）
+        - id: upload-static-route
+          uri: lb://qiyun-repair-service
+          predicates:
+            - Path=/uploads/**
+          order: 4
+
         - id: repair-service-route
           uri: lb://qiyun-repair-service
           predicates:
             - Path=/api/repair-orders/**,/api/tasks/**,/api/staff/**,/api/categories/**,/api/upload/**
           order: 4
 
-        # 转发到 qiyun-repair-service（管理员工单接口，精确匹配）
         - id: admin-repair-route
           uri: lb://qiyun-repair-service
           predicates:
             - Path=/api/admin/repair-orders/**,/api/admin/transfer-requests/**
           order: 5
 
-        # 转发到 qiyun-ops-service（通知服务，精确匹配）
         - id: notification-route
           uri: lb://qiyun-ops-service
           predicates:
             - Path=/api/notifications/**,/api/announcements/**
           order: 6
 
-        # 转发到 qiyun-ops-service（知识库服务，精确匹配）
         - id: knowledge-base-route
           uri: lb://qiyun-ops-service
           predicates:
             - Path=/api/knowledge-base/**
           order: 7
 
-        # 转发到 qiyun-ops-service（管理员运维接口，精确匹配）
         - id: admin-ops-route
           uri: lb://qiyun-ops-service
           predicates:
             - Path=/api/admin/audit-logs/**,/api/admin/system-config/**,/api/admin/backup/**,/api/admin/knowledge-base/**,/api/admin/stats/**,/api/admin/feedbacks/**,/api/admin/announcements/**,/api/admin/export,/api/admin/export/**
           order: 8
 
-        # 转发到 qiyun-biz-service（兼容原业务接口，匹配所有其他 /api/**）
         - id: biz-service-route
           uri: lb://qiyun-biz-service
           predicates:

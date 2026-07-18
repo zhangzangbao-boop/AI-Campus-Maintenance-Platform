@@ -47,6 +47,7 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/**").permitAll()
                 // 分类查询允许匿名访问
                 .requestMatchers("/api/categories").permitAll()
+                .requestMatchers("/uploads/**").permitAll()
                 // 内部接口需要ADMIN权限（通过Feign调用，携带Authorization头）
                 .requestMatchers("/internal/**").hasRole("ADMIN")
                 // 其他接口必须登录

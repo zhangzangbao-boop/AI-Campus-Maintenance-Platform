@@ -1,24 +1,23 @@
 @echo off
 echo ========================================
-echo Campus Repair System - Frontend Service
+echo AI Campus Maintenance Platform Frontend
 echo ========================================
 echo.
 
-echo Starting frontend development server...
-echo Frontend URL: http://localhost:3000
-echo API Proxy: http://localhost:8080/api
+echo Starting Vite development server...
+echo Frontend URL: http://localhost:5173
+echo API proxy: http://localhost:8070/api
 echo.
 
-REM Start Vite development server
 cd /d %~dp0
 call npm run dev
 
 if errorlevel 1 (
     echo.
-    echo Startup failed! Please check error messages.
+    echo Startup failed. Please check the error output above.
     echo Possible causes:
-    echo 1. npm dependencies not installed (run npm install first)
-    echo 2. Port 3000 is already in use
+    echo 1. npm dependencies are not installed.
+    echo 2. Port 5173 is already in use.
     echo.
     pause
 )

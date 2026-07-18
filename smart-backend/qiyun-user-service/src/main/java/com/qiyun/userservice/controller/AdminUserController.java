@@ -5,6 +5,7 @@ import com.qiyun.userservice.dto.ResetPasswordResult;
 import com.qiyun.userservice.dto.UserDto;
 import com.qiyun.userservice.dto.request.UserRegisterRequest;
 import com.qiyun.userservice.dto.request.UserUpdateRequest;
+import com.qiyun.userservice.service.AuditEventPublisher;
 import com.qiyun.userservice.service.UserService;
 import java.util.HashMap;
 import java.util.List;
@@ -14,6 +15,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -36,6 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminUserController {
 
     private final UserService userService;
+    private final AuditEventPublisher auditEventPublisher;
 
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
@@ -59,6 +63,8 @@ public class AdminUserController {
     public UserDto createUser(@RequestBody UserRegisterRequest request) {
         UserDto user = userService.register(request);
         log.info("管理员创建用户: userId={}, nickname={}, role={}", user.userId(), user.nickname(), user.role());
+        auditEventPublisher.record(currentUserId(), "用户管理", "创建用户", "USER", user.userId(),
+            "创建用户 userId=" + user.userId() + "，role=" + user.role());
         return user;
     }
 
@@ -67,6 +73,8 @@ public class AdminUserController {
     public UserDto updateUser(@PathVariable("userId") String userId, @RequestBody UserUpdateRequest request) {
         UserDto user = userService.updateUser(userId, request);
         log.info("管理员更新用户: userId={}, nickname={}", userId, user.nickname());
+        auditEventPublisher.record(currentUserId(), "用户管理", "更新用户", "USER", userId,
+            "更新用户 userId=" + userId + "，active=" + user.active());
         return user;
     }
 
@@ -76,23 +84,26 @@ public class AdminUserController {
     public void deleteUser(@PathVariable("userId") String userId) {
         userService.deactivate(userId);
         log.info("管理员禁用用户: userId={}", userId);
+        auditEventPublisher.record(currentUserId(), "用户管理", "禁用用户", "USER", userId,
+            "禁用用户 userId=" + userId);
     }
 
     @PostMapping("/{userId}/reset-password")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> resetPassword(@PathVariable("userId") String userId) {
-        try {
-            ResetPasswordResult result = userService.resetPassword(userId);
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "密码重置成功");
-            response.put("userId", result.getUserId());
-            response.put("newPassword", result.getNewPassword());
-            log.info("管理员重置用户密码: userId={}", userId);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(response);
-        }
+        ResetPasswordResult result = userService.resetPassword(userId);
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "密码重置成功");
+        response.put("userId", result.getUserId());
+        response.put("newPassword", result.getNewPassword());
+        log.info("管理员重置用户密码: userId={}", userId);
+        auditEventPublisher.record(currentUserId(), "用户管理", "重置登录凭证", "USER", userId,
+            "重置登录凭证 userId=" + userId + "，临时凭证已发放给管理员");
+        return ResponseEntity.ok(response);
+    }
+
+    private String currentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication == null ? null : authentication.getName();
     }
 }

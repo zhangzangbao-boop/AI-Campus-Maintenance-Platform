@@ -49,6 +49,14 @@ internal:
   service:
     secret: ${INTERNAL_SERVICE_SECRET:}
 
+# Feign 超时配置：AI/配置/审计等外部服务失败不能影响主业务
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 2000
+        readTimeout: 3000
+
 # Actuator 配置
 management:
   endpoints:

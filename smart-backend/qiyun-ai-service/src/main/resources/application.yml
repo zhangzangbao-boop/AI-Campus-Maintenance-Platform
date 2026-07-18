@@ -40,6 +40,14 @@ internal:
   service:
     secret: ${INTERNAL_SERVICE_SECRET:}
 
+# Feign 超时配置：规则服务不可用时快速降级到默认规则
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 2000
+        readTimeout: 3000
+
 ops:
   service:
     base-url: ${OPS_SERVICE_BASE_URL:http://localhost:9005}

@@ -81,35 +81,18 @@ public class BackupService {
             String host = extractHost(datasourceUrl);
             String port = extractPort(datasourceUrl);
 
-            // 使用ProcessBuilder构建命令，避免密码暴露在命令行
-            ProcessBuilder processBuilder;
-            if (System.getProperty("os.name").toLowerCase().contains("windows")) {
-                // Windows系统
-                processBuilder = new ProcessBuilder(
-                    "mysqldump",
-                    "-h", host,
-                    "-P", port,
-                    "-u", datasourceUsername,
-                    "-p" + datasourcePassword, // Windows下密码直接跟在-p后面
-                    "--single-transaction",
-                    "--routines",
-                    "--triggers",
-                    DB_NAME
-                );
-            } else {
-                // Linux/Mac系统
-                processBuilder = new ProcessBuilder(
-                    "mysqldump",
-                    "-h", host,
-                    "-P", port,
-                    "-u", datasourceUsername,
-                    "-p" + datasourcePassword,
-                    "--single-transaction",
-                    "--routines",
-                    "--triggers",
-                    DB_NAME
-                );
-            }
+            // 使用 MYSQL_PWD 环境变量传递密码，避免明文密码出现在进程命令行参数中
+            ProcessBuilder processBuilder = new ProcessBuilder(
+                "mysqldump",
+                "-h", host,
+                "-P", port,
+                "-u", datasourceUsername,
+                "--single-transaction",
+                "--routines",
+                "--triggers",
+                DB_NAME
+            );
+            applyDatabasePassword(processBuilder);
 
             // 重定向输出到文件
             processBuilder.redirectOutput(backupFile.toFile());
@@ -128,7 +111,8 @@ public class BackupService {
                     while ((line = reader.readLine()) != null) {
                         error.append(line).append("\n");
                     }
-                    throw new BusinessException("备份失败: " + error.toString());
+                    log.error("数据库备份命令执行失败: {}", error);
+                    throw new BusinessException("备份失败，请检查数据库连接和备份工具配置");
                 }
             }
 
@@ -154,7 +138,7 @@ public class BackupService {
             throw e;
         } catch (Exception e) {
             log.error("备份过程中发生错误", e);
-            throw new BusinessException("备份失败: " + e.getMessage());
+            throw new BusinessException("备份失败，请稍后重试或联系管理员");
         }
     }
 
@@ -170,35 +154,23 @@ public class BackupService {
                 BackupDto safetyBackup = performBackup();
                 log.info("恢复前已创建保护备份: {}", safetyBackup.fileName());
             } catch (Exception e) {
-                throw new BusinessException("恢复前创建保护备份失败，已取消恢复操作: " + e.getMessage());
+                log.error("恢复前创建保护备份失败，已取消恢复操作", e);
+                throw new BusinessException("恢复前创建保护备份失败，已取消恢复操作");
             }
 
             String host = extractHost(datasourceUrl);
             String port = extractPort(datasourceUrl);
 
-            // 使用ProcessBuilder构建恢复命令
-            ProcessBuilder processBuilder;
-            if (System.getProperty("os.name").toLowerCase().contains("windows")) {
-                // Windows系统 - 使用PowerShell或cmd执行
-                // 由于Windows下输入重定向复杂，使用cmd /c执行完整命令
-                String command = String.format(
-                    "mysql -h%s -P%s -u%s -p%s %s < \"%s\"",
-                    host, port, datasourceUsername, datasourcePassword, DB_NAME, backupFile.toAbsolutePath()
-                );
-                processBuilder = new ProcessBuilder("cmd.exe", "/c", command);
-            } else {
-                // Linux/Mac系统
-                processBuilder = new ProcessBuilder(
-                    "mysql",
-                    "-h", host,
-                    "-P", port,
-                    "-u", datasourceUsername,
-                    "-p" + datasourcePassword,
-                    DB_NAME
-                );
-                // 重定向输入从备份文件读取
-                processBuilder.redirectInput(backupFile.toFile());
-            }
+            // 使用 MYSQL_PWD 环境变量传递密码，并通过标准输入读取备份文件
+            ProcessBuilder processBuilder = new ProcessBuilder(
+                "mysql",
+                "-h", host,
+                "-P", port,
+                "-u", datasourceUsername,
+                DB_NAME
+            );
+            applyDatabasePassword(processBuilder);
+            processBuilder.redirectInput(backupFile.toFile());
 
             processBuilder.redirectErrorStream(true);
             Process process = processBuilder.start();
@@ -214,7 +186,8 @@ public class BackupService {
                     while ((line = reader.readLine()) != null) {
                         error.append(line).append("\n");
                     }
-                    throw new BusinessException("恢复失败: " + error.toString());
+                    log.error("数据库恢复命令执行失败: {}", error);
+                    throw new BusinessException("恢复失败，请检查备份文件和数据库连接配置");
                 }
             }
 
@@ -223,7 +196,13 @@ public class BackupService {
             throw e;
         } catch (Exception e) {
             log.error("恢复过程中发生错误", e);
-            throw new BusinessException("恢复失败: " + e.getMessage());
+            throw new BusinessException("恢复失败，请稍后重试或联系管理员");
+        }
+    }
+
+    private void applyDatabasePassword(ProcessBuilder processBuilder) {
+        if (datasourcePassword != null && !datasourcePassword.isBlank()) {
+            processBuilder.environment().put("MYSQL_PWD", datasourcePassword);
         }
     }
 

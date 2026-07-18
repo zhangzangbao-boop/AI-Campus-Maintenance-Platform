@@ -10,10 +10,12 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+@Slf4j
 @Service
 public class FileStorageService {
 
@@ -54,7 +56,8 @@ public class FileStorageService {
             if (e instanceof BusinessException businessException) {
                 throw businessException;
             }
-            throw new BusinessException("图片保存失败: " + e.getMessage());
+            log.error("图片保存失败: uploadPath={}, error={}", uploadPath, e.getMessage(), e);
+            throw new BusinessException("图片保存失败，请稍后重试");
         }
     }
 
@@ -94,7 +97,8 @@ public class FileStorageService {
         try {
             Files.write(target, file.getBytes());
         } catch (IOException e) {
-            throw new BusinessException("图片保存失败: " + e.getMessage());
+            log.error("图片写入失败: target={}, error={}", target, e.getMessage(), e);
+            throw new BusinessException("图片保存失败，请稍后重试");
         }
         return "/uploads/" + filename;
     }
@@ -181,7 +185,8 @@ public class FileStorageService {
             }
             return false;
         } catch (IOException e) {
-            throw new BusinessException("图片读取失败: " + e.getMessage());
+            log.error("图片读取失败: filename={}, error={}", file.getOriginalFilename(), e.getMessage(), e);
+            throw new BusinessException("图片读取失败，请重新选择图片后再试");
         }
     }
 }

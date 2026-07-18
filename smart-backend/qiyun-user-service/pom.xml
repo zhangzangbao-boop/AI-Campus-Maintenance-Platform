@@ -49,6 +49,18 @@
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
 
+        <!-- OpenFeign -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+
+        <!-- Spring Cloud Loadbalancer (required for Feign) -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+        </dependency>
+
         <!-- 参数校验 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

@@ -1,6 +1,7 @@
 package com.qiyun.opsservice.controller;
 
 import com.qiyun.opsservice.dto.BackupDto;
+import com.qiyun.opsservice.service.AuditLogService;
 import com.qiyun.opsservice.service.BackupService;
 import java.util.HashMap;
 import java.util.List;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class BackupController {
 
     private final BackupService backupService;
+    private final AuditLogService auditLogService;
 
     /**
      * 创建数据库备份
@@ -34,11 +36,15 @@ public class BackupController {
         log.info("管理员请求创建数据库备份");
         try {
             BackupDto backup = backupService.performBackup();
+            auditLogService.record("备份恢复", "创建备份", "BACKUP", backup.fileName(),
+                "创建数据库备份 fileName=" + backup.fileName() + "，size=" + backup.fileSize());
             return ResponseEntity.ok(success(backup, "备份创建成功"));
         } catch (Exception e) {
             log.error("创建备份失败", e);
+            auditLogService.record("备份恢复", "创建备份", "BACKUP", null,
+                "创建数据库备份失败", null, false);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(error("备份失败: " + e.getMessage()));
+                .body(error("备份失败，请稍后重试或联系管理员"));
         }
     }
 
@@ -55,7 +61,7 @@ public class BackupController {
         } catch (Exception e) {
             log.error("获取备份列表失败", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(error("获取备份列表失败: " + e.getMessage()));
+                .body(error("获取备份列表失败，请稍后重试"));
         }
     }
 
@@ -72,7 +78,7 @@ public class BackupController {
         } catch (Exception e) {
             log.error("获取备份状态失败", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(error("获取备份状态失败: " + e.getMessage()));
+                .body(error("获取备份状态失败，请稍后重试"));
         }
     }
 
@@ -87,11 +93,15 @@ public class BackupController {
         log.info("管理员请求恢复数据库: fileName={}", fileName);
         try {
             backupService.restoreBackup(fileName);
+            auditLogService.record("备份恢复", "恢复备份", "BACKUP", fileName,
+                "恢复数据库备份 fileName=" + fileName);
             return ResponseEntity.ok(success(null, "数据库恢复成功"));
         } catch (Exception e) {
             log.error("恢复数据库失败", e);
+            auditLogService.record("备份恢复", "恢复备份", "BACKUP", fileName,
+                "恢复数据库备份失败 fileName=" + fileName, null, false);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(error("恢复失败: " + e.getMessage()));
+                .body(error("恢复失败，请确认备份文件可用或联系管理员"));
         }
     }
 
@@ -104,11 +114,15 @@ public class BackupController {
         log.info("管理员请求删除备份文件: fileName={}", fileName);
         try {
             backupService.deleteBackup(fileName);
+            auditLogService.record("备份恢复", "删除备份", "BACKUP", fileName,
+                "删除数据库备份 fileName=" + fileName);
             return ResponseEntity.ok(success(null, "删除成功"));
         } catch (Exception e) {
             log.error("删除备份文件失败", e);
+            auditLogService.record("备份恢复", "删除备份", "BACKUP", fileName,
+                "删除数据库备份失败 fileName=" + fileName, null, false);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(error("删除失败: " + e.getMessage()));
+                .body(error("删除失败，请稍后重试或联系管理员"));
         }
     }
 

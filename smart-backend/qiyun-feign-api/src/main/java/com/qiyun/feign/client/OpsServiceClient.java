@@ -40,6 +40,15 @@ public interface OpsServiceClient {
     Map<String, Object> getRepairRuleConfig(@RequestHeader("X-Internal-Secret") String secret);
 
     /**
+     * 记录跨服务管理员审计事件。
+     */
+    @PostMapping("/audit-logs")
+    Map<String, Object> recordAuditLog(
+        @RequestHeader("X-Internal-Secret") String secret,
+        @RequestBody AuditEventRequest request
+    );
+
+    /**
      * 单用户推送请求
      */
     record NotificationPushRequest(
@@ -57,5 +66,18 @@ public interface OpsServiceClient {
         String title,
         String content,
         Long relatedOrderId
+    ) {}
+
+    /**
+     * 跨服务审计请求。
+     */
+    record AuditEventRequest(
+        String actorId,
+        String module,
+        String action,
+        String targetType,
+        String targetId,
+        String detail,
+        Boolean success
     ) {}
 }

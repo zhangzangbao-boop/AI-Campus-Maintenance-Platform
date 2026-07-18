@@ -54,6 +54,7 @@ public class TicketService {
     private final RatingDtoMapper ratingDtoMapper;
     private final RepairRuleConfigService repairRuleConfigService;
     private final HistoricalRepairCaseService historicalRepairCaseService;
+    private final AuditEventPublisher auditEventPublisher;
 
     @Transactional
     public TicketDetailDto createTicket(TicketCreateRequest request, List<MultipartFile> images) {
@@ -134,6 +135,10 @@ public class TicketService {
                     "工单 #" + ticket.getTicketId() + " 已转派给 " + safeName(staff) + " 继续处理。", ticket);
             }
             notifyTicketAssigned(ticket, staff);
+            auditEventPublisher.record(operator.getUserId(), "工单管理", "派单/转派", "REPAIR_TICKET",
+                String.valueOf(ticket.getTicketId()),
+                "工单#" + ticket.getTicketId() + " 指派给维修工 " + staff.getUserId()
+                    + "，原维修工=" + (oldStaff == null ? "无" : oldStaff.getUserId()));
             return toDetailDto(ticket);
         } catch (ObjectOptimisticLockingFailureException e) {
             throw new BusinessException("工单已被其他用户修改，请刷新后重试");
@@ -177,6 +182,9 @@ public class TicketService {
             ticket.setStatus(newStatus);
             appendStatusLog(ticket, oldStatus, newStatus, operator);
             triggerCompletionSummaryIfNeeded(ticket);
+            auditEventPublisher.record(operator.getUserId(), "工单管理", "修改状态", "REPAIR_TICKET",
+                String.valueOf(ticket.getTicketId()),
+                "工单#" + ticket.getTicketId() + " 状态 " + oldStatus + " -> " + newStatus);
             return toDetailDto(ticket);
         } catch (ObjectOptimisticLockingFailureException e) {
             throw new BusinessException("工单已被其他用户修改，请刷新后重试");
@@ -256,7 +264,11 @@ public class TicketService {
     public AiTicketAnalysisViewDto correctAiAnalysis(Long ticketId, AiTicketAnalysisCorrectionRequest request, String operatorId) {
         ticketRepository.findById(ticketId)
             .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "Ticket not found"));
-        return aiAnalysisIntegrationService.correctAnalysis(ticketId, request, operatorId);
+        AiTicketAnalysisViewDto analysis = aiAnalysisIntegrationService.correctAnalysis(ticketId, request, operatorId);
+        auditEventPublisher.record(operatorId, "AI人工修正", "修正工单AI分析", "REPAIR_TICKET",
+            String.valueOf(ticketId),
+            "工单#" + ticketId + " AI分析已人工修正，原因=" + request.reason());
+        return analysis;
     }
 
     @Transactional(readOnly = true)
@@ -419,6 +431,14 @@ public class TicketService {
     }
 
     @Transactional(readOnly = true)
+    public int rebuildHistoricalCaseIndex(String operatorId) {
+        int count = historicalRepairCaseService.rebuildIndex();
+        auditEventPublisher.record(operatorId, "历史案例索引", "重建历史维修案例索引", "HISTORICAL_REPAIR_CASE",
+            null, "重建历史维修案例向量索引，同步数量=" + count);
+        return count;
+    }
+
+    @Transactional(readOnly = true)
     public StaffDashboardDto getStaffDashboard(String staffId) {
         Long pendingCount = ticketRepository.countByStaffIdAndStatus(staffId, "WAITING_ACCEPT");
         Long inProgressCount = ticketRepository.countByStaffIdAndStatus(staffId, "IN_PROGRESS");
@@ -498,6 +518,8 @@ public class TicketService {
             .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "工单不存在"));
         ticket.setRepairNotes(repairNotes);
         ticketRepository.save(ticket);
+        auditEventPublisher.record(operatorId, "工单管理", "修改维修备注", "REPAIR_TICKET",
+            String.valueOf(ticketId), "工单#" + ticketId + " 维修备注已更新");
         return toDetailDto(ticket);
     }
 
@@ -507,6 +529,8 @@ public class TicketService {
             .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "工单不存在"));
         ticket.setProcessNotes(processNotes);
         ticketRepository.save(ticket);
+        auditEventPublisher.record(operatorId, "工单管理", "修改处理备注", "REPAIR_TICKET",
+            String.valueOf(ticketId), "工单#" + ticketId + " 处理备注已更新");
         return toDetailDto(ticket);
     }
 
@@ -516,6 +540,8 @@ public class TicketService {
             .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "工单不存在"));
         ticket.setEstimatedCompletionTime(estimatedTime);
         ticketRepository.save(ticket);
+        auditEventPublisher.record(operatorId, "工单管理", "修改预计完成时间", "REPAIR_TICKET",
+            String.valueOf(ticketId), "工单#" + ticketId + " 预计完成时间已更新");
         return toDetailDto(ticket);
     }
 

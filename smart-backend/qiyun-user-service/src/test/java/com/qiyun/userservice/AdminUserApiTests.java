@@ -692,7 +692,7 @@ class AdminUserApiTests {
 
             mockMvc.perform(post("/api/admin/users/nonexistent999/reset-password")
                             .header("Authorization", "Bearer " + adminToken))
-                    .andExpect(status().isBadRequest());
+                    .andExpect(status().isNotFound());
         }
     }
 }

@@ -660,7 +660,7 @@ public class TicketController {
     @PostMapping("/admin/repair-orders/history-cases/rebuild-index")
     @PreAuthorize("hasRole('ADMIN')")
     public Map<String, Object> rebuildHistoricalCaseIndex() {
-        int count = ticketService.rebuildHistoricalCaseIndex();
+        int count = ticketService.rebuildHistoricalCaseIndex(currentUserId());
         return success("历史维修案例索引重建完成", Map.of("syncedCount", count));
     }
 

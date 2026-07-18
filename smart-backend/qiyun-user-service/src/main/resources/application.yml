@@ -35,6 +35,19 @@ jwt:
   secret: ${JWT_SECRET:}
   expiration-ms: ${JWT_EXPIRATION_MS:604800000}
 
+# 内部服务密钥
+internal:
+  service:
+    secret: ${INTERNAL_SERVICE_SECRET:}
+
+# Feign 超时配置：内部审计失败不能拖垮用户主流程
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 2000
+        readTimeout: 3000
+
 # Actuator 配置
 management:
   endpoints:

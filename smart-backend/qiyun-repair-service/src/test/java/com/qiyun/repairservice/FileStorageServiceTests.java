@@ -15,6 +15,9 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 class FileStorageServiceTests {
 
     private FileStorageService service;
@@ -92,6 +95,21 @@ class FileStorageServiceTests {
         assertThrows(BusinessException.class, () -> service.storeImages(List.of(file("big.png", "image/png", bytes))));
     }
 
+
+    @Test
+    void readFailureReturnsSafeMessage() throws Exception {
+        MultipartFile file = mock(MultipartFile.class);
+        when(file.isEmpty()).thenReturn(false);
+        when(file.getSize()).thenReturn(12L);
+        when(file.getOriginalFilename()).thenReturn("broken.png");
+        when(file.getContentType()).thenReturn("image/png");
+        when(file.getBytes()).thenThrow(new java.io.IOException("C:\\secret\\raw-stack"));
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.storeImages(List.of(file)));
+
+        assertThat(exception.getMessage()).isEqualTo("图片读取失败，请重新选择图片后再试");
+        assertThat(exception.getMessage()).doesNotContain("C:\\secret");
+    }
     private MockMultipartFile file(String name, String contentType, byte[] bytes) {
         return new MockMultipartFile("images", name, contentType, bytes);
     }
@@ -104,4 +122,3 @@ class FileStorageServiceTests {
         };
     }
 }
-

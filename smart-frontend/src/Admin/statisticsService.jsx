@@ -391,6 +391,21 @@ export const statisticsService = {
     }
   },
 
+  getFaultTrends: async () => {
+    try {
+      const data = await handleApiResponse(() => api.admin.getStatsFaultTrends());
+      return normalizeFaultTrendData(data);
+    } catch (error) {
+      console.error('获取高频故障趋势预警失败:', error);
+      return { trends: [], alerts: [], generatedAt: null, sevenDayThreshold: 3, thirtyDayThreshold: 6 };
+    }
+  },
+
+  refreshFaultTrends: async () => {
+    const data = await handleApiResponse(() => api.admin.refreshStatsFaultTrends());
+    return normalizeFaultTrendData(data);
+  },
+
   // 新增：获取SLA超时告警统计
   getSlaOverview: async () => {
     try {
@@ -437,3 +452,32 @@ export const statisticsService = {
     }
   },
 };
+
+const normalizeFaultTrendData = (data) => ({
+  trends: Array.isArray(data?.trends) ? data.trends.map(item => ({
+    location: item.location || '未知位置',
+    category: item.category || '未分类',
+    periodDays: Number(item.periodDays || 0),
+    ticketCount: Number(item.ticketCount || 0),
+    previousCount: Number(item.previousCount || 0),
+    growthRate: Number(item.growthRate || 0),
+    riskLevel: item.riskLevel || 'LOW',
+    alertTriggered: Boolean(item.alertTriggered),
+  })) : [],
+  alerts: Array.isArray(data?.alerts) ? data.alerts.map(item => ({
+    id: item.id,
+    location: item.location || '未知位置',
+    category: item.category || '未分类',
+    periodDays: Number(item.periodDays || 0),
+    ticketCount: Number(item.ticketCount || 0),
+    previousCount: Number(item.previousCount || 0),
+    growthRate: Number(item.growthRate || 0),
+    riskLevel: item.riskLevel || 'LOW',
+    aiReason: item.aiReason || '',
+    suggestion: item.suggestion || '',
+    lastDetectedAt: item.lastDetectedAt || null,
+  })) : [],
+  generatedAt: data?.generatedAt || null,
+  sevenDayThreshold: Number(data?.sevenDayThreshold || 3),
+  thirtyDayThreshold: Number(data?.thirtyDayThreshold || 6),
+});

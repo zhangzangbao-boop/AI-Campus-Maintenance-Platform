@@ -377,6 +377,13 @@ const api = {
     // 新增：获取校园设施健康指数
     getStatsFacilityHealth: () => request("/admin/stats/facility-health"),
 
+    getStatsFaultTrends: () => request("/admin/stats/fault-trends"),
+
+    refreshStatsFaultTrends: () =>
+      request("/admin/stats/fault-trends/refresh", {
+        method: "POST",
+      }),
+
     // 新增：运维中心
     getAuditLogs: (params) => request(`/admin/audit-logs${toQueryString(params)}`),
 

@@ -51,6 +51,13 @@ const DataAnalysis = () => {
     suggestions: [],
     generatedAt: null,
   });
+  const [faultTrends, setFaultTrends] = useState({
+    trends: [],
+    alerts: [],
+    generatedAt: null,
+    sevenDayThreshold: 3,
+    thirtyDayThreshold: 6,
+  });
   const [overallStats, setOverallStats] = useState({
     totalRepairs: 0,
     avgProcessingTime: '暂无数据',
@@ -74,7 +81,7 @@ const DataAnalysis = () => {
 
     try {
       // 新增：获取月度统计数据
-      const [categoryStats, locationStats, ratingStats, statusStats, monthlyStats, overallStatsData, hotspotStats, facilityHealthStats] = await Promise.all([
+      const [categoryStats, locationStats, ratingStats, statusStats, monthlyStats, overallStatsData, hotspotStats, facilityHealthStats, faultTrendStats] = await Promise.all([
         statisticsService.getRepairCategoryStats(),
         statisticsService.getLocationRepairStats(),
         statisticsService.getRepairmanRatingStats(),
@@ -82,7 +89,8 @@ const DataAnalysis = () => {
         statisticsService.getMonthlyStats(), // 新增：获取月度统计
         statisticsService.getOverallStats(),
         statisticsService.getHotspotAnalysis(),
-        statisticsService.getFacilityHealth()
+        statisticsService.getFacilityHealth(),
+        statisticsService.getFaultTrends()
       ]);
 
       console.log('========================================');
@@ -104,6 +112,7 @@ const DataAnalysis = () => {
       setOverallStats(overallStatsData);
       setHotspotData(hotspotStats);
       setFacilityHealth(facilityHealthStats);
+      setFaultTrends(faultTrendStats);
 
       // 显示数据来源提示
       const dataSourceInfo = `
@@ -508,6 +517,23 @@ const DataAnalysis = () => {
         <Col xs={24}>
           <Card
             className="analytics-chart-card analytics-composite-card"
+            title="高频故障趋势与AI预警"
+            variant="borderless"
+            extra={
+              <div style={{ fontSize: '12px', color: '#666' }}>
+                近7天/30天按地点和分类识别异常增长
+              </div>
+            }
+          >
+            <FaultTrendAlertPanel data={faultTrends} onChange={setFaultTrends} />
+          </Card>
+        </Col>
+      </Row>
+
+      <Row gutter={[16, 16]} style={{ marginTop: '16px' }}>
+        <Col xs={24}>
+          <Card
+            className="analytics-chart-card analytics-composite-card"
             title="校园设施健康指数"
             variant="borderless"
             extra={
@@ -538,6 +564,130 @@ const DataAnalysis = () => {
           </Card>
         </Col>
       </Row>
+    </div>
+  );
+};
+
+const FaultTrendAlertPanel = ({ data, onChange }) => {
+  const [refreshing, setRefreshing] = useState(false);
+  const trends = data?.trends || [];
+  const alerts = data?.alerts || [];
+
+  const chartData = trends.map(item => ({
+    scope: `${item.location}/${item.category}`,
+    period: `${item.periodDays}天`,
+    count: item.ticketCount,
+  }));
+
+  const riskColor = (risk) => ({
+    CRITICAL: 'red',
+    HIGH: 'volcano',
+    MEDIUM: 'orange',
+    LOW: 'green',
+  }[risk] || 'default');
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      const nextData = await statisticsService.refreshFaultTrends();
+      onChange(nextData);
+      message.success('高频故障趋势预警已刷新');
+    } catch (error) {
+      message.error(error.message || '刷新高频故障趋势失败');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const config = {
+    data: chartData,
+    xField: 'period',
+    yField: 'count',
+    seriesField: 'scope',
+    smooth: true,
+    height: 260,
+    point: { size: 4 },
+    tooltip: {
+      formatter: (datum) => ({ name: datum.scope, value: `${datum.count} 单` }),
+    },
+    yAxis: {
+      label: { formatter: (text) => `${text}单` },
+    },
+  };
+
+  const columns = [
+    { title: '地点', dataIndex: 'location', key: 'location', ellipsis: true },
+    { title: '分类', dataIndex: 'category', key: 'category', width: 110 },
+    { title: '周期', dataIndex: 'periodDays', key: 'periodDays', width: 80, render: (days) => `${days}天` },
+    { title: '工单数', dataIndex: 'ticketCount', key: 'ticketCount', width: 90, render: (value) => `${value}单` },
+    { title: '增长率', dataIndex: 'growthRate', key: 'growthRate', width: 100, render: (value) => `${value}%` },
+    {
+      title: '风险',
+      dataIndex: 'riskLevel',
+      key: 'riskLevel',
+      width: 100,
+      render: (risk) => <Tag color={riskColor(risk)}>{risk}</Tag>,
+    },
+    { title: '原因解释', dataIndex: 'aiReason', key: 'aiReason', ellipsis: true },
+    { title: '处置建议', dataIndex: 'suggestion', key: 'suggestion', ellipsis: true },
+    {
+      title: '检测时间',
+      dataIndex: 'lastDetectedAt',
+      key: 'lastDetectedAt',
+      width: 160,
+      render: (value) => value ? new Date(value).toLocaleString() : '-',
+    },
+  ];
+
+  return (
+    <div>
+      <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+        <Col xs={12} md={6}>
+          <Card size="small" variant="borderless" className="analysis-sub-card">
+            <Statistic title="趋势组合" value={trends.length} suffix="组" />
+          </Card>
+        </Col>
+        <Col xs={12} md={6}>
+          <Card size="small" variant="borderless" className="analysis-sub-card">
+            <Statistic title="有效预警" value={alerts.length} suffix="条" valueStyle={{ color: alerts.length ? '#dc2626' : '#16a34a' }} />
+          </Card>
+        </Col>
+        <Col xs={12} md={6}>
+          <Card size="small" variant="borderless" className="analysis-sub-card">
+            <Statistic title="7天阈值" value={data?.sevenDayThreshold || 3} suffix="单" />
+          </Card>
+        </Col>
+        <Col xs={12} md={6}>
+          <Card size="small" variant="borderless" className="analysis-sub-card">
+            <Statistic title="30天阈值" value={data?.thirtyDayThreshold || 6} suffix="单" />
+          </Card>
+        </Col>
+      </Row>
+
+      <Space style={{ marginBottom: 12 }} wrap>
+        <Button type="primary" icon={<ReloadOutlined />} onClick={handleRefresh} loading={refreshing}>
+          手动刷新预警
+        </Button>
+        <span style={{ color: '#666', fontSize: 12 }}>
+          7天≥3单且增长≥50%；30天≥6单且增长≥30%；同地点/分类/周期自动去重
+        </span>
+      </Space>
+
+      {chartData.length > 0 ? (
+        <Line {...config} />
+      ) : (
+        <Alert type="success" showIcon message="暂无高频故障趋势" description="当前近7天和近30天未发现达到预警阈值的地点/分类组合。" />
+      )}
+
+      <Table
+        style={{ marginTop: 16 }}
+        size="small"
+        dataSource={alerts}
+        rowKey={(record) => record.id}
+        columns={columns}
+        pagination={{ pageSize: 6 }}
+        locale={{ emptyText: '暂无高频故障预警' }}
+      />
     </div>
   );
 };

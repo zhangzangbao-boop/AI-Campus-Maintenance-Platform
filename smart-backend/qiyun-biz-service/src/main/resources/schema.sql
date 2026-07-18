@@ -9,6 +9,7 @@ DROP TABLE IF EXISTS `repair_order_comment`;
 DROP TABLE IF EXISTS `repair_process_record_image`;
 DROP TABLE IF EXISTS `repair_process_record`;
 DROP TABLE IF EXISTS `campus_announcement`;
+DROP TABLE IF EXISTS `fault_trend_alert`;
 DROP TABLE IF EXISTS `sys_notification`;
 DROP TABLE IF EXISTS `ai_ticket_analysis`;
 DROP TABLE IF EXISTS `repair_knowledge_base`;
@@ -171,6 +172,24 @@ CREATE TABLE `campus_announcement` (
     `updated_at` DATETIME NOT NULL,
     INDEX `idx_announcement_status_time` (`status`, `publish_time`, `expire_time`),
     INDEX `idx_announcement_pinned` (`pinned`)
+);
+CREATE TABLE `fault_trend_alert` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+    `location` VARCHAR(200) NOT NULL,
+    `category_key` VARCHAR(80) NOT NULL,
+    `period_days` INT NOT NULL,
+    `ticket_count` BIGINT NOT NULL,
+    `previous_count` BIGINT NOT NULL,
+    `growth_rate` DOUBLE NOT NULL,
+    `risk_level` VARCHAR(20) NOT NULL,
+    `ai_reason` TEXT,
+    `suggestion` TEXT,
+    `last_detected_at` DATETIME NOT NULL,
+    `created_at` DATETIME NOT NULL,
+    `updated_at` DATETIME NOT NULL,
+    UNIQUE KEY `uk_fault_trend_alert_scope` (`location`, `category_key`, `period_days`),
+    INDEX `idx_fault_trend_risk` (`risk_level`),
+    INDEX `idx_fault_trend_detected` (`last_detected_at`)
 );
 CREATE TABLE `sys_notification` (
     `id` BIGINT AUTO_INCREMENT PRIMARY KEY,

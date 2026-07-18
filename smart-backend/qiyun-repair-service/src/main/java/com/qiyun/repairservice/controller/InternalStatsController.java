@@ -204,6 +204,62 @@ public class InternalStatsController {
     }
 
     /**
+     * 获取按地点和分类聚合的高频故障趋势
+     */
+    @GetMapping("/stats/fault-trends")
+    public ResponseEntity<Map<String, Object>> getFaultTrendStats(
+            @RequestParam(value = "days", defaultValue = "7") int days) {
+        int safeDays = days == 30 ? 30 : 7;
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime recentStart = now.minusDays(safeDays);
+        LocalDateTime previousStart = now.minusDays(safeDays * 2L);
+
+        List<Map<String, Object>> trendData = ticketRepository.findFaultTrendStats(recentStart, previousStart).stream()
+            .map(row -> {
+                Map<String, Object> item = new HashMap<>();
+                long recentCount = toLong(row[2]);
+                long previousCount = toLong(row[3]);
+                item.put("location", row[0] == null ? "未知位置" : String.valueOf(row[0]));
+                item.put("category", row[1] == null ? "未分类" : String.valueOf(row[1]));
+                item.put("periodDays", safeDays);
+                item.put("ticketCount", recentCount);
+                item.put("previousCount", previousCount);
+                item.put("growthRate", calculateGrowthRate(recentCount, previousCount));
+                item.put("lastCreatedAt", row[4]);
+                return item;
+            })
+            .collect(Collectors.toList());
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("periodDays", safeDays);
+        payload.put("generatedAt", now);
+        payload.put("items", trendData);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("code", 200);
+        result.put("message", "获取成功");
+        result.put("data", payload);
+        return ResponseEntity.ok(result);
+    }
+
+    private long toLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value == null) {
+            return 0L;
+        }
+        return Long.parseLong(String.valueOf(value));
+    }
+
+    private double calculateGrowthRate(long recentCount, long previousCount) {
+        if (previousCount <= 0) {
+            return recentCount > 0 ? 100.0 : 0.0;
+        }
+        return Math.round(((recentCount - previousCount) * 10000.0 / previousCount)) / 100.0;
+    }
+
+    /**
      * 获取评价列表（分页）
      */
     @GetMapping("/feedbacks")

@@ -174,6 +174,27 @@ public interface TicketRepository extends JpaRepository<RepairTicket, Long> {
     )
     List<Object[]> findCategoryProcessingTimeStats();
 
+    @Query(
+        value = "SELECT " +
+                "  location, " +
+                "  category_key, " +
+                "  SUM(CASE WHEN created_at >= :recentStart THEN 1 ELSE 0 END) AS recent_count, " +
+                "  SUM(CASE WHEN created_at < :recentStart AND created_at >= :previousStart THEN 1 ELSE 0 END) AS previous_count, " +
+                "  MAX(created_at) AS last_created_at " +
+                "FROM repair_order " +
+                "WHERE location IS NOT NULL " +
+                "  AND TRIM(location) <> '' " +
+                "  AND category_key IS NOT NULL " +
+                "  AND created_at >= :previousStart " +
+                "  AND (is_deleted IS NULL OR is_deleted = false) " +
+                "GROUP BY location, category_key " +
+                "HAVING recent_count > 0 " +
+                "ORDER BY recent_count DESC, (recent_count - previous_count) DESC, last_created_at DESC",
+        nativeQuery = true
+    )
+    List<Object[]> findFaultTrendStats(@Param("recentStart") LocalDateTime recentStart,
+                                       @Param("previousStart") LocalDateTime previousStart);
+
     // 使用悲观锁查询工单（用于关键操作）
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT rt FROM RepairTicket rt WHERE rt.ticketId = :id")

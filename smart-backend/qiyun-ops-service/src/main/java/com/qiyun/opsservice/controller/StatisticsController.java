@@ -1,12 +1,15 @@
 package com.qiyun.opsservice.controller;
 
+import com.qiyun.opsservice.service.FaultTrendAlertService;
 import com.qiyun.opsservice.service.StatisticsService;
+import java.util.HashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -22,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class StatisticsController {
 
     private final StatisticsService statisticsService;
+    private final FaultTrendAlertService faultTrendAlertService;
 
     /**
      * 获取工单状态统计
@@ -111,5 +115,33 @@ public class StatisticsController {
     public Map<String, Object> getFacilityHealth(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization) {
         log.info("ADMIN请求获取设施健康数据");
         return statisticsService.getFacilityHealth(authorization);
+    }
+
+    /**
+     * 获取高频故障趋势和预警
+     */
+    @GetMapping("/fault-trends")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Map<String, Object> getFaultTrends(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization) {
+        log.info("ADMIN请求获取高频故障趋势预警");
+        return success("获取成功", faultTrendAlertService.dashboard(authorization));
+    }
+
+    /**
+     * 手动刷新高频故障趋势和预警
+     */
+    @PostMapping("/fault-trends/refresh")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Map<String, Object> refreshFaultTrends(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization) {
+        log.info("ADMIN手动刷新高频故障趋势预警");
+        return success("刷新成功", faultTrendAlertService.refresh(authorization));
+    }
+
+    private Map<String, Object> success(String message, Object data) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("code", 200);
+        result.put("message", message);
+        result.put("data", data);
+        return result;
     }
 }

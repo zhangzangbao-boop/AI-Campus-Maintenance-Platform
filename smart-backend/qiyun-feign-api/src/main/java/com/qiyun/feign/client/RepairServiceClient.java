@@ -74,6 +74,15 @@ public interface RepairServiceClient {
     Map<String, Object> getFacilityHealth(@RequestHeader(value = "Authorization", required = false) String authorization);
 
     /**
+     * 获取高频故障趋势统计
+     */
+    @GetMapping("/stats/fault-trends")
+    Map<String, Object> getFaultTrendStats(
+        @RequestHeader(value = "Authorization", required = false) String authorization,
+        @RequestParam("days") int days
+    );
+
+    /**
      * 获取评价列表（分页）
      */
     @GetMapping("/feedbacks")

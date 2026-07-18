@@ -99,14 +99,14 @@ class BackupApiTests {
     void pathTraversalIsBlocked() throws Exception {
         mockMvc.perform(delete("/api/admin/backup/..%2F..%2F..%2Fetc%2Fpasswd")
                 .header("Authorization", "Bearer " + adminToken))
-            .andExpect(status().is5xxServerError());
+            .andExpect(status().isBadRequest());
     }
 
     @Test
     void pathTraversalWithBackslashIsBlocked() throws Exception {
         mockMvc.perform(delete("/api/admin/backup/..\\..\\..\\windows\\system32\\config\\sam")
                 .header("Authorization", "Bearer " + adminToken))
-            .andExpect(status().is5xxServerError());
+            .andExpect(status().isBadRequest());
     }
 
     @Test

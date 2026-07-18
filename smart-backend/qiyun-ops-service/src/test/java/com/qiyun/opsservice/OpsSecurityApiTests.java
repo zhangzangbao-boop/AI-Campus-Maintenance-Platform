@@ -143,16 +143,16 @@ class OpsSecurityApiTests {
     }
 
     @Test
-    void knowledgeBaseSearchIsPublic() throws Exception {
+    void knowledgeBaseSearchRequiresAuthentication() throws Exception {
         mockMvc.perform(get("/api/knowledge-base/search")
                 .param("keyword", "test"))
-            .andExpect(status().isOk());
+            .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void knowledgeBaseRecommendIsPublic() throws Exception {
+    void knowledgeBaseRecommendRequiresAuthentication() throws Exception {
         mockMvc.perform(get("/api/knowledge-base/recommend")
                 .param("category", "test"))
-            .andExpect(status().isOk());
+            .andExpect(status().isUnauthorized());
     }
 }

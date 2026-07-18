@@ -1,6 +1,9 @@
 package com.qiyun.opsservice;
 
 import com.qiyun.feign.client.RepairServiceClient;
+import com.qiyun.opsservice.domain.entity.UserReference;
+import com.qiyun.opsservice.domain.enums.UserRole;
+import com.qiyun.opsservice.repository.UserReferenceRepository;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
@@ -36,6 +39,9 @@ class OpsCoreApiTests {
     @MockBean
     private RepairServiceClient repairServiceClient;
 
+    @Autowired
+    private UserReferenceRepository userReferenceRepository;
+
     private String adminToken;
     private String studentToken;
 
@@ -43,6 +49,16 @@ class OpsCoreApiTests {
     void setUp() {
         adminToken = generateToken("admin01", "ADMIN");
         studentToken = generateToken("student01", "STUDENT");
+        ensureUser("admin01", "管理员", UserRole.ADMIN);
+    }
+
+    private void ensureUser(String userId, String nickname, UserRole role) {
+        UserReference user = userReferenceRepository.findById(userId).orElseGet(UserReference::new);
+        user.setUserId(userId);
+        user.setNickname(nickname);
+        user.setRole(role);
+        user.setIsActive(true);
+        userReferenceRepository.save(user);
     }
 
     private String generateToken(String userId, String role) {

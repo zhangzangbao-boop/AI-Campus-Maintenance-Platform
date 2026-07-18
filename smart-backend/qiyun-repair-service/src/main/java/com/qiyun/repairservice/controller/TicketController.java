@@ -5,6 +5,7 @@ import com.qiyun.repairservice.domain.enums.RepairProcessActionType;
 import com.qiyun.repairservice.domain.enums.TicketStatus;
 import com.qiyun.repairservice.dto.AiTicketAnalysisViewDto;
 import com.qiyun.repairservice.dto.CompletionSummaryDto;
+import com.qiyun.repairservice.dto.HistoricalRepairCaseDto;
 import com.qiyun.repairservice.dto.RepairProcessRecordDto;
 import com.qiyun.repairservice.dto.StaffDashboardDto;
 import com.qiyun.repairservice.dto.StaffRecommendationDto;
@@ -185,6 +186,17 @@ public class TicketController {
         }
         CompletionSummaryDto summary = ticketService.regenerateCompletionSummary(id);
         return success("完成总结已重新生成", summary);
+    }
+
+    @GetMapping("/repair-orders/{id}/historical-cases")
+    @PreAuthorize("hasAnyRole('STAFF','ADMIN')")
+    public Map<String, Object> recommendHistoricalCases(@PathVariable("id") Long id) {
+        TicketDetailDto detail = ticketService.getTicketDetail(id);
+        if (hasRole("STAFF") && !hasRole("ADMIN")) {
+            assertStaffOwnsTicket(detail);
+        }
+        List<HistoricalRepairCaseDto> cases = ticketService.recommendHistoricalCases(id);
+        return success("相似维修案例获取成功", cases);
     }
 
     @DeleteMapping("/repair-orders/{id}")
@@ -643,6 +655,13 @@ public class TicketController {
                                                  @Valid @RequestBody AiTicketAnalysisCorrectionRequest request) {
         AiTicketAnalysisViewDto analysis = ticketService.correctAiAnalysis(id, request, currentUserId());
         return success("AI analysis correction saved", analysis);
+    }
+
+    @PostMapping("/admin/repair-orders/history-cases/rebuild-index")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Map<String, Object> rebuildHistoricalCaseIndex() {
+        int count = ticketService.rebuildHistoricalCaseIndex();
+        return success("历史维修案例索引重建完成", Map.of("syncedCount", count));
     }
 
     @PutMapping("/admin/repair-orders/{id}/status")

@@ -3,6 +3,7 @@ package com.qiyun.aiservice.controller;
 import com.qiyun.aiservice.service.ChromaClientService;
 import com.qiyun.aiservice.service.EmbeddingService;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -138,6 +139,106 @@ public class InternalRagController {
         }
     }
 
+    @PostMapping("/repair-cases/{id}")
+    public ResponseEntity<Map<String, Object>> upsertRepairCase(
+            @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
+            @PathVariable("id") Long id,
+            @RequestBody RepairCaseSyncRequest request) {
+
+        if (!validateSecret(secret)) {
+            return ResponseEntity.status(401).body(Map.of("code", 401, "message", "认证失败"));
+        }
+        if (request == null || request.document() == null || request.document().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("code", 400, "message", "历史案例内容不能为空"));
+        }
+        if (!embeddingService.isAvailable()) {
+            return ResponseEntity.status(503).body(Map.of("code", 503, "message", "Embedding 服务不可用"));
+        }
+        if (!chromaClientService.isAvailable() || !chromaClientService.ensureCollection()) {
+            return ResponseEntity.status(503).body(Map.of("code", 503, "message", "Chroma 服务不可用"));
+        }
+
+        float[] embedding = embeddingService.embed(request.document());
+        if (embedding == null || embedding.length == 0 || embedding.length != embeddingService.getDimensions()) {
+            return ResponseEntity.status(500).body(Map.of("code", 500, "message", "生成历史案例向量失败"));
+        }
+
+        String docId = "repair-case-" + id;
+        Map<String, String> metadata = new HashMap<>();
+        metadata.put("type", "repair-case");
+        metadata.put("ticketId", String.valueOf(id));
+        metadata.put("categoryKey", safe(request.categoryKey()));
+        metadata.put("categoryName", safe(request.categoryName()));
+        metadata.put("failureCause", safe(request.failureCause()));
+        metadata.put("repairMethod", safe(request.repairMethod()));
+        metadata.put("materials", safe(request.materials()));
+        metadata.put("result", safe(request.result()));
+
+        boolean success = chromaClientService.updateDocument(docId, request.document(), embedding, metadata);
+        if (success) {
+            return ResponseEntity.ok(Map.of("code", 200, "message", "历史案例向量更新成功", "data", Map.of("id", docId)));
+        }
+        return ResponseEntity.status(500).body(Map.of("code", 500, "message", "历史案例向量更新失败"));
+    }
+
+    @DeleteMapping("/repair-cases/{id}")
+    public ResponseEntity<Map<String, Object>> deleteRepairCase(
+            @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
+            @PathVariable("id") Long id) {
+
+        if (!validateSecret(secret)) {
+            return ResponseEntity.status(401).body(Map.of("code", 401, "message", "认证失败"));
+        }
+
+        boolean success = chromaClientService.deleteDocument("repair-case-" + id);
+        if (success) {
+            return ResponseEntity.ok(Map.of("code", 200, "message", "历史案例向量删除成功"));
+        }
+        return ResponseEntity.status(500).body(Map.of("code", 500, "message", "历史案例向量删除失败"));
+    }
+
+    @PostMapping("/repair-cases/search")
+    public ResponseEntity<Map<String, Object>> searchRepairCases(
+            @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
+            @RequestBody RepairCaseSearchRequest request) {
+
+        if (!validateSecret(secret)) {
+            return ResponseEntity.status(401).body(Map.of("code", 401, "message", "认证失败"));
+        }
+        if (request == null || request.query() == null || request.query().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("code", 400, "message", "检索内容不能为空"));
+        }
+        if (!embeddingService.isAvailable()) {
+            return ResponseEntity.status(503).body(Map.of("code", 503, "message", "Embedding 服务不可用"));
+        }
+        if (!chromaClientService.isAvailable() || !chromaClientService.ensureCollection()) {
+            return ResponseEntity.status(503).body(Map.of("code", 503, "message", "Chroma 服务不可用"));
+        }
+
+        float[] embedding = embeddingService.embed(request.query());
+        if (embedding == null || embedding.length == 0 || embedding.length != embeddingService.getDimensions()) {
+            return ResponseEntity.status(500).body(Map.of("code", 500, "message", "生成检索向量失败"));
+        }
+
+        Map<String, String> where = new HashMap<>();
+        where.put("type", "repair-case");
+        if (request.categoryKey() != null && !request.categoryKey().isBlank()) {
+            where.put("categoryKey", request.categoryKey());
+        }
+        int limit = request.limit() == null ? 5 : Math.max(1, Math.min(request.limit(), 10));
+        List<Map<String, Object>> results = chromaClientService.queryWithEmbedding(embedding, limit, where).stream()
+            .map(item -> {
+                Map<String, Object> row = new HashMap<>();
+                row.put("id", item.id());
+                row.put("similarity", item.similarity());
+                row.put("metadata", item.metadata());
+                return row;
+            })
+            .toList();
+
+        return ResponseEntity.ok(Map.of("code", 200, "message", "历史案例检索成功", "data", results));
+    }
+
     /**
      * 清空并重建索引
      */
@@ -183,6 +284,10 @@ public class InternalRagController {
         return effectiveSecret.equals(secret);
     }
 
+    private String safe(String value) {
+        return value == null ? "" : value;
+    }
+
     /**
      * 知识同步请求
      */
@@ -191,5 +296,21 @@ public class InternalRagController {
         String title,
         String categoryKey,
         Boolean enabled
+    ) {}
+
+    public record RepairCaseSyncRequest(
+        String document,
+        String categoryKey,
+        String categoryName,
+        String failureCause,
+        String repairMethod,
+        String materials,
+        String result
+    ) {}
+
+    public record RepairCaseSearchRequest(
+        String query,
+        String categoryKey,
+        Integer limit
     ) {}
 }

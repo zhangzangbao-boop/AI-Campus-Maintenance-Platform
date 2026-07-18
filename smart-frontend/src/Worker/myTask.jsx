@@ -1174,6 +1174,44 @@ const MyTask = ({ targetTaskId, onTargetTaskHandled, initialFilters, overdueOnly
           </Card>
           <Card
             size="small"
+            title="相似维修案例与建议"
+            style={{ marginTop: 16, marginBottom: 16 }}
+          >
+            {selectedTask.similarRepairCases?.length > 0 ? (
+              <List
+                size="small"
+                dataSource={selectedTask.similarRepairCases}
+                renderItem={(item) => (
+                  <List.Item>
+                    <List.Item.Meta
+                      title={
+                        <Space wrap>
+                          <span>{item.categoryName || '历史案例'}</span>
+                          {item.similarity !== null && item.similarity !== undefined ? (
+                            <Tag color="green">相似度 {Math.round(item.similarity * 100)}%</Tag>
+                          ) : (
+                            <Tag color="orange">分类历史案例</Tag>
+                          )}
+                        </Space>
+                      }
+                      description={
+                        <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                          {item.failureCause && <div>故障原因：{item.failureCause}</div>}
+                          {item.repairMethod && <div>维修方法：{item.repairMethod}</div>}
+                          {item.materials && <div>材料：{item.materials}</div>}
+                          {item.result && <div>处理结果：{item.result}</div>}
+                        </Space>
+                      }
+                    />
+                  </List.Item>
+                )}
+              />
+            ) : (
+              <div style={{ color: '#64748b' }}>暂无相似历史案例，按现场情况处理并补充维修记录即可。</div>
+            )}
+          </Card>
+          <Card
+            size="small"
             title="推荐维修方案"
             style={{ marginTop: 16, marginBottom: 16 }}
           >

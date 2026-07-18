@@ -34,6 +34,25 @@ public interface AiInternalClient {
         @PathVariable("id") Long id
     );
 
+    @PostMapping("/rag/repair-cases/{id}")
+    Map<String, Object> syncRepairCase(
+        @RequestHeader("X-Internal-Secret") String secret,
+        @PathVariable("id") Long id,
+        @RequestBody RepairCaseSyncRequest request
+    );
+
+    @DeleteMapping("/rag/repair-cases/{id}")
+    Map<String, Object> deleteRepairCase(
+        @RequestHeader("X-Internal-Secret") String secret,
+        @PathVariable("id") Long id
+    );
+
+    @PostMapping("/rag/repair-cases/search")
+    Map<String, Object> searchRepairCases(
+        @RequestHeader("X-Internal-Secret") String secret,
+        @RequestBody RepairCaseSearchRequest request
+    );
+
     /**
      * 清空并重建向量索引
      */
@@ -50,5 +69,21 @@ public interface AiInternalClient {
         String title,
         String categoryKey,
         Boolean enabled
+    ) {}
+
+    record RepairCaseSyncRequest(
+        String document,
+        String categoryKey,
+        String categoryName,
+        String failureCause,
+        String repairMethod,
+        String materials,
+        String result
+    ) {}
+
+    record RepairCaseSearchRequest(
+        String query,
+        String categoryKey,
+        Integer limit
     ) {}
 }

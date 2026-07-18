@@ -53,6 +53,7 @@ public class TicketService {
     private final FeedbackFollowUpService feedbackFollowUpService;
     private final RatingDtoMapper ratingDtoMapper;
     private final RepairRuleConfigService repairRuleConfigService;
+    private final HistoricalRepairCaseService historicalRepairCaseService;
 
     @Transactional
     public TicketDetailDto createTicket(TicketCreateRequest request, List<MultipartFile> images) {
@@ -236,6 +237,7 @@ public class TicketService {
             throw new BusinessException("仅待受理状态的报修单可以删除");
         }
         ticketRepository.delete(ticket);
+        triggerHistoricalRepairCaseDelete(ticketId);
     }
 
     @Transactional
@@ -363,6 +365,7 @@ public class TicketService {
         appendStatusLog(ticket, oldStatus, TicketStatus.WAITING_FEEDBACK, student);
         notifyStaffCompletionConfirmed(ticket);
         triggerCompletionSummaryIfNeeded(ticket);
+        triggerHistoricalRepairCaseSync(ticket.getTicketId());
         return toDetailDto(ticket);
     }
 
@@ -403,6 +406,16 @@ public class TicketService {
             throw new BusinessException("仅已完成或已关闭的工单可重新生成完成总结");
         }
         return ticketCompletionSummaryService.regenerate(ticketId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<HistoricalRepairCaseDto> recommendHistoricalCases(Long ticketId) {
+        return historicalRepairCaseService.recommendForTicket(ticketId, 5);
+    }
+
+    @Transactional(readOnly = true)
+    public int rebuildHistoricalCaseIndex() {
+        return historicalRepairCaseService.rebuildIndex();
     }
 
     @Transactional(readOnly = true)
@@ -670,7 +683,8 @@ public class TicketService {
             ticket.getCompletedAt(), ticket.getStudentConfirmedAt(), ticket.getStudentRejectionReason(),
             ticket.getClosedAt(), images, logs, ratingDto,
             ticketCompletionSummaryService.getByTicketId(ticket.getTicketId()),
-            aiAnalysisIntegrationService.getViewByTicketId(ticket.getTicketId(), includeAdminAiFields));
+            aiAnalysisIntegrationService.getViewByTicketId(ticket.getTicketId(), includeAdminAiFields),
+            historicalRepairCaseService.recommendForTicket(ticket.getTicketId(), 5));
     }
 
     private void triggerCompletionSummaryIfNeeded(RepairTicket ticket) {
@@ -687,6 +701,38 @@ public class TicketService {
             });
         } else {
             ticketCompletionSummaryService.generateAsync(ticketId);
+        }
+    }
+
+    private void triggerHistoricalRepairCaseSync(Long ticketId) {
+        if (ticketId == null) {
+            return;
+        }
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    historicalRepairCaseService.syncTicketAsync(ticketId);
+                }
+            });
+        } else {
+            historicalRepairCaseService.syncTicketAsync(ticketId);
+        }
+    }
+
+    private void triggerHistoricalRepairCaseDelete(Long ticketId) {
+        if (ticketId == null) {
+            return;
+        }
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    historicalRepairCaseService.deleteTicketAsync(ticketId);
+                }
+            });
+        } else {
+            historicalRepairCaseService.deleteTicketAsync(ticketId);
         }
     }
 

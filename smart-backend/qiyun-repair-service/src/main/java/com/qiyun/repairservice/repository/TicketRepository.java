@@ -276,6 +276,24 @@ public interface TicketRepository extends JpaRepository<RepairTicket, Long> {
     )
     Long countCompletedTickets();
 
+    @Query("SELECT rt FROM RepairTicket rt " +
+           "WHERE rt.status IN ('WAITING_FEEDBACK', 'FEEDBACKED', 'CLOSED') " +
+           "  AND rt.studentConfirmedAt IS NOT NULL " +
+           "  AND (rt.deleted IS NULL OR rt.deleted = false) " +
+           "ORDER BY rt.completedAt DESC")
+    List<RepairTicket> findConfirmedCompletedTickets();
+
+    @Query("SELECT rt FROM RepairTicket rt " +
+           "WHERE rt.status IN ('WAITING_FEEDBACK', 'FEEDBACKED', 'CLOSED') " +
+           "  AND rt.studentConfirmedAt IS NOT NULL " +
+           "  AND (rt.deleted IS NULL OR rt.deleted = false) " +
+           "  AND (:categoryName IS NULL OR rt.category.categoryName = :categoryName) " +
+           "  AND (:excludeTicketId IS NULL OR rt.ticketId <> :excludeTicketId) " +
+           "ORDER BY rt.completedAt DESC")
+    List<RepairTicket> findConfirmedCompletedTicketsForFallback(
+            @Param("categoryName") String categoryName,
+            @Param("excludeTicketId") Long excludeTicketId);
+
     // ==================== 维修工相关统计查询 ====================
 
     /**

@@ -29,6 +29,7 @@ public record TicketDetailDto(
     List<TicketStatusLogDto> logs,
     RatingDto rating,
     CompletionSummaryDto completionSummary,
-    AiTicketAnalysisViewDto aiAnalysis
+    AiTicketAnalysisViewDto aiAnalysis,
+    List<HistoricalRepairCaseDto> similarRepairCases
 ) {
 }

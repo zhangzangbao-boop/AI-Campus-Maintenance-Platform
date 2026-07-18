@@ -341,6 +341,11 @@ const api = {
         body: JSON.stringify(data),
       }),
 
+
+    rebuildHistoricalCaseIndex: () =>
+      request("/admin/repair-orders/history-cases/rebuild-index", {
+        method: "POST",
+      }),
     // 修正驳回工单接口，使用通用状态更新接口
     rejectOrder: (orderId, reason) =>
       request(`/tasks/${orderId}/status`, {

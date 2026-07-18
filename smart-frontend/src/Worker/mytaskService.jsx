@@ -164,6 +164,7 @@ export const mytaskService = {
           ratingTime: task.rating?.ratedAt || task.ratingTime || null,
           logs: task.logs || [],
           completionSummary: task.completionSummary || null,
+          similarRepairCases: Array.isArray(task.similarRepairCases) ? task.similarRepairCases : [],
           // 图片：从 TicketImageDto 列表中提取 imageUrl
           images: Array.isArray(task.images)
             ? task.images

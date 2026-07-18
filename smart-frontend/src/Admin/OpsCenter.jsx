@@ -228,6 +228,20 @@ const KnowledgeBaseTab = () => {
     }
   };
 
+
+  const rebuildHistoricalCaseIndex = async () => {
+    setRebuildLoading(true);
+    try {
+      const response = await api.admin.rebuildHistoricalCaseIndex();
+      const count = response?.data?.syncedCount || 0;
+      message.success(`\u5386\u53f2\u7ef4\u4fee\u6848\u4f8b\u7d22\u5f15\u91cd\u5efa\u6210\u529f\uff0c\u5df2\u540c\u6b65 ${count} \u4e2a\u6848\u4f8b`);
+    } catch (error) {
+      message.error(`\u5386\u53f2\u6848\u4f8b\u7d22\u5f15\u91cd\u5efa\u5931\u8d25\uff1a${error.message}`);
+    } finally {
+      setRebuildLoading(false);
+    }
+  };
+
   return (
     <>
       <Space style={{ marginBottom: 12 }} wrap>
@@ -252,6 +266,14 @@ const KnowledgeBaseTab = () => {
         >
           <Button loading={rebuildLoading}>
             重建向量索引
+          </Button>
+        </Popconfirm>
+        <Popconfirm
+          title={"\u786e\u8ba4\u91cd\u5efa\u5386\u53f2\u7ef4\u4fee\u6848\u4f8b\u7d22\u5f15\uff1f\u8fd9\u4f1a\u91cd\u65b0\u540c\u6b65\u5df2\u5b8c\u6210\u5e76\u786e\u8ba4\u7684\u5de5\u5355\u6848\u4f8b\u3002"}
+          onConfirm={rebuildHistoricalCaseIndex}
+        >
+          <Button loading={rebuildLoading}>
+            {"\u91cd\u5efa\u5386\u53f2\u6848\u4f8b\u7d22\u5f15"}
           </Button>
         </Popconfirm>
       </Space>

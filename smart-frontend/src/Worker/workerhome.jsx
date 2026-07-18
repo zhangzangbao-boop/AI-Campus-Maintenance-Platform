@@ -7,6 +7,7 @@ import {
   FieldTimeOutlined,
   FireOutlined,
   HistoryOutlined,
+  NotificationOutlined,
   PlayCircleOutlined,
   ReloadOutlined,
   RobotOutlined,
@@ -18,6 +19,8 @@ import MyTask from "./myTask.jsx";
 import { mytaskService, mytaskUtils } from "./mytaskService.jsx";
 import PersonalInfoEd from "../services/PersonalInfoEd.jsx";
 import KnowledgeQA from "../components/KnowledgeQA";
+import AnnouncementList from "../components/AnnouncementList";
+import PinnedAnnouncements from "../components/PinnedAnnouncements";
 import AppShell from "../components/AppShell";
 import { MetricCard, MiniList, PageHero, QuickActionGrid, SectionCard, StatusTag, PriorityTag } from "../components/DashboardWidgets";
 
@@ -99,6 +102,7 @@ const WorkerDashboard = ({ worker, onNavigate }) => {
 
   return (
     <div className="dashboard-page worker-dashboard">
+      <PinnedAnnouncements onOpen={onNavigate} />
       <PageHero
         eyebrow="维修执行端"
         title="今日任务与风险优先处理"
@@ -235,6 +239,7 @@ const WorkerHome = () => {
       type: "group",
       children: [
         { key: "knowledge-qa", icon: <RobotOutlined />, label: "维修知识问答" },
+        { key: "announcements", icon: <NotificationOutlined />, label: "校园公告" },
       ],
     },
     {
@@ -320,6 +325,8 @@ const WorkerHome = () => {
           <WorkerDashboard worker={currentWorker} onNavigate={setCurrentMenu} />
         ) : currentMenu === "knowledge-qa" ? (
           <KnowledgeQA />
+        ) : currentMenu === "announcements" ? (
+          <AnnouncementList />
         ) : (
           <div>
             <div className="module-intro">

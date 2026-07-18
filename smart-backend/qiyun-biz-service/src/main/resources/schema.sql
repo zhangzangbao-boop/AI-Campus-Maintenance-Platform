@@ -8,6 +8,7 @@ DROP TABLE IF EXISTS `repair_order_status_log`;
 DROP TABLE IF EXISTS `repair_order_comment`;
 DROP TABLE IF EXISTS `repair_process_record_image`;
 DROP TABLE IF EXISTS `repair_process_record`;
+DROP TABLE IF EXISTS `campus_announcement`;
 DROP TABLE IF EXISTS `sys_notification`;
 DROP TABLE IF EXISTS `ai_ticket_analysis`;
 DROP TABLE IF EXISTS `repair_knowledge_base`;
@@ -22,7 +23,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 
 CREATE TABLE `sys_user` (
     `user_number` VARCHAR(255) PRIMARY KEY,
-    `name` VARCHAR(100) NOT NULL,
+    `nickname` VARCHAR(100) NOT NULL,
     `password` VARCHAR(255) NOT NULL,
     `role` VARCHAR(20) NOT NULL,
     `enabled` BOOLEAN DEFAULT TRUE,
@@ -156,6 +157,21 @@ CREATE TABLE `repair_process_record_image` (
     INDEX `idx_process_record_image_record` (`process_record_id`)
 );
 
+CREATE TABLE `campus_announcement` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+    `title` VARCHAR(200) NOT NULL,
+    `content` TEXT NOT NULL,
+    `type` VARCHAR(30) NOT NULL DEFAULT 'GENERAL',
+    `priority` VARCHAR(20) NOT NULL DEFAULT 'NORMAL',
+    `status` VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
+    `publish_time` DATETIME,
+    `expire_time` DATETIME,
+    `pinned` BOOLEAN NOT NULL DEFAULT FALSE,
+    `created_at` DATETIME NOT NULL,
+    `updated_at` DATETIME NOT NULL,
+    INDEX `idx_announcement_status_time` (`status`, `publish_time`, `expire_time`),
+    INDEX `idx_announcement_pinned` (`pinned`)
+);
 CREATE TABLE `sys_notification` (
     `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
     `receiver_id` VARCHAR(255) NOT NULL,
@@ -243,7 +259,8 @@ INSERT IGNORE INTO `repair_category` (`category_key`) VALUES
 ('公共设施');
 
 -- 插入初始用户数据（如果已存在则忽略，避免重复插入错误）
-INSERT IGNORE INTO `sys_user` (`user_number`, `name`, `password`, `role`, `enabled`, `phone`, `created_at`) VALUES
+INSERT IGNORE INTO `sys_user` (`user_number`,
+`nickname`, `password`, `role`, `enabled`, `phone`, `created_at`) VALUES
 ('admin', '管理员', '$2a$10$BnD773cRGP0RgVgCWfk2aOnE26elWpSZBjNLz/GNV7hghhopQ7xu2', 'ADMIN', TRUE, '13800000000', NOW()),
 ('worker001', '维修员张三', '$2a$10$BnD773cRGP0RgVgCWfk2aOnE26elWpSZBjNLz/GNV7hghhopQ7xu2', 'STAFF', TRUE, '13800000001', NOW()),
 ('worker002', '维修员李四', '$2a$10$BnD773cRGP0RgVgCWfk2aOnE26elWpSZBjNLz/GNV7hghhopQ7xu2', 'STAFF', TRUE, '13800000002', NOW()),

@@ -230,6 +230,7 @@ class GatewayRouteTests {
         String predicateString = adminOpsRoute.getPredicate().toString();
         assertThat(predicateString).contains("/api/admin/stats");
         assertThat(predicateString).contains("/api/admin/feedbacks");
+        assertThat(predicateString).contains("/api/admin/announcements");
     }
 
     @Test
@@ -267,6 +268,7 @@ class GatewayRouteTests {
 
         assertThat(notificationRoute).as("notification-route应存在").isNotNull();
         assertThat(notificationRoute.getUri().toString()).isEqualTo("lb://qiyun-ops-service");
+        assertThat(notificationRoute.getPredicate().toString()).contains("/api/announcements");
     }
 
     @Test

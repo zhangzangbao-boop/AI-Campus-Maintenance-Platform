@@ -7,6 +7,7 @@ import {
   ClockCircleOutlined,
   EditOutlined,
   FileSearchOutlined,
+  NotificationOutlined,
   PlusOutlined,
   RobotOutlined,
   SettingOutlined,
@@ -17,6 +18,8 @@ import MyRepairs from "./MyRepairs";
 import CreateRepairPage from "./CreateRepairPage";
 import PersonalInfoEd from "../services/PersonalInfoEd";
 import KnowledgeQA from "../components/KnowledgeQA";
+import AnnouncementList from "../components/AnnouncementList";
+import PinnedAnnouncements from "../components/PinnedAnnouncements";
 import { repairService } from "../services/repairService";
 import AppShell from "../components/AppShell";
 import { MetricCard, MiniList, PageHero, QuickActionGrid, SectionCard, StatusTag } from "../components/DashboardWidgets";
@@ -77,6 +80,7 @@ const StudentDashboard = ({ orders, loading, onNavigate, onRefresh }) => {
 
   return (
     <div className="dashboard-page student-dashboard">
+      <PinnedAnnouncements onOpen={onNavigate} />
       <PageHero
         eyebrow="学生服务台"
         title="校园报修，一站式跟踪"
@@ -199,6 +203,7 @@ const Home = () => {
         { key: "dashboard", icon: <BarChartOutlined />, label: "学生总览" },
         { key: "create-repair", icon: <PlusOutlined />, label: "立即报修" },
         { key: "knowledge-qa", icon: <RobotOutlined />, label: "维修知识问答" },
+        { key: "announcements", icon: <NotificationOutlined />, label: "校园公告" },
       ],
     },
     {
@@ -305,6 +310,10 @@ const Home = () => {
 
     if (currentMenu === "knowledge-qa") {
       return <KnowledgeQA />;
+    }
+
+    if (currentMenu === "announcements") {
+      return <AnnouncementList />;
     }
 
     const initialFilters = {

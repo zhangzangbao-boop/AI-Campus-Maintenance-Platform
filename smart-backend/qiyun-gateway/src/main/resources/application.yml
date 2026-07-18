@@ -70,7 +70,7 @@ spring:
         - id: notification-route
           uri: lb://qiyun-ops-service
           predicates:
-            - Path=/api/notifications/**
+            - Path=/api/notifications/**,/api/announcements/**
           order: 7
 
         # 转发到 qiyun-ops-service（知识库服务，精确匹配）
@@ -84,7 +84,7 @@ spring:
         - id: admin-ops-route
           uri: lb://qiyun-ops-service
           predicates:
-            - Path=/api/admin/audit-logs/**,/api/admin/system-config/**,/api/admin/backup/**,/api/admin/knowledge-base/**,/api/admin/stats/**,/api/admin/feedbacks/**
+            - Path=/api/admin/audit-logs/**,/api/admin/system-config/**,/api/admin/backup/**,/api/admin/knowledge-base/**,/api/admin/stats/**,/api/admin/feedbacks/**,/api/admin/announcements/**
           order: 9
 
         # 转发到 qiyun-biz-service（兼容原业务接口，匹配所有其他 /api/**）

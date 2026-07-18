@@ -9,6 +9,7 @@ import {
   EditOutlined,
   FileSearchOutlined,
   FileTextOutlined,
+  NotificationOutlined,
   PieChartOutlined,
   ReloadOutlined,
   RobotOutlined,
@@ -22,6 +23,8 @@ import UserManagement from "./UserManagement";
 import DataAnalysis from "./DataAnalysis";
 import FeedbackManagement from "./FeedbackManagement";
 import OpsCenter from "./OpsCenter";
+import AnnouncementManagement from "./AnnouncementManagement";
+import PinnedAnnouncements from "../components/PinnedAnnouncements";
 import PersonalInfoEd from "../services/PersonalInfoEd";
 import { repairService } from "../services/repairService";
 import AppShell from "../components/AppShell";
@@ -74,6 +77,7 @@ const CommandCenter = ({ orders, loading, onRefresh, onNavigate }) => {
 
   return (
     <div className="dashboard-page admin-dashboard">
+      <PinnedAnnouncements onOpen={onNavigate} />
       <PageHero
         eyebrow="管理员运营指挥台"
         title="工单池、服务质量与智能运维统一调度"
@@ -203,6 +207,7 @@ const AdminHome = () => {
         { key: "user-management", icon: <UserSwitchOutlined />, label: "用户管理" },
         { key: "feedback-management", icon: <StarOutlined />, label: "反馈管理" },
         { key: "ops-center", icon: <RobotOutlined />, label: "智能运维" },
+        { key: "announcement-management", icon: <NotificationOutlined />, label: "校园公告" },
       ],
     },
     {
@@ -301,6 +306,7 @@ const AdminHome = () => {
     if (currentMenu === "feedback-management") return <FeedbackManagement />;
     if (currentMenu === "data-analysis") return <DataAnalysis />;
     if (currentMenu === "ops-center") return <OpsCenter initialTab="knowledge" />;
+    if (currentMenu === "announcement-management") return <AnnouncementManagement />;
     if (currentMenu === "system-config") return <OpsCenter initialTab="config" />;
     return null;
   };

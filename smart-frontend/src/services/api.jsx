@@ -422,6 +422,35 @@ const api = {
         body: JSON.stringify(data),
       }),
 
+
+    getAnnouncements: () => request("/admin/announcements"),
+
+    createAnnouncement: (data) =>
+      request("/admin/announcements", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    updateAnnouncement: (id, data) =>
+      request(`/admin/announcements/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+
+    publishAnnouncement: (id) =>
+      request(`/admin/announcements/${id}/publish`, {
+        method: "POST",
+      }),
+
+    withdrawAnnouncement: (id) =>
+      request(`/admin/announcements/${id}/withdraw`, {
+        method: "POST",
+      }),
+
+    deleteAnnouncement: (id) =>
+      request(`/admin/announcements/${id}`, {
+        method: "DELETE",
+      }),
     // 备份相关接口
     createBackup: () => request("/admin/backup/create", { method: "POST" }),
     listBackups: () => request("/admin/backup/list"),
@@ -437,6 +466,11 @@ const api = {
       }),
   },
 
+
+  announcements: {
+    list: () => request("/announcements"),
+    detail: (id) => request(`/announcements/${id}`),
+  },
   notifications: {
     list: () => request("/notifications"),
 

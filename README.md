@@ -36,6 +36,7 @@
 | qiyun-user-service | 9003 | qiyun-user-service | 用户认证、用户管理 |
 | qiyun-repair-service | 9004 | qiyun-repair-service | 报修工单、任务管理、分类 |
 | qiyun-ops-service | 9005 | qiyun-ops-service | 统计分析、通知、知识库、备份 |
+| qiyun-biz-service | 9001 | qiyun-biz-service | 旧业务兼容与维修工业务接口 |
 | qiyun-ai-service | 9002 | qiyun-ai-service | AI 智能分析 |
 
 ### 项目结构
@@ -48,6 +49,7 @@ smart-backend/
 ├── qiyun-user-service/     # 用户服务
 ├── qiyun-repair-service/   # 报修服务
 ├── qiyun-ops-service/      # 运维服务
+├── qiyun-biz-service/      # 业务兼容服务
 └── qiyun-ai-service/       # AI 服务
 ```
 
@@ -166,6 +168,8 @@ smart-backend/
 
 ## 快速启动
 
+> 当前项目已统一为 `smart-backend` 微服务后端 + `smart-frontend` 前端。根目录旧单体 `backend` 已移除，不要再使用 `start-all.bat` / `start-all.ps1`。本地一键启动入口为根目录 `start-project.bat`。
+
 ### 前置条件
 
 - **Java** 17+
@@ -174,16 +178,30 @@ smart-backend/
 - **Node.js** 18+
 - **Nacos** 2.x
 
-### 1. 启动 Nacos
+### 1. 拉取代码并进入项目
 
 ```bash
-# 下载 Nacos 并启动（standalone 模式）
+git clone <repository-url>
+cd AI-Campus-Maintenance-Platform
+```
+
+### 2. 启动外部依赖
+
+本地启动前请先确认：
+
+- MySQL 已启动，端口为 `3306`
+- Nacos 已启动，端口为 `8848`
+- Nacos 控制台可访问：`http://localhost:8848/nacos/`
+
+Nacos standalone 模式示例：
+
+```bash
 sh startup.sh -m standalone
 ```
 
-访问 http://localhost:8848/nacos（默认账号：nacos/nacos）
+Windows 环境可使用 Nacos 自带的 `startup.cmd -m standalone`。
 
-### 2. 初始化数据库
+### 3. 初始化数据库
 
 ```sql
 -- 创建数据库
@@ -193,25 +211,86 @@ CREATE DATABASE repairdb DEFAULT CHARACTER SET utf8mb4;
 SOURCE smart-backend/qiyun-repair-service/src/main/resources/full_init_test_data.sql;
 ```
 
-### 3. 配置环境变量
+### 4. 配置本地 `.env`
 
-**Windows PowerShell**：
-```powershell
-$env:JWT_SECRET="your-at-least-32-characters-jwt-secret-key"
-$env:DB_PASSWORD="your-db-password"
-$env:INTERNAL_SERVICE_SECRET="your-internal-service-secret"
-$env:EMBEDDING_MODEL_PATH="C:\path\to\model.onnx"
+在项目根目录创建 `.env` 文件。不要提交 `.env`，只提交 `.env.example` 这类占位模板。
+
+```env
+NACOS_SERVER_ADDR=127.0.0.1:8848
+DB_URL=jdbc:mysql://127.0.0.1:3306/repairdb?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=UTF-8&allowPublicKeyRetrieval=true&useSSL=false
+DB_USERNAME=root
+DB_PASSWORD=your-db-password
+JWT_SECRET=your-at-least-32-characters-jwt-secret-key
+INTERNAL_SERVICE_SECRET=your-internal-service-secret
+JWT_EXPIRATION_MS=604800000
 ```
 
-**Linux/Mac**：
+如需启用 RAG / AI 扩展功能，再按实际环境补充 `CHROMA_URL`、`EMBEDDING_MODEL_PATH`、`DEEPSEEK_API_KEY` 等变量。
+
+### 5. 启动项目（推荐）
+
+Windows 本地开发直接双击根目录：
+
+```text
+start-project.bat
+```
+
+该脚本会自动：
+
+- 读取根目录 `.env`
+- 检查 MySQL `3306` 和 Nacos `8848`
+- 使用项目内 `local-cache/maven` 构建并启动 `smart-backend` 各微服务
+- 启动 `smart-frontend`
+- 打开前端页面 `http://localhost:5173/`
+
+启动后保持弹出的后端和前端窗口不要关闭。
+
+### 6. 访问地址
+
+| 地址 | 说明 |
+|------|------|
+| `http://localhost:5173/` | 前端页面 |
+| `http://localhost:8070/` | Gateway 端口，根路径返回 404 属于正常现象 |
+| `http://localhost:8848/nacos/` | Nacos 控制台 |
+
+### 7. 手动启动后端（备用）
+
+如一键脚本不可用，可手动启动：
+
 ```bash
-export JWT_SECRET="your-at-least-32-characters-jwt-secret-key"
-export DB_PASSWORD="your-db-password"
-export INTERNAL_SERVICE_SECRET="your-internal-service-secret"
-export EMBEDDING_MODEL_PATH="/path/to/model.onnx"
+cd smart-backend
+mvn -Dmaven.repo.local=../local-cache/maven -DskipTests install
+
+cd qiyun-user-service
+mvn -Dmaven.repo.local=../../local-cache/maven spring-boot:run
+
+cd ../qiyun-repair-service
+mvn -Dmaven.repo.local=../../local-cache/maven spring-boot:run
+
+cd ../qiyun-ops-service
+mvn -Dmaven.repo.local=../../local-cache/maven spring-boot:run
+
+cd ../qiyun-ai-service
+mvn -Dmaven.repo.local=../../local-cache/maven spring-boot:run
+
+cd ../qiyun-biz-service
+mvn -Dmaven.repo.local=../../local-cache/maven spring-boot:run
+
+cd ../qiyun-gateway
+mvn -Dmaven.repo.local=../../local-cache/maven spring-boot:run
 ```
 
-### 4. 启动 Chroma 向量数据库（RAG 功能需要）
+### 8. 手动启动前端（备用）
+
+```bash
+cd smart-frontend
+npm install
+npm run dev
+```
+
+访问 `http://localhost:5173/`。
+
+### 9. 启动 Chroma 向量数据库（RAG 功能需要）
 
 ```bash
 # 使用 Docker 启动 Chroma
@@ -222,7 +301,7 @@ pip install chromadb==0.5.20
 chroma run --host 0.0.0.0 --port 8000
 ```
 
-### 5. 下载 Embedding 模型（RAG 功能需要）
+### 10. 下载 Embedding 模型（RAG 功能需要）
 
 下载 `paraphrase-multilingual-MiniLM-L12-v2` ONNX 模型并配置路径：
 
@@ -233,48 +312,6 @@ export EMBEDDING_MODEL_PATH="/path/to/model.onnx"
 ```
 
 **注意**：如不配置 Embedding 模型，RAG 问答功能将不可用，系统会返回明确的降级提示。
-
-### 6. 启动后端服务
-
-```bash
-cd smart-backend
-
-# 构建所有模块
-mvn clean install -DskipTests
-
-# 按顺序启动服务
-# 1. Gateway
-cd qiyun-gateway && mvn spring-boot:run
-
-# 2. User Service
-cd ../qiyun-user-service && mvn spring-boot:run
-
-# 3. Repair Service
-cd ../qiyun-repair-service && mvn spring-boot:run
-
-# 4. Ops Service
-cd ../qiyun-ops-service && mvn spring-boot:run
-
-# 5. AI Service
-cd ../qiyun-ai-service && mvn spring-boot:run
-```
-
-### 7. 启动前端
-
-```bash
-cd smart-frontend
-
-# 安装依赖
-npm install
-
-# 配置环境变量
-echo "VITE_API_BASE_URL=http://localhost:8070/api" > .env
-
-# 启动开发服务器
-npm run dev
-```
-
-访问 http://localhost:5173
 
 ## Postman 集合
 

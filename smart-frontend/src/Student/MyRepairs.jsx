@@ -101,6 +101,15 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
     return !order?.rating && (originalStatus === 'WAITING_FEEDBACK' || order?.status === 'to_be_evaluated');
   };
 
+  const isStudentFeedbackTodo = (order) => {
+    const originalStatus = order?.originalStatus || order?.status;
+    return !order?.rating && (
+      originalStatus === 'RESOLVED'
+      || originalStatus === 'WAITING_FEEDBACK'
+      || order?.status === 'to_be_evaluated'
+    );
+  };
+
   // 分类选项配置 - 使用 repairService 中的变量名
   const categoryOptions = [
     { value: "waterAndElectricity", label: "水电维修", backendValue: "水电维修" },
@@ -256,7 +265,11 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
 
     // 状态筛选 - 直接匹配前端状态值
     if (filters.status !== "all") {
-      filtered = filtered.filter((order) => order.status === filters.status);
+      if (filters.status === "to_be_evaluated") {
+        filtered = filtered.filter(isStudentFeedbackTodo);
+      } else {
+        filtered = filtered.filter((order) => order.status === filters.status);
+      }
     }
 
     // 分类筛选 - 前端值映射到后端值

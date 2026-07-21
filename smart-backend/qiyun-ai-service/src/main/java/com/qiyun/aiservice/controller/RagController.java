@@ -1,5 +1,6 @@
 package com.qiyun.aiservice.controller;
 
+import com.qiyun.aiservice.service.ChromaClientService;
 import com.qiyun.aiservice.service.RagKnowledgeService;
 import com.qiyun.aiservice.service.RagKnowledgeService.RagAnswer;
 import java.util.HashMap;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class RagController {
 
     private final RagKnowledgeService ragKnowledgeService;
+    private final ChromaClientService chromaClientService;
 
     /**
      * 知识问答接口
@@ -44,6 +46,7 @@ public class RagController {
             data.put("sources", answer.sources());
             data.put("similarity", answer.maxSimilarity());
             data.put("fallback", answer.fallback());
+            data.put("retrievalMode", answer.retrievalMode());
             response.put("data", data);
             response.put("message", "回答生成成功");
         } else {
@@ -53,4 +56,15 @@ public class RagController {
 
         return ResponseEntity.ok(response);
     }
+
+    @GetMapping("/status")
+    public ResponseEntity<Map<String, Object>> status() {
+        Map<String, Object> response = new HashMap<>();
+        response.put("code", 200);
+        response.put("message", "RAG status");
+        response.put("data", chromaClientService.diagnosticStatus());
+        return ResponseEntity.ok(response);
+    }
+
+
 }

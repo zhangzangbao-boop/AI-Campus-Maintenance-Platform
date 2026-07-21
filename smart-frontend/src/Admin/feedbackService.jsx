@@ -6,7 +6,7 @@ export const feedbackService = {
     try {
       const response = await api.admin.getAllFeedbacks(params);
       if (!response) {
-        throw new Error('Empty feedback response');
+        throw new Error('评价响应为空');
       }
 
       const listRaw =
@@ -16,7 +16,7 @@ export const feedbackService = {
         [];
 
       if (!Array.isArray(listRaw)) {
-        throw new Error('Invalid feedback response format');
+        throw new Error('评价响应格式不正确');
       }
 
       return listRaw.map(item => ({
@@ -46,8 +46,8 @@ export const feedbackService = {
         createdAt: item.ratedAt ?? item.createdAt ?? item.created_at,
       }));
     } catch (error) {
-      console.error('Load feedbacks failed:', error);
-      message.error('Load feedbacks failed');
+      console.error('加载评价失败:', error);
+      message.error('加载评价失败');
       return [];
     }
   },
@@ -55,11 +55,11 @@ export const feedbackService = {
   deleteFeedback: async (feedbackId) => {
     try {
       await api.admin.deleteFeedback(feedbackId);
-      message.success('Feedback deleted');
+      message.success('评价已删除');
       return true;
     } catch (error) {
-      console.error('Delete feedback failed:', error);
-      message.error('Delete feedback failed: ' + error.message);
+      console.error('删除评价失败:', error);
+      message.error('删除评价失败：' + error.message);
       throw error;
     }
   },
@@ -67,22 +67,22 @@ export const feedbackService = {
   updateFollowUp: async (feedbackId, data) => {
     try {
       await api.admin.updateFeedbackFollowUp(feedbackId, data);
-      message.success('Follow-up updated');
+      message.success('回访记录已更新');
       return true;
     } catch (error) {
-      console.error('Update follow-up failed:', error);
-      message.error('Update follow-up failed: ' + error.message);
+      console.error('更新回访记录失败:', error);
+      message.error('更新回访记录失败：' + error.message);
       throw error;
     }
   },
 
   getRepairmanInfo: (repairmanId) => {
     const repairmen = {
-      1: { id: 1, name: 'Repairman Zhang' },
-      2: { id: 2, name: 'Repairman Li' },
-      3: { id: 3, name: 'Repairman Wang' },
-      4: { id: 4, name: 'Repairman Zhao' },
+      1: { id: 1, name: '张师傅' },
+      2: { id: 2, name: '李师傅' },
+      3: { id: 3, name: '王师傅' },
+      4: { id: 4, name: '赵师傅' },
     };
-    return repairmen[repairmanId] || { id: repairmanId, name: 'Unknown repairman' };
+    return repairmen[repairmanId] || { id: repairmanId, name: '未知维修工' };
   },
 };

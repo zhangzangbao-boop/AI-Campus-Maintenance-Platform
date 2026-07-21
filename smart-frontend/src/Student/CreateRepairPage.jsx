@@ -56,6 +56,65 @@ const aiCategoryToValueMap = {
   '其他故障': 'other',
 };
 
+const normalizeText = (value) => (value || '').replace(/\s+/g, ' ').trim();
+
+const extractLocationFallback = (text, currentLocation = '') => {
+  const existingLocation = normalizeText(currentLocation);
+  if (existingLocation) {
+    return existingLocation;
+  }
+
+  const input = normalizeText(text);
+  const patterns = [
+    /([一二三四五六七八九十0-9]+号?(?:宿舍楼|宿舍|公寓|教学楼|实验楼|楼|栋|幢)\s*\d{1,2}[-—]\d{2,4})/,
+    /((?:宿舍楼|宿舍|公寓|教学楼|实验楼|图书馆|食堂|体育馆)\s*\d+\s*楼\s*(?:卫生间|洗手间|浴室|走廊|大厅|教室|实验室|房间|宿舍)?)/,
+    /([一二三四五六七八九十0-9]+号?(?:宿舍楼|公寓|教学楼|实验楼|楼|栋|幢)\s*\d{2,4}(?:室|房间|宿舍)?)/,
+    /((?:图书馆|食堂|教学楼|实验楼|体育馆|操场|宿舍楼|宿舍|公寓)[\u4e00-\u9fa5A-Za-z0-9\s\-—]{0,16}(?:卫生间|洗手间|浴室|走廊|大厅|教室|实验室|门口|入口|房间|宿舍))/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = input.match(pattern);
+    if (match?.[1]) {
+      return normalizeText(match[1]).replace(/^[在于到至\s]+/, '').replace(/[的,，。；;：:\s]+$/, '');
+    }
+  }
+  return '';
+};
+
+const inferIssueName = (text, category) => {
+  const input = normalizeText(text).toLowerCase();
+  if (input.includes('漏水') || input.includes('滴水') || input.includes('积水')) return '漏水故障';
+  if (input.includes('堵塞') || input.includes('下水') || input.includes('地漏')) return '堵塞故障';
+  if (input.includes('频闪') || input.includes('照明') || input.includes('灯')) return '照明故障';
+  if (input.includes('插座')) return '插座故障';
+  if (input.includes('断电') || input.includes('跳闸')) return '电力故障';
+  if (input.includes('wifi') || input.includes('网络') || input.includes('网口')) return '网络故障';
+  if (input.includes('空调')) return '空调故障';
+  if (input.includes('门锁') || input.includes('门')) return '门锁故障';
+  if (input.includes('窗') || input.includes('玻璃')) return '门窗故障';
+  if (input.includes('桌') || input.includes('椅') || input.includes('床') || input.includes('柜')) return '家具故障';
+  return category?.endsWith('故障') ? category : '维修问题';
+};
+
+const buildTitleFallback = (text, category, location) => {
+  const issueName = inferIssueName(text, category);
+  const title = location ? `${location}${issueName}` : `${issueName}报修`;
+  return title.slice(0, 60);
+};
+
+const normalizeAiResult = (result = {}, text = '', currentLocation = '') => {
+  const locationText = normalizeText(result.locationText || result.location) ||
+                       extractLocationFallback(text, currentLocation);
+  const title = normalizeText(result.title) ||
+                buildTitleFallback(text, result.category, locationText);
+  return {
+    ...result,
+    title,
+    locationText,
+    location: locationText,
+  };
+};
+
 const CreateRepairPage = ({ currentUser, onSubmitSuccess }) => {
   const [form] = Form.useForm();
   const [fileList, setFileList] = useState([]);
@@ -100,15 +159,21 @@ const CreateRepairPage = ({ currentUser, onSubmitSuccess }) => {
         '紧急': 'high',
         '普通': 'medium',
         '一般': 'low',
+        high: 'high',
+        medium: 'medium',
+        low: 'low',
       };
-      const priorityValue = urgencyToPriorityMap[result.urgency] || 'low';
+      const priorityValue = urgencyToPriorityMap[result.urgency] || urgencyToPriorityMap[String(result.urgency || '').toLowerCase()] || 'low';
+      const normalizedResult = normalizeAiResult(result, aiText, form.getFieldValue('location') || '');
 
       form.setFieldsValue({
+        title: normalizedResult.title,
+        location: normalizedResult.locationText,
         category: categoryValue,
         description: aiText,
         priority: priorityValue,
       });
-      setAiResult(result);
+      setAiResult(normalizedResult);
       message.success('智能识别完成，已自动填写报修表单');
     } catch (error) {
       console.error('智能识别失败:', error);
@@ -170,7 +235,7 @@ const CreateRepairPage = ({ currentUser, onSubmitSuccess }) => {
         console.log('AI 分析结果:', aiResponse);
 
         if (aiResponse?.data) {
-          setSubmittedAiResult(aiResponse.data);
+          setSubmittedAiResult(normalizeAiResult(aiResponse.data, values.description, values.location));
           setAiModalVisible(true);
         }
       } catch (aiError) {
@@ -532,6 +597,12 @@ const CreateRepairPage = ({ currentUser, onSubmitSuccess }) => {
 
         {submittedAiResult && (
           <Descriptions bordered column={1} size="small">
+            <Descriptions.Item label={<strong>报修标题</strong>}>
+              {submittedAiResult.title || '未识别'}
+            </Descriptions.Item>
+            <Descriptions.Item label={<strong>具体位置</strong>}>
+              {submittedAiResult.locationText || submittedAiResult.location || '未识别'}
+            </Descriptions.Item>
             <Descriptions.Item label={<strong>故障类型</strong>}>
               <Tag color="blue">{submittedAiResult.category || '未分类'}</Tag>
             </Descriptions.Item>
@@ -546,6 +617,11 @@ const CreateRepairPage = ({ currentUser, onSubmitSuccess }) => {
             <Descriptions.Item label={<strong>维修建议</strong>}>
               {submittedAiResult.suggestion || '暂无建议'}
             </Descriptions.Item>
+            {submittedAiResult.source && (
+              <Descriptions.Item label={<strong>识别来源</strong>}>
+                {submittedAiResult.source}
+              </Descriptions.Item>
+            )}
             {submittedAiResult.keywords && submittedAiResult.keywords.length > 0 && (
               <Descriptions.Item label={<strong>关键词</strong>}>
                 <Space wrap>

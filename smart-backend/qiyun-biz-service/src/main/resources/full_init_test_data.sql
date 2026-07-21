@@ -53,7 +53,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 
 CREATE TABLE `sys_user` (
     `user_number` VARCHAR(255) PRIMARY KEY,
-    `nickname` VARCHAR(100) NOT NULL,
+    `name` VARCHAR(100) NOT NULL,
     `password` VARCHAR(255) NOT NULL,
     `role` VARCHAR(20) NOT NULL,
     `enabled` BOOLEAN NOT NULL DEFAULT TRUE,
@@ -388,7 +388,7 @@ CREATE TABLE `category_stats` (
 -- Password hash below is BCrypt for plain text password: 123456
 INSERT INTO `sys_user`
     (`user_number`,
-     `nickname`, `password`, `role`, `enabled`, `phone`, `avatar_url`, `created_at`)
+     `name`, `password`, `role`, `enabled`, `phone`, `avatar_url`, `created_at`)
 VALUES
     ('admin', '管理员', '$2a$10$BnD773cRGP0RgVgCWfk2aOnE26elWpSZBjNLz/GNV7hghhopQ7xu2', 'ADMIN', TRUE, '13800000000', NULL, NOW() - INTERVAL 180 DAY),
     ('admin02', '值班管理员', '$2a$10$BnD773cRGP0RgVgCWfk2aOnE26elWpSZBjNLz/GNV7hghhopQ7xu2', 'ADMIN', TRUE, '13800000009', NULL, NOW() - INTERVAL 120 DAY),

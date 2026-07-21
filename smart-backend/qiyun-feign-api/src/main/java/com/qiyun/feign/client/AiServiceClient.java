@@ -42,7 +42,11 @@ public interface AiServiceClient {
                 (String) dataMap.get("category"),
                 (String) dataMap.get("urgency"),
                 (String) dataMap.get("suggestion"),
-                keywords != null ? keywords : java.util.Collections.emptyList()
+                keywords != null ? keywords : java.util.Collections.emptyList(),
+                dataMap.get("title") == null ? null : String.valueOf(dataMap.get("title")),
+                dataMap.get("locationText") == null ? null : String.valueOf(dataMap.get("locationText")),
+                dataMap.get("location") == null ? null : String.valueOf(dataMap.get("location")),
+                dataMap.get("source") == null ? null : String.valueOf(dataMap.get("source"))
             );
         }
         return null;

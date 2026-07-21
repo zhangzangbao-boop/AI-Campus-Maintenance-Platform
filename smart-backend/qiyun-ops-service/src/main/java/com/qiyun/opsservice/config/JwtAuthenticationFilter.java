@@ -43,7 +43,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 List<String> roles = jwtUtil.extractRoles(token);
 
                 List<SimpleGrantedAuthority> authorities = roles.stream()
-                    .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
+                    .map(this::toRoleAuthority)
                     .collect(Collectors.toList());
 
                 UsernamePasswordAuthenticationToken authentication =
@@ -56,5 +56,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private SimpleGrantedAuthority toRoleAuthority(String role) {
+        String normalizedRole = role == null ? "" : role.trim().toUpperCase();
+        if (normalizedRole.startsWith("ROLE_")) {
+            return new SimpleGrantedAuthority(normalizedRole);
+        }
+        return new SimpleGrantedAuthority("ROLE_" + normalizedRole);
     }
 }

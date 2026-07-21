@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -38,14 +40,15 @@ public class AiAnalyzeService {
      * 分析工单描述
      */
     public AnalyzeTicketResponse analyze(AnalyzeTicketRequest request) {
-        String description = request.description().toLowerCase(Locale.ROOT);
-        String location = request.location();
+        String rawDescription = request.description() == null ? "" : request.description().trim();
+        String description = rawDescription.toLowerCase(Locale.ROOT);
+        String location = cleanText(request.location());
 
         // 尝试调用 DeepSeek API
         if (deepSeekClientService.isAvailable()) {
             log.info("尝试调用 DeepSeek AI 进行分析");
             try {
-                AnalyzeTicketResponse aiResponse = analyzeByDeepSeek(description, location);
+                AnalyzeTicketResponse aiResponse = analyzeByDeepSeek(rawDescription, location);
                 if (aiResponse != null) {
                     log.info("DeepSeek AI 分析成功: category={}, urgency={}",
                         aiResponse.category(), aiResponse.urgency());
@@ -60,7 +63,7 @@ public class AiAnalyzeService {
         }
 
         // 降级到规则引擎
-        return analyzeByRules(description);
+        return analyzeByRules(description, rawDescription, location);
     }
 
     public AnalyzeFeedbackSentimentResponse analyzeFeedbackSentiment(AnalyzeFeedbackSentimentRequest request) {
@@ -79,6 +82,27 @@ public class AiAnalyzeService {
         }
 
         return analyzeFeedbackByRules(comment);
+    }
+
+    public String generateRepairReport(String description, String processNotes) {
+        String problem = cleanText(description);
+        String process = cleanText(processNotes);
+        if (deepSeekClientService.isAvailable()) {
+            String aiReport = deepSeekClientService.requestText(
+                "你是校园后勤维修工单助手。请用中文生成简洁、规范、可直接提交的维修处理报告，不要编造不存在的耗材和结果。",
+                "问题描述：" + problem + "\n维修过程记录：" + process + "\n请输出 120 字以内的维修报告。",
+                400
+            );
+            if (!aiReport.isBlank()) {
+                return aiReport;
+            }
+        }
+        if (process.isBlank()) {
+            process = "已完成现场检查、故障定位和必要维修处理。";
+        }
+        return "维修处理报告：针对“" + shortText(problem, 80) + "”，维修人员已进行现场核查。"
+            + process
+            + " 处理后已完成基础功能测试，建议后续继续观察同位置是否出现重复故障。";
     }
 
     private AnalyzeFeedbackSentimentResponse parseSentimentResponse(Map<String, Object> result, String comment) {
@@ -125,6 +149,11 @@ public class AiAnalyzeService {
             String urgency = getStringValue(result, "urgency");
             String suggestion = getStringValue(result, "suggestion");
             List<String> keywords = getStringListValue(result, "keywords");
+            String locationText = firstNonBlank(
+                getStringValue(result, "locationText"),
+                getStringValue(result, "location"),
+                extractLocation(description, location)
+            );
 
             // 验证必要字段
             if (category == null || category.isBlank()) {
@@ -137,10 +166,14 @@ public class AiAnalyzeService {
                 suggestion = "建议现场检查后确定故障原因";
             }
             if (keywords == null || keywords.isEmpty()) {
-                keywords = extractKeywords(description);
+                keywords = extractKeywords(description.toLowerCase(Locale.ROOT));
             }
+            String title = firstNonBlank(
+                getStringValue(result, "title"),
+                buildTitle(description, category, locationText)
+            );
 
-            return new AnalyzeTicketResponse(category, urgency, suggestion, keywords);
+            return new AnalyzeTicketResponse(category, urgency, suggestion, keywords, title, locationText, locationText, "deepseek");
         } catch (Exception e) {
             log.error("解析 DeepSeek 响应失败: {}", e.getMessage());
             return null;
@@ -150,7 +183,7 @@ public class AiAnalyzeService {
     /**
      * 使用规则引擎分析（降级方案）
      */
-    private AnalyzeTicketResponse analyzeByRules(String description) {
+    private AnalyzeTicketResponse analyzeByRules(String description, String rawDescription, String providedLocation) {
         // 1. 根据关键词判断故障分类
         String category = determineCategory(description);
 
@@ -162,8 +195,10 @@ public class AiAnalyzeService {
 
         // 4. 提取关键词
         List<String> keywords = extractKeywords(description);
+        String locationText = extractLocation(rawDescription, providedLocation);
+        String title = buildTitle(rawDescription, category, locationText);
 
-        return new AnalyzeTicketResponse(category, urgency, suggestion, keywords);
+        return new AnalyzeTicketResponse(category, urgency, suggestion, keywords, title, locationText, locationText, "rules");
     }
 
     /**
@@ -401,6 +436,112 @@ public class AiAnalyzeService {
         }
 
         return keywords;
+    }
+
+    private String extractLocation(String description, String providedLocation) {
+        String directLocation = cleanText(providedLocation);
+        if (!directLocation.isBlank()) {
+            return directLocation;
+        }
+
+        String text = cleanText(description);
+        if (text.isBlank()) {
+            return "";
+        }
+
+        String[] regexes = {
+            "([一二三四五六七八九十0-9]+号?(?:宿舍楼|宿舍|公寓|教学楼|实验楼|楼|栋|幢)\\s*\\d{1,2}[-—]\\d{2,4})",
+            "((?:宿舍楼|宿舍|公寓|教学楼|实验楼|图书馆|食堂|体育馆)\\s*\\d+\\s*楼\\s*(?:卫生间|洗手间|浴室|走廊|大厅|教室|实验室|房间|宿舍)?)",
+            "([一二三四五六七八九十0-9]+号?(?:宿舍楼|公寓|教学楼|实验楼|楼|栋|幢)\\s*\\d{2,4}(?:室|房间|宿舍)?)",
+            "((?:东|西|南|北)?(?:区)?[A-Za-z0-9一二三四五六七八九十]+(?:栋|幢|号楼|楼)\\s*\\d{2,4}(?:室|房间|宿舍)?)",
+            "((?:图书馆|食堂|教学楼|实验楼|体育馆|操场|宿舍楼|宿舍|公寓)[\\u4e00-\\u9fa5A-Za-z0-9\\s\\-—]{0,16}(?:卫生间|洗手间|浴室|走廊|大厅|教室|实验室|门口|入口|房间|宿舍))"
+        };
+
+        for (String regex : regexes) {
+            Matcher matcher = Pattern.compile(regex).matcher(text);
+            if (matcher.find()) {
+                return cleanLocation(matcher.group(1));
+            }
+        }
+
+        return "";
+    }
+
+    private String buildTitle(String description, String category, String locationText) {
+        String issue = inferIssueName(description, category);
+        String location = cleanText(locationText);
+        String title = location.isBlank() ? issue + "报修" : location + issue;
+        return title.length() > 60 ? title.substring(0, 60) : title;
+    }
+
+    private String inferIssueName(String description, String category) {
+        String text = description == null ? "" : description.toLowerCase(Locale.ROOT);
+        if (text.contains("漏水") || text.contains("滴水") || text.contains("积水")) {
+            return "漏水故障";
+        }
+        if (text.contains("堵塞") || text.contains("下水") || text.contains("地漏")) {
+            return "堵塞故障";
+        }
+        if (text.contains("频闪") || text.contains("照明") || text.contains("灯")) {
+            return "照明故障";
+        }
+        if (text.contains("插座")) {
+            return "插座故障";
+        }
+        if (text.contains("断电") || text.contains("跳闸")) {
+            return "电力故障";
+        }
+        if (text.contains("wifi") || text.contains("网络") || text.contains("网口")) {
+            return "网络故障";
+        }
+        if (text.contains("空调")) {
+            return "空调故障";
+        }
+        if (text.contains("门锁") || text.contains("门")) {
+            return "门锁故障";
+        }
+        if (text.contains("窗") || text.contains("玻璃")) {
+            return "门窗故障";
+        }
+        if (text.contains("桌") || text.contains("椅") || text.contains("床") || text.contains("柜")) {
+            return "家具故障";
+        }
+        if (category != null && category.endsWith("故障")) {
+            return category;
+        }
+        return "维修问题";
+    }
+
+    private String cleanLocation(String value) {
+        String cleaned = cleanText(value);
+        cleaned = cleaned.replaceAll("^[在于到至\\s]+", "");
+        cleaned = cleaned.replaceAll("[的,，。；;：:\\s]+$", "");
+        return cleaned;
+    }
+
+    private String cleanText(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replaceAll("\\s+", " ").trim();
+    }
+
+    private String shortText(String value, int maxLength) {
+        String text = cleanText(value);
+        if (text.length() <= maxLength) {
+            return text;
+        }
+        return text.substring(0, maxLength) + "...";
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            String cleaned = cleanText(value);
+            if (!cleaned.isBlank()) {
+                return cleaned;
+            }
+        }
+        return "";
     }
 
     /**

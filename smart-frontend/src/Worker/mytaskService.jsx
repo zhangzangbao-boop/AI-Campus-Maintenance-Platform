@@ -78,53 +78,62 @@ export const mytaskService = {
       // 移除静态数据过滤，直接调用API
       const response = await api.repairman.getMyTasks(requestParams);
       
-      // 假设API返回的数据结构为 { code: 200, data: { list: [], total: number, page: number, pageSize: number } }
-      if (response.code === 200) {
-        // 确保从正确的路径获取数据
-        const dataObj = response.data || {};
-        const rawData = dataObj.list || (Array.isArray(dataObj) ? dataObj : []);
-        console.log('后端返回的原始数据:', rawData);
-        console.log('response.data结构:', response.data);
-        
-        // 映射后端状态枚举值到前端状态值，并补充前端展示/统计所需字段
-        const mappedData = Array.isArray(rawData) ? rawData.map(task => {
-          const originalStatus = task.status; // 保存原始状态用于调试
-          const frontendStatus = mapStatusToFrontend(task.status);
-          return {
-            ...task,
-            id: task.ticketId || task.id,
-            ticketId: task.ticketId || task.id, // 确保 ticketId 存在
-            status: frontendStatus,
-            originalStatus: originalStatus, // 保存原始状态
-            category: task.categoryName || task.category,
-            location: task.locationText || task.location,
-            description: task.description || '', // 添加描述字段
-            created_at: task.createdAt || task.created_at,
-            assigned_at: task.assignedAt || task.assigned_at,
-            completed_at: task.completedAt || task.completed_at,
-            // 优先级（用于列表显示和筛选）
-            priority: task.priority || 'low',
-            estimated_completion_time: task.estimatedCompletionTime || task.estimated_completion_time,
-            processNotes: task.processNotes || task.notes,
-            studentName: task.studentName || task.studentId || '', // 添加学生名称
-            contactPhone: task.contactPhone || '', // 添加联系电话
-            // 评价分数（从后端 TicketSummaryDto.ratingScore 映射）
-            rating: task.ratingScore ?? task.rating ?? null,
-          };
-        }) : [];
-        
-        console.log('映射后的任务数据:', mappedData);
-        console.log('任务数量:', mappedData.length);
-        
-        return {
-          data: mappedData,
-          total: dataObj.total || mappedData.length,
-          page: dataObj.page || 0,
-          pageSize: dataObj.pageSize || 10,
-        };
+      // 兼容两种数据格式：
+      // 1. 统一响应格式: { code: 200, data: { list: [], total: number, ... } }
+      // 2. 直接返回DTO: { total: number, list: [], ... }
+      let rawData;
+      if (response.code === 200 && response.data) {
+        // 统一响应格式
+        rawData = response.data.list || response.data || [];
+      } else if (response.total !== undefined || response.list !== undefined) {
+        // 直接返回DTO格式
+        rawData = response.list || [];
       } else {
-        throw new Error(response.message || '获取任务失败');
+        throw new Error(response.message || '获取任务失败：未知的数据格式');
       }
+
+      console.log('后端返回的原始数据:', rawData);
+      console.log('response结构:', response);
+
+      // 映射后端状态枚举值到前端状态值，并补充前端展示/统计所需字段
+      const mappedData = Array.isArray(rawData) ? rawData.map(task => {
+        const originalStatus = task.status; // 保存原始状态用于调试
+        const frontendStatus = mapStatusToFrontend(task.status);
+        return {
+          ...task,
+          id: task.ticketId || task.id,
+          ticketId: task.ticketId || task.id, // 确保 ticketId 存在
+          status: frontendStatus,
+          originalStatus: originalStatus, // 保存原始状态
+          category: task.categoryName || task.category,
+          location: task.locationText || task.location,
+          description: task.description || '', // 添加描述字段
+          created_at: task.createdAt || task.created_at,
+          assigned_at: task.assignedAt || task.assigned_at,
+          completed_at: task.completedAt || task.completed_at,
+          // 优先级（用于列表显示和筛选）
+          priority: task.priority || 'low',
+          estimated_completion_time: task.estimatedCompletionTime || task.estimated_completion_time,
+          processNotes: task.processNotes || task.notes,
+          studentName: task.studentName || task.studentId || '', // 添加学生名称
+          contactPhone: task.contactPhone || '', // 添加联系电话
+          // 评价分数（从后端 TicketSummaryDto.ratingScore 映射）
+          rating: task.ratingScore ?? task.rating ?? null,
+        };
+      }) : [];
+
+      console.log('映射后的任务数据:', mappedData);
+      console.log('任务数量:', mappedData.length);
+
+      // 兼容两种格式的分页信息
+      const paginationSource = response.data || response;
+
+      return {
+        data: mappedData,
+        total: paginationSource.total || mappedData.length,
+        page: paginationSource.page || 0,
+        pageSize: paginationSource.pageSize || 10,
+      };
     } catch (error) {
       console.error('获取任务失败:', error);
       message.error('获取任务失败: ' + error.message);

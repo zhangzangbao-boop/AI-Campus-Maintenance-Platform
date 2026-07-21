@@ -21,6 +21,16 @@ public class ChromaConfig {
     private String collection = "campus_maintenance_kb";
 
     /**
+     * Chroma v2 tenant
+     */
+    private String tenant = "default_tenant";
+
+    /**
+     * Chroma v2 database
+     */
+    private String database = "default_database";
+
+    /**
      * 检索返回数量
      */
     private int topK = 5;
@@ -45,6 +55,22 @@ public class ChromaConfig {
 
     public void setCollection(String collection) {
         this.collection = collection;
+    }
+
+    public String getTenant() {
+        return tenant;
+    }
+
+    public void setTenant(String tenant) {
+        this.tenant = tenant;
+    }
+
+    public String getDatabase() {
+        return database;
+    }
+
+    public void setDatabase(String database) {
+        this.database = database;
     }
 
     public int getTopK() {

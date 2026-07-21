@@ -9,6 +9,8 @@ import com.qiyun.opsservice.dto.request.KnowledgeBaseRequest;
 import com.qiyun.opsservice.repository.KnowledgeBaseRepository;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,6 +26,18 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class KnowledgeBaseService {
 
+    private static final String DEFAULT_INTERNAL_SECRET = "qiyun-local-internal-secret";
+
+    private static final Map<String, Set<String>> CATEGORY_ALIASES = Map.of(
+        "ac", Set.of("ac", "空调维修", "空调故障", "电器故障"),
+        "plumbing", Set.of("plumbing", "水电维修", "管道故障"),
+        "electrical", Set.of("electrical", "电器故障", "电力故障", "水电维修"),
+        "network", Set.of("network", "网络故障"),
+        "furniture", Set.of("furniture", "家具维修", "家具故障"),
+        "door_window", Set.of("door_window", "公共设施", "门窗故障"),
+        "other", Set.of("other", "其他故障", "公共设施")
+    );
+
     private final KnowledgeBaseRepository knowledgeBaseRepository;
     private final AuditLogService auditLogService;
     private final AiInternalClient aiInternalClient;
@@ -33,13 +47,10 @@ public class KnowledgeBaseService {
 
     @Transactional(readOnly = true)
     public List<KnowledgeBaseDto> list(String categoryKey, String keyword, boolean includeDisabled) {
-        List<KnowledgeBase> rows = includeDisabled
-            ? knowledgeBaseRepository.findAllWithCategory()
-            : knowledgeBaseRepository.searchEnabled(categoryKey, keyword);
+        List<KnowledgeBase> rows = knowledgeBaseRepository.findAllWithCategory();
         return rows.stream()
             .filter(item -> includeDisabled || Boolean.TRUE.equals(item.getEnabled()))
-            .filter(item -> categoryKey == null || categoryKey.isBlank()
-                || categoryKey.equals(item.getCategoryKey()))
+            .filter(item -> categoryMatches(categoryKey, item.getCategoryKey()))
             .filter(item -> keyword == null || keyword.isBlank() || matches(item, keyword))
             .map(this::toDto)
             .toList();
@@ -49,7 +60,9 @@ public class KnowledgeBaseService {
     public List<KnowledgeBaseDto> recommend(String categoryKey, String text, int limit) {
         String keyword = text == null ? "" : text;
         int size = limit <= 0 ? 5 : Math.min(limit, 10);
-        return knowledgeBaseRepository.findEnabledByCategory(categoryKey).stream()
+        return knowledgeBaseRepository.findAllWithCategory().stream()
+            .filter(item -> Boolean.TRUE.equals(item.getEnabled()))
+            .filter(item -> categoryMatches(categoryKey, item.getCategoryKey()))
             .sorted(Comparator.comparingInt((KnowledgeBase item) -> score(item, keyword)).reversed()
                 .thenComparing(KnowledgeBase::getUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
             .limit(size)
@@ -130,8 +143,9 @@ public class KnowledgeBaseService {
         int syncedCount = 0;
         for (KnowledgeBase item : enabledItems) {
             try {
-                syncToChroma(item);
-                syncedCount++;
+                if (syncToChroma(item)) {
+                    syncedCount++;
+                }
             } catch (Exception e) {
                 log.warn("同步知识条目 {} 到向量库失败: {}", item.getKnowledgeId(), e.getMessage());
             }
@@ -145,7 +159,7 @@ public class KnowledgeBaseService {
     /**
      * 同步知识条目到 Chroma
      */
-    private void syncToChroma(KnowledgeBase item) {
+    private boolean syncToChroma(KnowledgeBase item) {
         try {
             String secret = getInternalSecret();
             String document = buildDocument(item);
@@ -155,12 +169,31 @@ public class KnowledgeBaseService {
                 item.getCategoryKey(),
                 item.getEnabled()
             );
-            aiInternalClient.syncKnowledge(secret, item.getKnowledgeId(), request);
-            log.debug("知识条目 {} 已同步到向量库", item.getKnowledgeId());
+            Map<String, Object> response = aiInternalClient.syncKnowledge(secret, item.getKnowledgeId(), request);
+            boolean vectorSynced = isVectorSynced(response);
+            if (vectorSynced) {
+                log.debug("知识条目 {} 已同步到向量库", item.getKnowledgeId());
+            } else {
+                log.warn("知识条目 {} 未成功写入向量库: {}", item.getKnowledgeId(), response);
+            }
+            return vectorSynced;
         } catch (Exception e) {
             log.error("同步知识条目 {} 到向量库失败: {}", item.getKnowledgeId(), e.getMessage());
             // 不抛出异常，避免影响主流程
+            return false;
         }
+    }
+
+    private boolean isVectorSynced(Map<String, Object> response) {
+        if (response == null) {
+            return false;
+        }
+        Object data = response.get("data");
+        if (!(data instanceof Map<?, ?> dataMap)) {
+            return false;
+        }
+        Object value = dataMap.get("vectorSynced");
+        return Boolean.TRUE.equals(value) || "true".equalsIgnoreCase(String.valueOf(value));
     }
 
     /**
@@ -205,10 +238,7 @@ public class KnowledgeBaseService {
         String secret = (internalSecret != null && !internalSecret.isBlank())
             ? internalSecret
             : System.getenv("INTERNAL_SERVICE_SECRET");
-        if (secret == null || secret.isBlank()) {
-            throw new BusinessException("内部服务密钥未配置");
-        }
-        return secret;
+        return (secret == null || secret.isBlank()) ? DEFAULT_INTERNAL_SECRET : secret;
     }
 
     private void apply(KnowledgeBase item, KnowledgeBaseRequest request) {
@@ -227,6 +257,24 @@ public class KnowledgeBaseService {
         return contains(item.getTitle(), lower)
             || contains(item.getSymptomKeywords(), lower)
             || contains(item.getSolutionSteps(), lower);
+    }
+
+    private boolean categoryMatches(String requestedCategory, String itemCategory) {
+        if (requestedCategory == null || requestedCategory.isBlank()) {
+            return true;
+        }
+        if (itemCategory == null || itemCategory.isBlank()) {
+            return false;
+        }
+
+        String requested = requestedCategory.trim();
+        String actual = itemCategory.trim();
+        if (requested.equalsIgnoreCase(actual)) {
+            return true;
+        }
+
+        Set<String> aliases = CATEGORY_ALIASES.get(requested.toLowerCase());
+        return aliases != null && aliases.stream().anyMatch(alias -> alias.equalsIgnoreCase(actual));
     }
 
     private int score(KnowledgeBase item, String text) {

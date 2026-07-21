@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -23,6 +24,7 @@ public class DeepSeekClientService {
 
     private final ObjectMapper objectMapper;
     private final SystemConfigRepository systemConfigRepository;
+    private final Environment environment;
     private final HttpClient httpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(8))
         .build();
@@ -39,7 +41,7 @@ public class DeepSeekClientService {
     @Value("${ai.api-key:}")
     private String apiKey;
 
-    @Value("${ai.model:deepseek-v4-flash}")
+    @Value("${ai.model:deepseek-chat}")
     private String model;
 
     @Value("${ai.timeout-seconds:20}")
@@ -166,6 +168,10 @@ public class DeepSeekClientService {
     }
 
     private String configValue(String key, String fallback) {
+        String runtimeValue = runtimeAiConfigValue(key);
+        if (runtimeValue != null && !runtimeValue.isBlank()) {
+            return runtimeValue;
+        }
         try {
             return systemConfigRepository.findById(key)
                 .map(SystemConfig::getConfigValue)
@@ -174,6 +180,24 @@ public class DeepSeekClientService {
         } catch (Exception ignored) {
             return fallback == null ? "" : fallback;
         }
+    }
+
+    private String runtimeAiConfigValue(String key) {
+        String envKey = switch (key) {
+            case "ai.enabled" -> "AI_ENABLED";
+            case "ai.provider" -> "AI_PROVIDER";
+            case "ai.base-url" -> "AI_BASE_URL";
+            case "ai.api-key" -> "DEEPSEEK_API_KEY";
+            case "ai.model" -> "AI_MODEL";
+            case "ai.timeout-seconds" -> "AI_TIMEOUT_SECONDS";
+            case "ai.thinking.enabled" -> "AI_THINKING_ENABLED";
+            default -> null;
+        };
+        if (envKey == null) {
+            return null;
+        }
+        String value = environment.getProperty(envKey);
+        return value == null ? null : value.trim();
     }
 
     private boolean configBoolean(String key, boolean fallback) {

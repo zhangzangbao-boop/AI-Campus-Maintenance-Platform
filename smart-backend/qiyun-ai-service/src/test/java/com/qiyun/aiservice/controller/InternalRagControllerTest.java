@@ -2,6 +2,7 @@ package com.qiyun.aiservice.controller;
 
 import com.qiyun.aiservice.service.ChromaClientService;
 import com.qiyun.aiservice.service.EmbeddingService;
+import com.qiyun.aiservice.service.LocalKnowledgeIndexService;
 import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,11 +31,14 @@ class InternalRagControllerTest {
     @Mock
     private EmbeddingService embeddingService;
 
+    @Mock
+    private LocalKnowledgeIndexService localKnowledgeIndexService;
+
     private InternalRagController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new InternalRagController(chromaClientService, embeddingService);
+        controller = new InternalRagController(chromaClientService, embeddingService, localKnowledgeIndexService);
         ReflectionTestUtils.setField(controller, "internalSecret", "test-secret");
     }
 
@@ -63,7 +67,7 @@ class InternalRagControllerTest {
     }
 
     @Test
-    @DisplayName("Embedding 服务不可用返回503")
+    @DisplayName("Embedding 服务不可用时同步到本地索引")
     void testEmbeddingServiceUnavailable() {
         when(embeddingService.isAvailable()).thenReturn(false);
 
@@ -73,9 +77,10 @@ class InternalRagControllerTest {
         ResponseEntity<Map<String, Object>> response =
             controller.upsertKnowledge("test-secret", 1L, request);
 
-        assertEquals(503, response.getStatusCode().value());
-        assertEquals(503, response.getBody().get("code"));
-        assertTrue(response.getBody().get("message").toString().contains("Embedding 服务不可用"));
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(200, response.getBody().get("code"));
+        assertTrue(response.getBody().get("message").toString().contains("本地索引"));
+        verify(localKnowledgeIndexService).upsertKnowledge(eq("kb-1"), eq("测试内容"), anyMap());
     }
 
     @Test
@@ -94,6 +99,7 @@ class InternalRagControllerTest {
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(200, response.getBody().get("code"));
+        verify(localKnowledgeIndexService).upsertKnowledge(eq("kb-1"), eq("测试内容"), anyMap());
         verify(chromaClientService).updateDocument(eq("kb-1"), eq("测试内容"), any(float[].class), anyMap());
     }
 
@@ -106,6 +112,7 @@ class InternalRagControllerTest {
             controller.deleteKnowledge("test-secret", 1L);
 
         assertEquals(200, response.getStatusCode().value());
+        verify(localKnowledgeIndexService).deleteKnowledge("kb-1");
         verify(chromaClientService).deleteDocument("kb-1");
     }
 
@@ -118,11 +125,12 @@ class InternalRagControllerTest {
             controller.rebuildIndex("test-secret");
 
         assertEquals(200, response.getStatusCode().value());
+        verify(localKnowledgeIndexService).clear();
         verify(chromaClientService).clearCollection();
     }
 
     @Test
-    @DisplayName("更新失败返回500")
+    @DisplayName("向量更新失败时仍保留本地索引")
     void testUpsertFailure() {
         when(embeddingService.isAvailable()).thenReturn(true);
         when(embeddingService.getDimensions()).thenReturn(384);
@@ -135,7 +143,9 @@ class InternalRagControllerTest {
         ResponseEntity<Map<String, Object>> response =
             controller.upsertKnowledge("test-secret", 1L, request);
 
-        assertEquals(500, response.getStatusCode().value());
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(200, response.getBody().get("code"));
+        assertTrue(response.getBody().get("message").toString().contains("本地索引"));
     }
 
     @Test
@@ -153,7 +163,7 @@ class InternalRagControllerTest {
     }
 
     @Test
-    @DisplayName("Embedding 生成失败返回500")
+    @DisplayName("Embedding 生成失败时仍保留本地索引")
     void testEmbeddingGenerationFailure() {
         when(embeddingService.isAvailable()).thenReturn(true);
         when(embeddingService.embed(anyString())).thenReturn(null);
@@ -164,13 +174,13 @@ class InternalRagControllerTest {
         ResponseEntity<Map<String, Object>> response =
             controller.upsertKnowledge("test-secret", 1L, request);
 
-        assertEquals(500, response.getStatusCode().value());
-        assertEquals(500, response.getBody().get("code"));
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(200, response.getBody().get("code"));
         assertTrue(response.getBody().get("message").toString().contains("生成向量失败"));
     }
 
     @Test
-    @DisplayName("Embedding 维度不匹配返回500")
+    @DisplayName("Embedding 维度不匹配时仍保留本地索引")
     void testEmbeddingDimensionMismatch() {
         when(embeddingService.isAvailable()).thenReturn(true);
         when(embeddingService.getDimensions()).thenReturn(384);
@@ -182,8 +192,8 @@ class InternalRagControllerTest {
         ResponseEntity<Map<String, Object>> response =
             controller.upsertKnowledge("test-secret", 1L, request);
 
-        assertEquals(500, response.getStatusCode().value());
-        assertEquals(500, response.getBody().get("code"));
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(200, response.getBody().get("code"));
         assertTrue(response.getBody().get("message").toString().contains("向量维度不匹配"));
     }
 }

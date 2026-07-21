@@ -16,14 +16,24 @@ import org.springframework.stereotype.Component;
 @Component
 public class JwtUtil {
 
+    private static final String DEFAULT_DEV_SECRET =
+            "qiyun-campus-maintenance-platform-jwt-secret-key-2024";
+
     private final Key secretKey;
     private final long tokenValidityMs;
 
     public JwtUtil(
             @Value("${jwt.secret:}") String secret,
             @Value("${jwt.expiration-ms:604800000}") long tokenValidityMs) {
-        this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        this.secretKey = Keys.hmacShaKeyFor(resolveSecret(secret).getBytes(StandardCharsets.UTF_8));
         this.tokenValidityMs = tokenValidityMs;
+    }
+
+    private String resolveSecret(String secret) {
+        if (secret == null || secret.isBlank() || secret.getBytes(StandardCharsets.UTF_8).length < 32) {
+            return DEFAULT_DEV_SECRET;
+        }
+        return secret;
     }
 
     public String extractUsername(String token) {

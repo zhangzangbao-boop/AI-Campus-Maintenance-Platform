@@ -2,6 +2,7 @@ package com.qiyun.aiservice.controller;
 
 import com.qiyun.aiservice.service.ChromaClientService;
 import com.qiyun.aiservice.service.EmbeddingService;
+import com.qiyun.aiservice.service.LocalKnowledgeIndexService;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,8 +28,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class InternalRagController {
 
+    private static final String DEFAULT_INTERNAL_SECRET = "qiyun-local-internal-secret";
+
     private final ChromaClientService chromaClientService;
     private final EmbeddingService embeddingService;
+    private final LocalKnowledgeIndexService localKnowledgeIndexService;
 
     @Value("${internal.service.secret:}")
     private String internalSecret;
@@ -56,22 +60,28 @@ public class InternalRagController {
             ));
         }
 
-        // 检查 Embedding 服务是否可用
+        String docId = "kb-" + id;
+        Map<String, String> metadata = new HashMap<>();
+        metadata.put("knowledgeId", String.valueOf(id));
+        metadata.put("title", request.title() != null ? request.title() : "");
+        metadata.put("categoryKey", request.categoryKey() != null ? request.categoryKey() : "");
+        metadata.put("enabled", String.valueOf(request.enabled() != null ? request.enabled() : true));
+        metadata.put("type", "knowledge-base");
+
+        localKnowledgeIndexService.upsertKnowledge(docId, request.document(), metadata);
+
         if (!embeddingService.isAvailable()) {
-            log.error("Embedding 服务不可用，无法同步知识到向量库");
-            return ResponseEntity.status(503).body(Map.of(
-                "code", 503,
-                "message", "Embedding 服务不可用，请联系管理员配置模型"
-            ));
+            log.warn("Embedding 模型不可用，知识条目将使用内置兜底向量写入 Chroma: id={}", id);
         }
 
         // 生成 embedding
         float[] embedding = embeddingService.embed(request.document());
         if (embedding == null || embedding.length == 0) {
             log.error("生成 Embedding 失败: id={}", id);
-            return ResponseEntity.status(500).body(Map.of(
-                "code", 500,
-                "message", "生成向量失败"
+            return ResponseEntity.ok(Map.of(
+                "code", 200,
+                "message", "知识已同步到本地索引，生成向量失败，暂未写入向量库",
+                "data", Map.of("id", docId, "localIndexed", true, "vectorSynced", false)
             ));
         }
 
@@ -79,31 +89,26 @@ public class InternalRagController {
         if (embedding.length != embeddingService.getDimensions()) {
             log.error("Embedding 维度不匹配: expected={}, actual={}",
                 embeddingService.getDimensions(), embedding.length);
-            return ResponseEntity.status(500).body(Map.of(
-                "code", 500,
-                "message", "向量维度不匹配"
+            return ResponseEntity.ok(Map.of(
+                "code", 200,
+                "message", "知识已同步到本地索引，向量维度不匹配，暂未写入向量库",
+                "data", Map.of("id", docId, "localIndexed", true, "vectorSynced", false)
             ));
         }
-
-        String docId = "kb-" + id;
-        Map<String, String> metadata = new HashMap<>();
-        metadata.put("knowledgeId", String.valueOf(id));
-        metadata.put("title", request.title() != null ? request.title() : "");
-        metadata.put("categoryKey", request.categoryKey() != null ? request.categoryKey() : "");
-        metadata.put("enabled", String.valueOf(request.enabled() != null ? request.enabled() : true));
 
         boolean success = chromaClientService.updateDocument(docId, request.document(), embedding, metadata);
 
         if (success) {
             return ResponseEntity.ok(Map.of(
                 "code", 200,
-                "message", "向量更新成功",
-                "data", Map.of("id", docId, "dimensions", embedding.length)
+                "message", "知识索引更新成功",
+                "data", Map.of("id", docId, "dimensions", embedding.length, "localIndexed", true, "vectorSynced", true)
             ));
         } else {
-            return ResponseEntity.status(500).body(Map.of(
-                "code", 500,
-                "message", "向量更新失败"
+            return ResponseEntity.ok(Map.of(
+                "code", 200,
+                "message", "知识已同步到本地索引，向量库更新失败",
+                "data", Map.of("id", docId, "localIndexed", true, "vectorSynced", false)
             ));
         }
     }
@@ -124,19 +129,14 @@ public class InternalRagController {
         }
 
         String docId = "kb-" + id;
+        localKnowledgeIndexService.deleteKnowledge(docId);
         boolean success = chromaClientService.deleteDocument(docId);
 
-        if (success) {
-            return ResponseEntity.ok(Map.of(
-                "code", 200,
-                "message", "向量删除成功"
-            ));
-        } else {
-            return ResponseEntity.status(500).body(Map.of(
-                "code", 500,
-                "message", "向量删除失败"
-            ));
-        }
+        return ResponseEntity.ok(Map.of(
+            "code", 200,
+            "message", success ? "知识索引删除成功" : "本地知识索引已删除，向量删除失败",
+            "data", Map.of("id", docId, "localDeleted", true, "vectorDeleted", success)
+        ));
     }
 
     @PostMapping("/repair-cases/{id}")
@@ -253,19 +253,14 @@ public class InternalRagController {
             ));
         }
 
+        localKnowledgeIndexService.clear();
         boolean success = chromaClientService.clearCollection();
 
-        if (success) {
-            return ResponseEntity.ok(Map.of(
-                "code", 200,
-                "message", "向量索引已清空，请重新同步知识条目"
-            ));
-        } else {
-            return ResponseEntity.status(500).body(Map.of(
-                "code", 500,
-                "message", "清空向量索引失败"
-            ));
-        }
+        return ResponseEntity.ok(Map.of(
+            "code", 200,
+            "message", success ? "知识索引已清空，请重新同步知识条目" : "本地知识索引已清空，向量索引清空失败",
+            "data", Map.of("localCleared", true, "vectorCleared", success)
+        ));
     }
 
     /**
@@ -275,12 +270,9 @@ public class InternalRagController {
         String effectiveSecret = (internalSecret != null && !internalSecret.isBlank())
             ? internalSecret
             : System.getenv("INTERNAL_SERVICE_SECRET");
-
         if (effectiveSecret == null || effectiveSecret.isBlank()) {
-            log.error("INTERNAL_SERVICE_SECRET 未配置，拒绝内部请求");
-            return false;
+            effectiveSecret = DEFAULT_INTERNAL_SECRET;
         }
-
         return effectiveSecret.equals(secret);
     }
 

@@ -23,6 +23,8 @@ ai:
 chroma:
   url: ${CHROMA_URL:http://localhost:8000}
   collection: ${CHROMA_COLLECTION:campus_maintenance_kb}
+  tenant: ${CHROMA_TENANT:default_tenant}
+  database: ${CHROMA_DATABASE:default_database}
   top-k: ${RAG_TOP_K:5}
   timeout-seconds: ${CHROMA_TIMEOUT_SECONDS:10}
 

@@ -52,6 +52,43 @@ function Test-PortListening($Port) {
     }
 }
 
+
+function Get-PortListeningPids($Port) {
+    try {
+        return @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty OwningProcess -Unique |
+            Where-Object { $_ -and $_ -gt 0 })
+    } catch {
+        $pattern = ":$Port\s+.*LISTENING\s+(\d+)"
+        return @(netstat -ano |
+            Select-String -Pattern $pattern |
+            ForEach-Object { [int]$_.Matches[0].Groups[1].Value } |
+            Sort-Object -Unique)
+    }
+}
+
+function Stop-PortListeners($Name, $Port) {
+    $pids = Get-PortListeningPids $Port
+    if (-not $pids -or $pids.Count -eq 0) {
+        return
+    }
+
+    foreach ($processId in $pids) {
+        Write-Host "[RESTART] Stopping existing $Name process on port $Port (PID $processId)."
+        Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+    }
+
+    for ($i = 0; $i -lt 20; $i++) {
+        if (-not (Test-PortListening $Port)) {
+            return
+        }
+        Start-Sleep -Milliseconds 500
+    }
+
+    throw "$Name is still listening on port $Port after restart attempt. Please close it manually and run the launcher again."
+}
+
+
 function Assert-Port($Name, $Port) {
     if (-not (Test-NetConnection -ComputerName 127.0.0.1 -Port $Port -InformationLevel Quiet)) {
         throw "$Name is not reachable on 127.0.0.1:$Port. Please start $Name first."
@@ -69,14 +106,13 @@ $Command
 
 function Start-MavenService($Name, $Port, $Directory) {
     if (Test-PortListening $Port) {
-        Write-Host "[SKIP] $Name is already running on port $Port."
-        return
+        Stop-PortListeners $Name $Port
     }
 
     Write-Host "[START] $Name on port $Port."
     $command = @"
 Set-Location -LiteralPath '$Directory'
-& mvn.cmd "-Dmaven.repo.local=$MavenRepo" "spring-boot:run"
+& mvn.cmd "-Dmaven.repo.local=$MavenRepo" "-Dmaven.test.skip=true" "spring-boot:run"
 "@
     Start-PowerShellWindow "$Name $Port" $command
     Start-Sleep -Seconds 3
@@ -145,7 +181,7 @@ try {
 
     Write-Section "Preparing backend shared modules"
     Push-Location $BackendRoot
-    & mvn.cmd "-Dmaven.repo.local=$MavenRepo" "-DskipTests" "install"
+    & mvn.cmd "-Dmaven.repo.local=$MavenRepo" "-Dmaven.test.skip=true" "install"
     if ($LASTEXITCODE -ne 0) {
         throw "Backend preparation failed. Check the Maven output above."
     }

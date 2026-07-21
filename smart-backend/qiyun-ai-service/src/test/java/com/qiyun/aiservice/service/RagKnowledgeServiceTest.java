@@ -1,7 +1,6 @@
 package com.qiyun.aiservice.service;
 
 import com.qiyun.aiservice.config.ChromaConfig;
-import com.qiyun.aiservice.config.DeepSeekConfig;
 import com.qiyun.aiservice.service.ChromaClientService.RetrievalResult;
 import java.util.List;
 import java.util.Map;
@@ -33,14 +32,14 @@ class RagKnowledgeServiceTest {
     private ChromaConfig chromaConfig;
 
     @Mock
-    private DeepSeekConfig deepSeekConfig;
+    private LocalKnowledgeIndexService localKnowledgeIndexService;
 
     private RagKnowledgeService ragKnowledgeService;
 
     @BeforeEach
     void setUp() {
         ragKnowledgeService = new RagKnowledgeService(
-            chromaClientService, deepSeekClientService, embeddingService, chromaConfig, deepSeekConfig
+            chromaClientService, deepSeekClientService, embeddingService, chromaConfig, localKnowledgeIndexService
         );
     }
 
@@ -53,14 +52,24 @@ class RagKnowledgeServiceTest {
     }
 
     @Test
-    @DisplayName("Embedding 服务不可用时返回降级提示")
+    @DisplayName("Embedding 服务不可用时使用本地知识索引回答")
     void testEmbeddingUnavailable() {
         when(embeddingService.isAvailable()).thenReturn(false);
+        when(chromaConfig.getTopK()).thenReturn(5);
+        RetrievalResult localResult = new RetrievalResult(
+            "kb-1#chunk-0",
+            "检查空调滤网是否堵塞，确认制冷模式。",
+            Map.of("title", "空调故障处理", "categoryKey", "ac"),
+            0.78
+        );
+        when(localKnowledgeIndexService.search("空调不制冷怎么办？", 5, null))
+            .thenReturn(List.of(localResult));
 
         RagKnowledgeService.RagAnswer answer = ragKnowledgeService.ask("空调不制冷怎么办？", null);
-        assertFalse(answer.success());
+        assertTrue(answer.success());
         assertTrue(answer.fallback());
-        assertEquals("Embedding 服务暂不可用，请联系管理员配置模型", answer.message());
+        assertTrue(answer.answer().contains("本地知识库索引"));
+        assertEquals("空调故障处理", answer.sources().get(0).title());
     }
 
     @Test
@@ -68,11 +77,13 @@ class RagKnowledgeServiceTest {
     void testChromaUnavailable() {
         when(embeddingService.isAvailable()).thenReturn(true);
         when(chromaClientService.isAvailable()).thenReturn(false);
+        when(chromaConfig.getTopK()).thenReturn(5);
+        when(localKnowledgeIndexService.search("空调不制冷怎么办？", 5, null)).thenReturn(List.of());
 
         RagKnowledgeService.RagAnswer answer = ragKnowledgeService.ask("空调不制冷怎么办？", null);
         assertFalse(answer.success());
-        assertTrue(answer.fallback());
-        assertEquals("向量知识库暂不可用，请联系管理员", answer.message());
+        assertFalse(answer.fallback());
+        assertEquals("未找到相关维修知识，请先在管理端维护知识库并重建索引", answer.message());
     }
 
     @Test
@@ -84,10 +95,12 @@ class RagKnowledgeServiceTest {
         when(chromaClientService.isAvailable()).thenReturn(true);
         when(chromaClientService.ensureCollection()).thenReturn(true);
         when(chromaClientService.queryWithEmbedding(any(float[].class), anyInt(), any())).thenReturn(List.of());
+        when(chromaConfig.getTopK()).thenReturn(5);
+        when(localKnowledgeIndexService.search("这是什么？", 5, null)).thenReturn(List.of());
 
         RagKnowledgeService.RagAnswer answer = ragKnowledgeService.ask("这是什么？", null);
         assertFalse(answer.success());
-        assertEquals("未找到相关维修知识，请联系管理员或提交报修工单", answer.message());
+        assertEquals("未找到相关维修知识，请先在管理端维护知识库并重建索引", answer.message());
     }
 
     @Test
@@ -101,10 +114,12 @@ class RagKnowledgeServiceTest {
 
         RetrievalResult lowSimilarity = new RetrievalResult("kb-1", "测试内容", Map.of("title", "测试"), 0.1);
         when(chromaClientService.queryWithEmbedding(any(float[].class), anyInt(), any())).thenReturn(List.of(lowSimilarity));
+        when(chromaConfig.getTopK()).thenReturn(5);
+        when(localKnowledgeIndexService.search("空调不制冷怎么办？", 5, null)).thenReturn(List.of());
 
         RagKnowledgeService.RagAnswer answer = ragKnowledgeService.ask("空调不制冷怎么办？", null);
         assertFalse(answer.success());
-        assertEquals("未找到相关维修知识，请联系管理员或提交报修工单", answer.message());
+        assertEquals("未找到相关维修知识，请先在管理端维护知识库并重建索引", answer.message());
     }
 
     @Test
@@ -139,6 +154,8 @@ class RagKnowledgeServiceTest {
         when(chromaClientService.isAvailable()).thenReturn(true);
         when(chromaClientService.ensureCollection()).thenReturn(true);
         when(chromaClientService.queryWithEmbedding(any(float[].class), anyInt(), any())).thenReturn(List.of());
+        when(chromaConfig.getTopK()).thenReturn(5);
+        when(localKnowledgeIndexService.search("空调问题", 5, "ac")).thenReturn(List.of());
 
         ragKnowledgeService.ask("空调问题", "ac");
 

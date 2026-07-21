@@ -131,8 +131,10 @@ public class EmbeddingService {
         }
 
         if (!isAvailable()) {
-            log.warn("Embedding service is unavailable");
-            return Collections.emptyList();
+            log.warn("Embedding service is unavailable, using deterministic local fallback embeddings");
+            return texts.stream()
+                .map(this::fallbackEmbed)
+                .toList();
         }
 
         try {
@@ -150,6 +152,35 @@ public class EmbeddingService {
             log.error("Failed to generate embeddings: {}", e.getMessage(), e);
             return Collections.emptyList();
         }
+    }
+
+    private float[] fallbackEmbed(String text) {
+        int dimensions = config.getDimensions() > 0 ? config.getDimensions() : 384;
+        float[] vector = new float[dimensions];
+        String normalized = text == null ? "" : text.trim().toLowerCase();
+
+        if (normalized.isBlank()) {
+            return vector;
+        }
+
+        for (int i = 0; i < normalized.length(); i++) {
+            char current = normalized.charAt(i);
+            addToken(vector, String.valueOf(current), 1.0f);
+            if (i + 1 < normalized.length()) {
+                addToken(vector, normalized.substring(i, i + 2), 1.35f);
+            }
+            if (i + 2 < normalized.length()) {
+                addToken(vector, normalized.substring(i, i + 3), 1.15f);
+            }
+        }
+
+        normalize(vector);
+        return vector;
+    }
+
+    private void addToken(float[] vector, String token, float weight) {
+        int index = Math.floorMod(token.hashCode(), vector.length);
+        vector[index] += weight;
     }
 
     private List<float[]> processBatch(List<String> texts) throws OrtException {

@@ -259,6 +259,39 @@ class AiAnalyzeServiceTest {
         assertEquals("普通", response.urgency());
     }
 
+    @Test
+    @DisplayName("规则引擎：识别报修标题和具体位置")
+    void ruleEngineExtractsTitleAndLocation() {
+        var request = new com.qiyun.aiservice.dto.AnalyzeTicketRequest(
+            "三号宿舍楼 6-612 的照明灯一直频闪，晚上学习很受影响，担心线路有问题。",
+            ""
+        );
+
+        var response = aiAnalyzeService.analyze(request);
+
+        assertNotNull(response);
+        assertEquals("电力故障", response.category());
+        assertEquals("三号宿舍楼 6-612", response.locationText());
+        assertEquals("三号宿舍楼 6-612", response.location());
+        assertTrue(response.title().contains("三号宿舍楼 6-612"));
+        assertTrue(response.title().contains("照明故障"));
+        assertEquals("rules", response.source());
+    }
+
+    @Test
+    @DisplayName("维修报告：DeepSeek 未启用时生成规则兜底报告")
+    void generateRepairReportFallsBackToRules() {
+        String report = aiAnalyzeService.generateRepairReport(
+            "三号宿舍楼 6-612 的照明灯一直频闪",
+            "已更换灯管并检查线路，现场测试照明恢复正常。"
+        );
+
+        assertNotNull(report);
+        assertTrue(report.contains("维修处理报告"));
+        assertTrue(report.contains("已更换灯管"));
+        assertTrue(report.contains("基础功能测试"));
+    }
+
 
     @Test
     @DisplayName("???????????????")

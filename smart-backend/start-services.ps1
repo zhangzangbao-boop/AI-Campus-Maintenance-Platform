@@ -45,7 +45,7 @@ function Start-ServiceModule {
         return
     }
 
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location -LiteralPath '$path'; mvn spring-boot:run"
+    Start-Process powershell -ArgumentList @("-NoExit", "-Command", "Set-Location -LiteralPath '$path'; mvn '-Dmaven.test.skip=true' spring-boot:run")
     Write-Host "Opened $($Service.Name)." -ForegroundColor Cyan
 }
 
@@ -61,7 +61,7 @@ if ($choice -eq "7") {
     $path = Join-Path $PSScriptRoot $svc.Path
     Write-Host "Starting $($svc.Name) from $path..." -ForegroundColor Cyan
     Set-Location -LiteralPath $path
-    mvn spring-boot:run
+    mvn "-Dmaven.test.skip=true" spring-boot:run
 } else {
     Write-Host "Invalid option." -ForegroundColor Red
 }

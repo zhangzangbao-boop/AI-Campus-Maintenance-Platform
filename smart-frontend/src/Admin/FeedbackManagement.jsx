@@ -5,22 +5,22 @@ import { feedbackService } from './feedbackService';
 import api from '../services/api';
 
 const followUpOptions = [
-  { value: 'ALL', label: 'All follow-ups' },
-  { value: 'PENDING', label: 'Pending' },
-  { value: 'PROCESSING', label: 'Processing' },
-  { value: 'RESOLVED', label: 'Resolved' },
+  { value: 'ALL', label: '全部回访状态' },
+  { value: 'PENDING', label: '待处理' },
+  { value: 'PROCESSING', label: '处理中' },
+  { value: 'RESOLVED', label: '已解决' },
 ];
 
 const followUpMeta = {
-  PENDING: { color: 'red', label: 'Pending' },
-  PROCESSING: { color: 'orange', label: 'Processing' },
-  RESOLVED: { color: 'green', label: 'Resolved' },
+  PENDING: { color: 'red', label: '待处理' },
+  PROCESSING: { color: 'orange', label: '处理中' },
+  RESOLVED: { color: 'green', label: '已解决' },
 };
 
 const sentimentMeta = {
-  POSITIVE: { color: 'green', label: 'Positive' },
-  NEUTRAL: { color: 'default', label: 'Neutral' },
-  NEGATIVE: { color: 'red', label: 'Negative' },
+  POSITIVE: { color: 'green', label: '正面' },
+  NEUTRAL: { color: 'default', label: '中性' },
+  NEGATIVE: { color: 'red', label: '负面' },
 };
 
 const FeedbackManagement = () => {
@@ -112,8 +112,8 @@ const FeedbackManagement = () => {
   const negativeCount = feedbacks.filter(item => item.sentiment === 'NEGATIVE' || item.rating <= 2).length;
 
   const renderFeedbackCard = (feedback) => {
-    const sentiment = sentimentMeta[feedback.sentiment] || { color: 'default', label: 'Unanalyzed' };
-    const followUp = followUpMeta[feedback.followUpStatus] || { color: 'default', label: 'Not required' };
+    const sentiment = sentimentMeta[feedback.sentiment] || { color: 'default', label: '未分析' };
+    const followUp = followUpMeta[feedback.followUpStatus] || { color: 'default', label: '无需回访' };
     const keywords = keywordsOf(feedback);
 
     return (
@@ -121,13 +121,13 @@ const FeedbackManagement = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start' }}>
           <div style={{ flex: 1 }}>
             <Space wrap style={{ marginBottom: 8 }}>
-              <strong>Feedback #{feedback.id}</strong>
-              <Tag color="blue">Ticket {feedback.repairOrderId || '-'}</Tag>
+              <strong>评价 #{feedback.id}</strong>
+              <Tag color="blue">工单 {feedback.repairOrderId || '-'}</Tag>
               <Tag color={feedback.rating >= 4 ? 'green' : feedback.rating >= 3 ? 'orange' : 'red'}>
-                {feedback.rating} stars
+                {feedback.rating} 星
               </Tag>
-              <Tag color={sentiment.color}>Sentiment: {sentiment.label}</Tag>
-              <Tag color={followUp.color}>Follow-up: {followUp.label}</Tag>
+              <Tag color={sentiment.color}>情感：{sentiment.label}</Tag>
+              <Tag color={followUp.color}>回访：{followUp.label}</Tag>
             </Space>
 
             <div style={{ marginBottom: 8 }}>
@@ -135,25 +135,25 @@ const FeedbackManagement = () => {
             </div>
 
             <Space wrap style={{ marginBottom: 8 }}>
-              {feedback.speedRating && <Tag>Speed {feedback.speedRating}</Tag>}
-              {feedback.qualityRating && <Tag>Quality {feedback.qualityRating}</Tag>}
-              {feedback.attitudeRating && <Tag>Attitude {feedback.attitudeRating}</Tag>}
-              {typeof feedback.sentimentScore === 'number' && <Tag>Score {Math.round(feedback.sentimentScore * 100)}%</Tag>}
+              {feedback.speedRating && <Tag>响应速度 {feedback.speedRating}</Tag>}
+              {feedback.qualityRating && <Tag>维修质量 {feedback.qualityRating}</Tag>}
+              {feedback.attitudeRating && <Tag>服务态度 {feedback.attitudeRating}</Tag>}
+              {typeof feedback.sentimentScore === 'number' && <Tag>置信度 {Math.round(feedback.sentimentScore * 100)}%</Tag>}
               {keywords.map(keyword => <Tag key={keyword}>{keyword}</Tag>)}
             </Space>
 
             <Row gutter={[16, 8]} style={{ marginBottom: 8 }}>
               <Col xs={24} md={12}>
-                <UserOutlined /> Student: {feedback.anonymous ? 'Anonymous' : (feedback.studentName || feedback.studentId || '-')}
+                <UserOutlined /> 学生：{feedback.anonymous ? '匿名' : (feedback.studentName || feedback.studentId || '-')}
               </Col>
               <Col xs={24} md={12}>
-                <UserOutlined /> Staff: {feedback.repairmanName || feedback.repairmanId || '-'}
+                <UserOutlined /> 维修工：{feedback.repairmanName || feedback.repairmanId || '-'}
               </Col>
             </Row>
 
             {feedback.comment && (
               <div style={{ marginBottom: 8, padding: '8px 12px', backgroundColor: '#f5f5f5', borderRadius: 4 }}>
-                <strong><MessageOutlined /> Comment: </strong>{feedback.comment}
+                <strong><MessageOutlined /> 评价内容：</strong>{feedback.comment}
               </div>
             )}
 
@@ -165,19 +165,19 @@ const FeedbackManagement = () => {
 
             {feedback.followUpStatus && (
               <div style={{ marginBottom: 8, padding: '8px 12px', backgroundColor: '#fff7e6', borderRadius: 4 }}>
-                <div><strong>Follow-up record:</strong> {feedback.followUpNote || '-'}</div>
+                <div><strong>回访记录：</strong>{feedback.followUpNote || '-'}</div>
                 <div style={{ color: '#666', fontSize: 12 }}>
-                  Handler: {feedback.followUpOperatorName || feedback.followUpOperatorId || '-'}
-                  {' '}| Updated: {feedback.followUpUpdatedAt || '-'}
+                  处理人：{feedback.followUpOperatorName || feedback.followUpOperatorId || '-'}
+                  {' '}| 更新时间：{feedback.followUpUpdatedAt || '-'}
                 </div>
               </div>
             )}
 
-            <div style={{ color: '#666', fontSize: 12 }}>Created: {feedback.createdAt || '-'}</div>
+            <div style={{ color: '#666', fontSize: 12 }}>创建时间：{feedback.createdAt || '-'}</div>
           </div>
 
           <Button icon={<EditOutlined />} onClick={() => openFollowUp(feedback)}>
-            Handle
+            处理回访
           </Button>
         </div>
       </Card>
@@ -186,72 +186,73 @@ const FeedbackManagement = () => {
 
   return (
     <div style={{ padding: 16 }}>
-      <h2>Feedback Management</h2>
+      <h2>反馈管理</h2>
 
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={6}>
           <Card size="small">
-            <Statistic title="Total feedback" value={totalFeedbacks} prefix={<MessageOutlined />} />
+            <Statistic title="评价总数" value={totalFeedbacks} prefix={<MessageOutlined />} />
           </Card>
         </Col>
         <Col xs={24} sm={6}>
           <Card size="small">
-            <Statistic title="Average rating" value={averageRating} prefix={<StarOutlined />} />
+            <Statistic title="平均评分" value={averageRating} prefix={<StarOutlined />} />
           </Card>
         </Col>
         <Col xs={24} sm={6}>
           <Card size="small">
-            <Statistic title="Needs attention" value={negativeCount} />
+            <Statistic title="需关注评价" value={negativeCount} />
           </Card>
         </Col>
         <Col xs={24} sm={6}>
           <Card size="small">
-            <Statistic title="Follow-ups" value={followUpCount} />
+            <Statistic title="已回访/处理中" value={followUpCount} />
           </Card>
         </Col>
       </Row>
 
       <Card size="small" style={{ marginBottom: 16 }}>
         <Space wrap>
-          <span>Sentiment</span>
+          <span>情感倾向</span>
           <Select
             value={sentimentFilter}
             style={{ width: 160 }}
             onChange={setSentimentFilter}
             options={[
-              { value: 'ALL', label: 'All feedback' },
-              { value: 'NEGATIVE', label: 'Negative only' },
+              { value: 'ALL', label: '全部评价' },
+              { value: 'NEGATIVE', label: '仅负面评价' },
             ]}
           />
-          <span>Follow-up</span>
+          <span>回访状态</span>
           <Select
             value={followUpFilter}
             style={{ width: 160 }}
             onChange={setFollowUpFilter}
             options={followUpOptions}
           />
-          <Button onClick={loadFeedbacks} loading={loading}>Refresh</Button>
+          <Button onClick={loadFeedbacks} loading={loading}>刷新</Button>
           <Button icon={<DownloadOutlined />} onClick={handleExport} loading={exportLoading}>
-            Export
+            导出
           </Button>
         </Space>
       </Card>
 
       {loading ? (
-        <Card><div style={{ textAlign: 'center', padding: '40px 0' }}>Loading feedbacks...</div></Card>
+        <Card><div style={{ textAlign: 'center', padding: '40px 0' }}>正在加载评价...</div></Card>
       ) : feedbacks.length === 0 ? (
-        <Card><div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>No feedback data</div></Card>
+        <Card><div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>暂无评价数据</div></Card>
       ) : (
         feedbacks.map(renderFeedbackCard)
       )}
 
       <Modal
-        title={editing ? `Handle feedback #${editing.id}` : 'Handle feedback'}
+        title={editing ? `处理评价 #${editing.id}` : '处理评价'}
         open={Boolean(editing)}
         onCancel={() => setEditing(null)}
         onOk={saveFollowUp}
         confirmLoading={saving}
-        okText="Save"
+        okText="保存"
+        cancelText="取消"
       >
         <Space direction="vertical" style={{ width: '100%' }}>
           <Select
@@ -264,7 +265,7 @@ const FeedbackManagement = () => {
             rows={4}
             value={followUpNote}
             onChange={event => setFollowUpNote(event.target.value)}
-            placeholder="Processing note"
+            placeholder="请输入回访处理记录"
             maxLength={1000}
             showCount
           />

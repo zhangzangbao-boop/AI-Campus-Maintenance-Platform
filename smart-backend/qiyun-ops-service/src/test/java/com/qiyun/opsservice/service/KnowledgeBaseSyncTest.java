@@ -3,6 +3,7 @@ package com.qiyun.opsservice.service;
 import com.qiyun.feign.client.AiInternalClient;
 import com.qiyun.opsservice.domain.entity.KnowledgeBase;
 import com.qiyun.opsservice.repository.KnowledgeBaseRepository;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -165,5 +166,34 @@ class KnowledgeBaseSyncTest {
         assertEquals(1, count); // 只同步启用的条目
         verify(aiInternalClient).rebuildIndex("test-secret");
         verify(aiInternalClient).syncKnowledge(eq("test-secret"), eq(1L), any());
+    }
+
+    @Test
+    @DisplayName("推荐知识支持前端分类键匹配中文知识分类")
+    void recommendMatchesCategoryAlias() {
+        KnowledgeBase network = new KnowledgeBase();
+        network.setKnowledgeId(1L);
+        network.setTitle("校园网连接不上处理");
+        network.setCategoryKey("网络故障");
+        network.setSymptomKeywords("网络,校园网,无法连接,认证失败");
+        network.setSolutionSteps("检查账号、网线和网口，保留错误截图后提交报修。");
+        network.setEnabled(true);
+        network.setUpdatedAt(LocalDateTime.now());
+
+        KnowledgeBase plumbing = new KnowledgeBase();
+        plumbing.setKnowledgeId(2L);
+        plumbing.setTitle("宿舍漏水处理");
+        plumbing.setCategoryKey("水电维修");
+        plumbing.setSymptomKeywords("漏水,积水");
+        plumbing.setSolutionSteps("先关闭水阀并提交报修。");
+        plumbing.setEnabled(true);
+        plumbing.setUpdatedAt(LocalDateTime.now().minusDays(1));
+
+        when(knowledgeBaseRepository.findAllWithCategory()).thenReturn(List.of(network, plumbing));
+
+        var results = knowledgeBaseService.recommend("network", "网络连接不上怎么办？", 3);
+
+        assertEquals(1, results.size());
+        assertEquals("校园网连接不上处理", results.get(0).title());
     }
 }

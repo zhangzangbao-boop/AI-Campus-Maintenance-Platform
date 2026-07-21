@@ -38,26 +38,113 @@ const KnowledgeQA = () => {
     '网络连接不上怎么办？',
   ];
 
+  const buildKnowledgeFallbackAnswer = (items) => {
+    const primary = items[0];
+    const lines = [
+      `根据维修知识库，推荐先参考「${primary.title || '相关知识'}」：`,
+    ];
+
+    if (primary.solutionSteps) {
+      lines.push('', primary.solutionSteps);
+    }
+
+    if (primary.safetyNotes) {
+      lines.push('', `安全提示：${primary.safetyNotes}`);
+    }
+
+    if (primary.estimatedMinutes) {
+      lines.push('', `预计处理时长：约 ${primary.estimatedMinutes} 分钟`);
+    }
+
+    if (items.length > 1) {
+      lines.push('', '还可参考：');
+      items.slice(1, 3).forEach((item) => {
+        lines.push(`- ${item.title}`);
+      });
+    }
+
+    return lines.join('\n');
+  };
+
+  const buildKnowledgeSources = (items) =>
+    items.map((item) => ({
+      id: String(item.knowledgeId),
+      title: item.title,
+      categoryKey: item.categoryKey,
+      snippet: item.solutionSteps || item.symptomKeywords || item.safetyNotes || '',
+      similarity: 0,
+    }));
+
+  const askKnowledgeBaseFallback = async (trimmedQuestion, fallbackMessage) => {
+    const response = await api.knowledgeBase.recommend({
+      categoryKey: categoryKey || undefined,
+      text: trimmedQuestion,
+      limit: 3,
+    });
+
+    if (response.code === 200 && Array.isArray(response.data) && response.data.length > 0) {
+      setResult({
+        success: true,
+        answer: buildKnowledgeFallbackAnswer(response.data),
+        sources: buildKnowledgeSources(response.data),
+        similarity: 0,
+        fallback: true,
+        message: fallbackMessage || '已使用知识库基础检索生成回答',
+      });
+      return true;
+    }
+
+    setError(fallbackMessage || '未找到相关维修知识，请先在管理端维护维修知识库并重建索引');
+    return false;
+  };
+
   const handleAsk = async () => {
     if (!question.trim()) {
       message.warning('请输入您的问题');
       return;
     }
 
+    const trimmedQuestion = question.trim();
     setLoading(true);
     setError('');
     setResult(null);
 
     try {
-      const response = await api.ai.ragAsk(question.trim(), categoryKey || null);
+      const response = await api.ai.ragAsk(trimmedQuestion, categoryKey || null);
 
       if (response.code === 200 && response.data) {
-        setResult(response.data);
+        if (response.data.success === false) {
+          const fallbackUsed = await askKnowledgeBaseFallback(
+            trimmedQuestion,
+            response.data.message || response.message
+          );
+          if (!fallbackUsed) {
+            setError(response.data.message || response.message || '未找到相关维修知识');
+          }
+        } else {
+          setResult({ success: true, ...response.data });
+        }
       } else {
-        setError(response.message || '问答失败，请稍后重试');
+        const fallbackUsed = await askKnowledgeBaseFallback(
+          trimmedQuestion,
+          response.message
+        );
+        if (!fallbackUsed) {
+          setError(response.message || '问答失败，请稍后重试');
+        }
       }
     } catch (err) {
-      setError(err.message || '网络错误，请检查连接');
+      try {
+        const fallbackUsed = await askKnowledgeBaseFallback(
+          trimmedQuestion,
+          err.message
+        );
+        if (!fallbackUsed) {
+          setError(err.message || '网络错误，请检查连接');
+        }
+      } catch (fallbackErr) {
+        setError(fallbackErr.message || err.message || '网络错误，请检查连接');
+      }
     } finally {
       setLoading(false);
     }
@@ -65,6 +152,19 @@ const KnowledgeQA = () => {
 
   const handleQuickQuestion = (q) => {
     setQuestion(q);
+  };
+
+  const getRetrievalTag = (mode, fallback) => {
+    if (mode === 'chroma_ai') {
+      return { color: 'green', text: 'Chroma 向量库 + AI 回答' };
+    }
+    if (mode === 'chroma_basic') {
+      return { color: 'blue', text: 'Chroma 向量库检索' };
+    }
+    if (mode === 'local_index') {
+      return { color: 'orange', text: '本地知识索引兜底' };
+    }
+    return { color: fallback ? 'orange' : 'green', text: fallback ? '基础回答' : 'AI 回答' };
   };
 
   return (
@@ -165,8 +265,11 @@ const KnowledgeQA = () => {
       {result && !loading && (
         <Card style={{ marginTop: '16px' }}>
           <div style={{ marginBottom: '16px' }}>
-            <Tag color={result.fallback ? 'orange' : 'green'} style={{ marginBottom: '8px' }}>
-              {result.fallback ? '基础回答' : 'AI 回答'}
+            <Tag
+              color={getRetrievalTag(result.retrievalMode, result.fallback).color}
+              style={{ marginBottom: '8px' }}
+            >
+              {getRetrievalTag(result.retrievalMode, result.fallback).text}
             </Tag>
             {result.similarity > 0 && (
               <Tag color="blue" style={{ marginBottom: '8px' }}>
@@ -196,7 +299,9 @@ const KnowledgeQA = () => {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                     <Text strong>{source.title || `知识条目 ${idx + 1}`}</Text>
-                    <Tag>{(source.similarity * 100).toFixed(0)}%</Tag>
+                    {source.similarity > 0 && (
+                      <Tag>{(source.similarity * 100).toFixed(0)}%</Tag>
+                    )}
                   </div>
                   <Text type="secondary" style={{ fontSize: '12px' }}>
                     {source.categoryKey && `分类: ${source.categoryKey}`}

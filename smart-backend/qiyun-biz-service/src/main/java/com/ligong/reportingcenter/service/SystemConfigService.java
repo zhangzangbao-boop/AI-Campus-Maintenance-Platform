@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +20,7 @@ public class SystemConfigService {
     private final SystemConfigRepository systemConfigRepository;
     private final UserService userService;
     private final AuditLogService auditLogService;
+    private final Environment environment;
 
     @Transactional(readOnly = true)
     public List<SystemConfigDto> list() {
@@ -28,6 +30,7 @@ public class SystemConfigService {
             .map(this::toDto)
             .filter(item -> !isDeprecatedConfig(item.configKey()))
             .forEach(item -> merged.put(item.configKey(), item));
+        applyRuntimeAiOverrides(merged);
         return List.copyOf(merged.values());
     }
 
@@ -54,6 +57,10 @@ public class SystemConfigService {
 
     @Transactional(readOnly = true)
     public String getValue(String key, String fallback) {
+        String runtimeValue = runtimeAiConfigValue(key);
+        if (runtimeValue != null && !runtimeValue.isBlank()) {
+            return runtimeValue;
+        }
         return systemConfigRepository.findById(key)
             .map(SystemConfig::getConfigValue)
             .filter(value -> !value.isBlank())
@@ -69,6 +76,56 @@ public class SystemConfigService {
             config.getCreatedAt(),
             config.getUpdatedAt()
         );
+    }
+
+    private void applyRuntimeAiOverrides(Map<String, SystemConfigDto> configs) {
+        for (String key : List.of(
+            "ai.enabled",
+            "ai.provider",
+            "ai.base-url",
+            "ai.api-key",
+            "ai.model",
+            "ai.timeout-seconds"
+        )) {
+            String runtimeValue = runtimeAiConfigValue(key);
+            if (runtimeValue == null || runtimeValue.isBlank()) {
+                continue;
+            }
+
+            SystemConfigDto current = configs.get(key);
+            configs.put(key, new SystemConfigDto(
+                key,
+                displayRuntimeValue(key, runtimeValue),
+                current != null ? current.description() : "Runtime AI configuration from environment variables.",
+                "env",
+                current != null ? current.createdAt() : null,
+                current != null ? current.updatedAt() : null
+            ));
+        }
+    }
+
+    private String displayRuntimeValue(String key, String value) {
+        if ("ai.api-key".equals(key)) {
+            return "已通过环境变量配置";
+        }
+        return value;
+    }
+
+    private String runtimeAiConfigValue(String key) {
+        String envKey = switch (key) {
+            case "ai.enabled" -> "AI_ENABLED";
+            case "ai.provider" -> "AI_PROVIDER";
+            case "ai.base-url" -> "AI_BASE_URL";
+            case "ai.api-key" -> "DEEPSEEK_API_KEY";
+            case "ai.model" -> "AI_MODEL";
+            case "ai.timeout-seconds" -> "AI_TIMEOUT_SECONDS";
+            default -> null;
+        };
+        if (envKey == null) {
+            return null;
+        }
+        String value = environment.getProperty(envKey);
+        return value == null ? null : value.trim();
     }
 
     private Map<String, SystemConfigDto> defaultConfigs() {

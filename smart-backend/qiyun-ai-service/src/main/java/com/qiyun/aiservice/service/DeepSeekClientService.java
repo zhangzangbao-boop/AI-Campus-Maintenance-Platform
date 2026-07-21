@@ -117,6 +117,15 @@ public class DeepSeekClientService {
         }
     }
 
+    public String requestText(String systemPrompt, String userPrompt, int maxTokens) {
+        if (!isAvailable()) {
+            log.debug("DeepSeek AI is not enabled or configured");
+            return "";
+        }
+        String response = chat(systemPrompt, userPrompt, false, maxTokens);
+        return response == null ? "" : response.trim();
+    }
+
     /**
      * 发送聊天请求
      */
@@ -225,6 +234,9 @@ public class DeepSeekClientService {
     private String buildSystemPrompt() {
         return "你是校园报修系统的智能分析助手。请根据学生描述的问题，分析并输出 JSON 格式的结果。\n"
             + "字段要求：\n"
+            + "- title: 报修标题，格式尽量为“位置+故障类型”，不超过30字，例如“三号宿舍楼 6-612照明故障”\n"
+            + "- locationText: 从描述中识别出的具体位置，例如“三号宿舍楼 6-612”“宿舍 3 楼卫生间”；如果无法识别则为空字符串\n"
+            + "- location: 与 locationText 保持相同，用于兼容前端\n"
             + "- category: 故障分类，可选值：空调故障、管道故障、电力故障、网络故障、家具故障、门窗故障、其他故障\n"
             + "- urgency: 紧急程度，可选值：紧急、普通、一般\n"
             + "- suggestion: 简洁的维修建议（不超过100字）\n"
@@ -233,6 +245,7 @@ public class DeepSeekClientService {
             + "- 紧急：涉及安全（漏水、积水、触电、烧焦、冒烟、火花、异味、消防问题）\n"
             + "- 普通：影响正常使用（无法使用、断线、损坏、堵塞）\n"
             + "- 一般：轻微问题或不影响使用\n\n"
+            + "位置识别要求：优先识别宿舍楼/教学楼/楼层/房间号/卫生间/走廊等地点；输入已提供位置信息时优先采用该位置。\n"
             + "只输出 JSON 对象，不要输出其他内容。";
     }
 
@@ -245,7 +258,7 @@ public class DeepSeekClientService {
         if (location != null && !location.isBlank()) {
             sb.append("\n位置信息：").append(location);
         }
-        sb.append("\n\n请分析并输出 JSON 格式的结果。");
+        sb.append("\n\n请分析并输出包含 title、locationText、location、category、urgency、suggestion、keywords 的 JSON 结果。");
         return sb.toString();
     }
 

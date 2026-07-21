@@ -1,7 +1,6 @@
 package com.qiyun.aiservice.service;
 
 import com.qiyun.aiservice.config.ChromaConfig;
-import com.qiyun.aiservice.config.DeepSeekConfig;
 import com.qiyun.aiservice.service.ChromaClientService.RetrievalResult;
 import java.util.HashMap;
 import java.util.List;
@@ -23,7 +22,7 @@ public class RagKnowledgeService {
     private final DeepSeekClientService deepSeekClientService;
     private final EmbeddingService embeddingService;
     private final ChromaConfig chromaConfig;
-    private final DeepSeekConfig deepSeekConfig;
+    private final LocalKnowledgeIndexService localKnowledgeIndexService;
 
     /**
      * RAG 问答接口
@@ -37,36 +36,34 @@ public class RagKnowledgeService {
             return RagAnswer.noAnswer("问题不能为空");
         }
 
-        // 检查 Embedding 服务是否可用
         if (!embeddingService.isAvailable()) {
-            log.warn("Embedding 服务不可用，无法进行 RAG 检索");
-            return RagAnswer.fallback("Embedding 服务暂不可用，请联系管理员配置模型");
+            log.warn("Embedding 模型不可用，使用内置兜底向量继续检索 Chroma");
         }
 
         // 检查 Chroma 是否可用
         if (!chromaClientService.isAvailable()) {
-            log.warn("Chroma 服务不可用，无法进行 RAG 检索");
-            return RagAnswer.fallback("向量知识库暂不可用，请联系管理员");
+            log.warn("Chroma 服务不可用，切换到本地知识索引检索");
+            return askLocalIndex(question, categoryKey, "向量知识库不可用，已使用本地知识库索引检索");
         }
 
         // 确保集合存在
         if (!chromaClientService.ensureCollection()) {
             log.error("无法初始化 Chroma 集合");
-            return RagAnswer.fallback("知识库初始化失败，请联系管理员");
+            return askLocalIndex(question, categoryKey, "向量知识库初始化失败，已使用本地知识库索引检索");
         }
 
         // 生成查询 embedding
         float[] queryEmbedding = embeddingService.embed(question);
         if (queryEmbedding == null || queryEmbedding.length == 0) {
             log.error("生成查询 Embedding 失败: question={}", question);
-            return RagAnswer.fallback("向量生成失败，请联系管理员");
+            return askLocalIndex(question, categoryKey, "向量生成失败，已使用本地知识库索引检索");
         }
 
         // 校验维度
         if (queryEmbedding.length != embeddingService.getDimensions()) {
             log.error("查询 Embedding 维度不匹配: expected={}, actual={}",
                 embeddingService.getDimensions(), queryEmbedding.length);
-            return RagAnswer.fallback("向量维度不匹配，请联系管理员");
+            return askLocalIndex(question, categoryKey, "向量维度不匹配，已使用本地知识库索引检索");
         }
 
         // 构建过滤条件
@@ -82,7 +79,7 @@ public class RagKnowledgeService {
 
         if (results.isEmpty()) {
             log.info("RAG 检索无匹配结果: question={}", question);
-            return RagAnswer.noMatch("未找到相关维修知识，请联系管理员或提交报修工单");
+            return askLocalIndex(question, categoryKey, "未找到向量匹配，已使用本地知识库索引检索");
         }
 
         // 过滤低相似度结果
@@ -93,20 +90,33 @@ public class RagKnowledgeService {
         if (relevantResults.isEmpty()) {
             log.info("RAG 检索无高相似度匹配: question={}, maxSimilarity={}",
                 question, results.get(0).similarity());
-            return RagAnswer.noMatch("未找到相关维修知识，请联系管理员或提交报修工单");
+            return askLocalIndex(question, categoryKey, "向量匹配度较低，已使用本地知识库索引检索");
         }
 
         // 尝试使用 AI 生成回答
         if (deepSeekClientService.isAvailable()) {
             String answer = generateAiAnswer(question, relevantResults);
             if (answer != null && !answer.isBlank()) {
-                return RagAnswer.success(answer, relevantResults, false);
+                return RagAnswer.success(answer, relevantResults, false, "chroma_ai");
             }
         }
 
         // AI 不可用，生成降级回答
         String fallbackAnswer = generateFallbackAnswer(question, relevantResults);
-        return RagAnswer.success(fallbackAnswer, relevantResults, true);
+        return RagAnswer.success(fallbackAnswer, relevantResults, true, "chroma_basic");
+    }
+
+    private RagAnswer askLocalIndex(String question, String categoryKey, String reason) {
+        int topK = chromaConfig.getTopK() > 0 ? chromaConfig.getTopK() : 5;
+        List<RetrievalResult> localResults = localKnowledgeIndexService.search(question, topK, categoryKey);
+        if (localResults == null || localResults.isEmpty()) {
+            log.info("本地知识索引无匹配结果: question={}, categoryKey={}, indexed={}",
+                question, categoryKey, localKnowledgeIndexService.size());
+            return RagAnswer.noMatch("未找到相关维修知识，请先在管理端维护知识库并重建索引");
+        }
+
+        String answer = generateFallbackAnswer(question, localResults);
+        return RagAnswer.success(answer + "\n\n（" + reason + "）", localResults, true, "local_index");
     }
 
     /**
@@ -125,77 +135,9 @@ public class RagKnowledgeService {
             String systemPrompt = buildRagSystemPrompt();
             String userPrompt = context + "\n\n用户问题：" + question + "\n\n请根据上述知识回答用户问题。";
 
-            // 使用 DeepSeekClientService 的 chat 方法（需要扩展）
-            return callDeepSeek(systemPrompt, userPrompt);
+            return deepSeekClientService.requestText(systemPrompt, userPrompt, 500);
         } catch (Exception e) {
             log.error("AI 生成回答失败: {}", e.getMessage());
-            return null;
-        }
-    }
-
-    /**
-     * 调用 DeepSeek API
-     */
-    private String callDeepSeek(String systemPrompt, String userPrompt) {
-        try {
-            // 复用 DeepSeekClientService 的逻辑
-            // 由于 chat 方法是 private，我们需要在这里重新实现
-            java.net.http.HttpClient httpClient = java.net.http.HttpClient.newBuilder()
-                .connectTimeout(java.time.Duration.ofSeconds(10))
-                .build();
-
-            Map<String, Object> body = new HashMap<>();
-            body.put("model", deepSeekConfig.getModel());
-            body.put("stream", false);
-            body.put("temperature", 0.4);
-            body.put("max_tokens", 500);
-
-            List<Map<String, String>> messages = new java.util.ArrayList<>();
-            messages.add(Map.of("role", "system", "content", systemPrompt));
-            messages.add(Map.of("role", "user", "content", userPrompt));
-            body.put("messages", messages);
-
-            String baseUrl = deepSeekConfig.getBaseUrl();
-            if (baseUrl == null || baseUrl.isBlank()) {
-                baseUrl = "https://api.deepseek.com";
-            }
-            while (baseUrl.endsWith("/")) {
-                baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
-            }
-
-            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                .uri(java.net.URI.create(baseUrl + "/chat/completions"))
-                .timeout(java.time.Duration.ofSeconds(Math.max(deepSeekConfig.getTimeoutSeconds(), 10)))
-                .header("Content-Type", "application/json")
-                .header("Authorization", "Bearer " + deepSeekConfig.getApiKey())
-                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(
-                    new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(body)))
-                .build();
-
-            java.net.http.HttpResponse<String> response = httpClient.send(
-                request, java.net.http.HttpResponse.BodyHandlers.ofString());
-
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                return null;
-            }
-
-            // 提取内容
-            Map<String, Object> responseMap = new com.fasterxml.jackson.databind.ObjectMapper().readValue(
-                response.body(), new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
-            Object choicesObj = responseMap.get("choices");
-            if (choicesObj instanceof List<?> choices && !choices.isEmpty()) {
-                Object firstChoice = choices.get(0);
-                if (firstChoice instanceof Map<?, ?> choiceMap) {
-                    Object messageObj = choiceMap.get("message");
-                    if (messageObj instanceof Map<?, ?> messageMap) {
-                        Object content = messageMap.get("content");
-                        return content == null ? null : String.valueOf(content).trim();
-                    }
-                }
-            }
-            return null;
-        } catch (Exception e) {
-            log.error("调用 DeepSeek API 失败: {}", e.getMessage());
             return null;
         }
     }
@@ -261,6 +203,7 @@ public class RagKnowledgeService {
         List<Source> sources,
         double maxSimilarity,
         boolean fallback,
+        String retrievalMode,
         boolean success,
         String message
     ) {
@@ -272,7 +215,7 @@ public class RagKnowledgeService {
             double similarity
         ) {}
 
-        public static RagAnswer success(String answer, List<RetrievalResult> results, boolean fallback) {
+        public static RagAnswer success(String answer, List<RetrievalResult> results, boolean fallback, String retrievalMode) {
             List<Source> sources = results.stream()
                 .map(r -> new Source(
                     r.id(),
@@ -288,19 +231,19 @@ public class RagKnowledgeService {
                 .max()
                 .orElse(0);
 
-            return new RagAnswer(answer, sources, maxSimilarity, fallback, true, "回答生成成功");
+            return new RagAnswer(answer, sources, maxSimilarity, fallback, retrievalMode, true, "回答生成成功");
         }
 
         public static RagAnswer noAnswer(String message) {
-            return new RagAnswer(null, List.of(), 0, false, false, message);
+            return new RagAnswer(null, List.of(), 0, false, "none", false, message);
         }
 
         public static RagAnswer noMatch(String message) {
-            return new RagAnswer(null, List.of(), 0, false, false, message);
+            return new RagAnswer(null, List.of(), 0, false, "none", false, message);
         }
 
         public static RagAnswer fallback(String message) {
-            return new RagAnswer(null, List.of(), 0, true, false, message);
+            return new RagAnswer(null, List.of(), 0, true, "fallback", false, message);
         }
 
         private static String truncate(String text, int maxLength) {

@@ -78,7 +78,7 @@ const request = async (endpoint, options = {}) => {
       // 清除本地存储的令牌
     }
 
-    if (response.status === 401) {
+    if (response.status === 401 && options.authRedirect !== false) {
       console.warn("Token 已过期或无效");
       // 清除本地存储的令牌
       localStorage.removeItem("token");
@@ -400,34 +400,35 @@ const api = {
         body: JSON.stringify(data),
       }),
 
-    getStatsCategory: () => request("/admin/stats/category"),
+    getStatsCategory: () => request("/admin/stats/category", { authRedirect: false }),
 
-    getStatsLocation: () => request("/admin/stats/location"),
+    getStatsLocation: () => request("/admin/stats/location", { authRedirect: false }),
 
-    getStatsRepairmanRating: () => request("/admin/stats/repairman-rating"),
+    getStatsRepairmanRating: () => request("/admin/stats/repairman-rating", { authRedirect: false }),
 
-    getStatsMonthly: () => request("/admin/stats/monthly"),
+    getStatsMonthly: () => request("/admin/stats/monthly", { authRedirect: false }),
 
     // 新增：获取工单状态统计
-    getStatsOrderStatus: () => request("/admin/stats/status"),
+    getStatsOrderStatus: () => request("/admin/stats/status", { authRedirect: false }),
 
     // 新增：获取平均处理时间统计
-    getStatsProcessingTime: () => request("/admin/stats/processing-time"),
+    getStatsProcessingTime: () => request("/admin/stats/processing-time", { authRedirect: false }),
 
     // 新增：获取 SLA 超时预警统计
-    getStatsSla: () => request("/admin/stats/sla"),
+    getStatsSla: () => request("/admin/stats/sla", { authRedirect: false }),
 
     // 新增：获取热点问题分析
-    getStatsHotspot: () => request("/admin/stats/hotspot"),
+    getStatsHotspot: () => request("/admin/stats/hotspot", { authRedirect: false }),
 
     // 新增：获取校园设施健康指数
-    getStatsFacilityHealth: () => request("/admin/stats/facility-health"),
+    getStatsFacilityHealth: () => request("/admin/stats/facility-health", { authRedirect: false }),
 
-    getStatsFaultTrends: () => request("/admin/stats/fault-trends"),
+    getStatsFaultTrends: () => request("/admin/stats/fault-trends", { authRedirect: false }),
 
     refreshStatsFaultTrends: () =>
       request("/admin/stats/fault-trends/refresh", {
         method: "POST",
+        authRedirect: false,
       }),
 
     // 新增：运维中心
@@ -464,6 +465,7 @@ const api = {
     rebuildKnowledgeBaseIndex: () =>
       request("/admin/knowledge-base/rebuild-index", {
         method: "POST",
+        authRedirect: false,
       }),
 
     getTransferRequests: (params) =>

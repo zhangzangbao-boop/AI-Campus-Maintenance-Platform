@@ -1,5 +1,6 @@
 package com.qiyun.repairservice.controller;
 
+import com.qiyun.repairservice.domain.entity.Rating;
 import com.qiyun.repairservice.domain.enums.TicketStatus;
 import com.qiyun.repairservice.dto.LocationStatsDto;
 import com.qiyun.repairservice.dto.PagedResult;
@@ -10,6 +11,7 @@ import com.qiyun.repairservice.repository.RatingRepository;
 import com.qiyun.repairservice.repository.TicketRepository;
 import com.qiyun.repairservice.service.FacilityHealthService;
 import com.qiyun.repairservice.service.FeedbackFollowUpService;
+import com.qiyun.repairservice.service.FeedbackSentimentAnalysisService;
 import com.qiyun.repairservice.service.RatingDtoMapper;
 import com.qiyun.repairservice.service.TicketService;
 import java.time.LocalDate;
@@ -50,6 +52,7 @@ public class InternalStatsController {
     private final FacilityHealthService facilityHealthService;
     private final RatingDtoMapper ratingDtoMapper;
     private final FeedbackFollowUpService feedbackFollowUpService;
+    private final FeedbackSentimentAnalysisService feedbackSentimentAnalysisService;
 
     /**
      * 获取工单状态统计
@@ -371,7 +374,12 @@ public class InternalStatsController {
             @RequestParam(value = "startDate", required = false) String startDate,
             @RequestParam(value = "endDate", required = false) String endDate) {
 
-        List<RatingDto> allRatings = ratingRepository.findAllWithDetails().stream()
+        List<Rating> ratings = ratingRepository.findAllWithDetails();
+        if (backfillMissingSentiment(ratings)) {
+            ratings = ratingRepository.findAllWithDetails();
+        }
+
+        List<RatingDto> allRatings = ratings.stream()
             .map(ratingDtoMapper::toDto)
             .collect(Collectors.toList());
 
@@ -424,6 +432,22 @@ public class InternalStatsController {
             "total", total
         ));
         return ResponseEntity.ok(result);
+    }
+
+    private boolean backfillMissingSentiment(List<Rating> ratings) {
+        boolean updated = false;
+        for (Rating rating : ratings) {
+            if (rating.getRatingId() == null || rating.getSentiment() != null) {
+                continue;
+            }
+            try {
+                feedbackSentimentAnalysisService.analyzeNow(rating.getRatingId());
+                updated = true;
+            } catch (Exception e) {
+                log.warn("补充分评价情感分析失败: ratingId={}, error={}", rating.getRatingId(), e.getMessage());
+            }
+        }
+        return updated;
     }
 
     @PutMapping("/feedbacks/{ratingId}/follow-up")

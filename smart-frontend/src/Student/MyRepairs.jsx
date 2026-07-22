@@ -42,7 +42,7 @@ const mapStatusToFrontend = (backendStatus) => {
   const statusMap = {
     'WAITING_ACCEPT': 'pending',
     'IN_PROGRESS': 'processing',
-    'RESOLVED': 'completed',
+    'RESOLVED': 'awaiting_confirmation',
     'WAITING_FEEDBACK': 'to_be_evaluated',
     'FEEDBACKED': 'closed',
     'CLOSED': 'closed',
@@ -55,7 +55,7 @@ const mapStatusToFrontend = (backendStatus) => {
   }
   
   // 如果已经是小写格式（前端格式），直接返回
-  if (['pending', 'processing', 'completed', 'to_be_evaluated', 'closed', 'rejected'].includes(backendStatus.toLowerCase())) {
+  if (['pending', 'processing', 'awaiting_confirmation', 'completed', 'to_be_evaluated', 'closed', 'rejected'].includes(backendStatus.toLowerCase())) {
     return backendStatus.toLowerCase();
   }
   
@@ -93,19 +93,21 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
 
   const isAwaitingStudentConfirmation = (order) => {
     const originalStatus = order?.originalStatus || order?.status;
-    return originalStatus === 'RESOLVED';
+    return originalStatus === 'RESOLVED' || order?.status === 'awaiting_confirmation';
   };
 
   const canEvaluateOrder = (order) => {
     const originalStatus = order?.originalStatus || order?.status;
-    return !order?.rating && (originalStatus === 'WAITING_FEEDBACK' || order?.status === 'to_be_evaluated');
+    return !order?.rating && (
+      originalStatus === 'WAITING_FEEDBACK'
+      || order?.status === 'to_be_evaluated'
+    );
   };
 
   const isStudentFeedbackTodo = (order) => {
     const originalStatus = order?.originalStatus || order?.status;
     return !order?.rating && (
-      originalStatus === 'RESOLVED'
-      || originalStatus === 'WAITING_FEEDBACK'
+      originalStatus === 'WAITING_FEEDBACK'
       || order?.status === 'to_be_evaluated'
     );
   };
@@ -174,7 +176,7 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
           ? rawTitle
           : (order.locationText ? `报修-${order.locationText}` : '报修单');
 
-        const backendStatus = order.status;
+        const backendStatus = order.originalStatus || order.status;
         const mappedStatus = mapStatusToFrontend(backendStatus);
         console.log(`订单ID ${order.ticketId || order.id}: 后端状态="${backendStatus}" -> 前端状态="${mappedStatus}"`);
 
@@ -193,7 +195,7 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
           repairmanId: order.staffId || order.repairmanId || null,
           repairmanName: order.staffName || null, // 添加维修人员名称
           status: mappedStatus, // 映射状态
-          originalStatus: backendStatus, // 保存原始状态
+          originalStatus: order.originalStatus || backendStatus, // 保存原始状态
           title: title, // 确保标题正确生成，与description区分
           rating: order.ratingScore || order.rating || null, // 映射评价分数
         };
@@ -209,6 +211,7 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
       const statusCounts = {
         pending: mappedData.filter(o => o.status === 'pending').length,
         processing: mappedData.filter(o => o.status === 'processing').length,
+        awaiting_confirmation: mappedData.filter(o => o.status === 'awaiting_confirmation').length,
         completed: mappedData.filter(o => o.status === 'completed').length,
         to_be_evaluated: mappedData.filter(o => o.status === 'to_be_evaluated').length,
         closed: mappedData.filter(o => o.status === 'closed').length,
@@ -450,6 +453,20 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
     }
     await repairService.confirmCompletion(orderId);
     await refreshAfterCompletionAction(orderId);
+    let evaluationOrder = {
+      ...record,
+      status: 'to_be_evaluated',
+      originalStatus: 'WAITING_FEEDBACK',
+    };
+    try {
+      evaluationOrder = await repairService.getRepairOrderById(orderId);
+    } catch (error) {
+      console.warn('Failed to refresh order before evaluation:', error);
+    }
+    if (detailModalVisible) {
+      handleCloseDetail();
+    }
+    handleEvaluate(evaluationOrder);
   };
 
   const handleRejectCompletion = (record) => {
@@ -585,6 +602,7 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
         total: 0,
         pending: 0,
         processing: 0,
+        awaitingConfirmation: 0,
         completed: 0,
         toBeEvaluated: 0,
         rejected: 0
@@ -605,7 +623,8 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
     // 学生端视角：
     // - pending（待受理）= WAITING_ACCEPT（刚提交，等待维修工接单）
     // - processing（处理中）= IN_PROGRESS（维修工正在处理）
-    // - toBeEvaluated（待评价）= RESOLVED（维修完成，需要学生评价）或 WAITING_FEEDBACK（等待评价）
+    // - awaitingConfirmation（待确认）= RESOLVED（维修工已完成，等待学生确认）
+    // - toBeEvaluated（待评价）= WAITING_FEEDBACK（学生已确认，等待评价）
     // - completed（已完成）= FEEDBACKED（已评价）或 CLOSED（已关闭）
     // - rejected（已驳回）= REJECTED
 
@@ -640,15 +659,28 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
       console.log('处理中订单详情:', processingOrders.map(o => ({ id: o.id, title: o.title, originalStatus: o.originalStatus })));
     }
 
-    // 学生端"待评价"：仅学生确认完成后的 WAITING_FEEDBACK 状态
+    // 学生端"待确认"：维修工已完成，等待学生确认是否解决的 RESOLVED 状态
+    const awaitingConfirmationOrders = repairOrders.filter(order => {
+      const originalStatus = order.originalStatus || order.status;
+      const isAwaitingConfirmation = isAwaitingStudentConfirmation(order);
+      console.log(`订单 ${order.id}: 原始状态="${originalStatus}", 是否待确认=${isAwaitingConfirmation}`);
+      return isAwaitingConfirmation;
+    });
+    const awaitingConfirmation = awaitingConfirmationOrders.length;
+    console.log('待确认订单 (RESOLVED):', awaitingConfirmation, '条');
+    if (awaitingConfirmationOrders.length > 0) {
+      console.log('待确认订单详情:', awaitingConfirmationOrders.map(o => ({ id: o.id, title: o.title, originalStatus: o.originalStatus })));
+    }
+
+    // 学生端"待评价"：学生确认完成后的 WAITING_FEEDBACK 状态
     const toBeEvaluatedOrders = repairOrders.filter(order => {
       const originalStatus = order.originalStatus || order.status;
-      const isToBeEvaluated = originalStatus === 'WAITING_FEEDBACK' || (order.status === 'to_be_evaluated' && originalStatus !== 'RESOLVED');
+      const isToBeEvaluated = isStudentFeedbackTodo(order);
       console.log(`订单 ${order.id}: 原始状态="${originalStatus}", 是否待评价=${isToBeEvaluated}`);
       return isToBeEvaluated;
     });
     const toBeEvaluated = toBeEvaluatedOrders.length;
-    console.log('待评价订单 (RESOLVED 或 WAITING_FEEDBACK):', toBeEvaluated, '条');
+    console.log('待评价订单 (WAITING_FEEDBACK):', toBeEvaluated, '条');
     if (toBeEvaluatedOrders.length > 0) {
       console.log('待评价订单详情:', toBeEvaluatedOrders.map(o => ({
         id: o.id,
@@ -661,8 +693,8 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
     // 学生端"已完成"：FEEDBACKED（已评价）或 CLOSED（已关闭）状态
     const completedOrders = repairOrders.filter(order => {
       const originalStatus = order.originalStatus || order.status;
-      // RESOLVED 表示维修工已完成，等待学生确认
-      const isCompleted = originalStatus === 'RESOLVED' || originalStatus === 'FEEDBACKED' || originalStatus === 'CLOSED' || order.status === 'closed';
+      // 学生端"已完成"仅统计已评价或已关闭的工单
+      const isCompleted = originalStatus === 'FEEDBACKED' || originalStatus === 'CLOSED' || order.status === 'closed' || (order.status === 'completed' && order.rating);
       console.log(`订单 ${order.id}: 原始状态="${originalStatus}", 是否已完成=${isCompleted}`);
       return isCompleted;
     });
@@ -690,12 +722,12 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
       console.log('已驳回订单详情:', rejectedOrders.map(o => ({ id: o.id, title: o.title, originalStatus: o.originalStatus })));
     }
 
-    const stats = { total, pending, processing, completed, toBeEvaluated, rejected };
+    const stats = { total, pending, processing, awaitingConfirmation, completed, toBeEvaluated, rejected };
 
     console.log('========================================');
     console.log('学生端统计结果汇总:', stats);
-    console.log(`验证: total(${total}) = pending(${pending}) + processing(${processing}) + toBeEvaluated(${toBeEvaluated}) + completed(${completed}) + rejected(${rejected})`);
-    const verificationSum = pending + processing + toBeEvaluated + completed + rejected;
+    console.log(`验证: total(${total}) = pending(${pending}) + processing(${processing}) + awaitingConfirmation(${awaitingConfirmation}) + toBeEvaluated(${toBeEvaluated}) + completed(${completed}) + rejected(${rejected})`);
+    const verificationSum = pending + processing + awaitingConfirmation + toBeEvaluated + completed + rejected;
     console.log(`验证计算: ${total} = ${verificationSum}`);
     console.log(`验证结果: ${total === verificationSum ? '✓ 正确' : '✗ 错误（差额=' + (total - verificationSum) + '）'}`);
     console.log('========================================');
@@ -914,6 +946,16 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
         <Col span={4}>
           <Card style={{ borderRadius: "8px", border: "none", boxShadow: "0 2px 8px rgba(15, 82, 186, 0.06)", background: "#FFFFFF" }}>
             <Statistic
+              title={<span style={{ fontSize: "13px", color: "#8c8c8c", fontWeight: "400" }}>待确认</span>}
+              value={stats.awaitingConfirmation}
+              prefix={<CheckCircleOutlined style={{ color: "#13c2c2" }} />}
+              valueStyle={{ color: "#1f1f1f", fontSize: "28px", fontWeight: "600" }}
+            />
+          </Card>
+        </Col>
+        <Col span={4}>
+          <Card style={{ borderRadius: "8px", border: "none", boxShadow: "0 2px 8px rgba(15, 82, 186, 0.06)", background: "#FFFFFF" }}>
+            <Statistic
               title={<span style={{ fontSize: "13px", color: "#8c8c8c", fontWeight: "400" }}>待评价</span>}
               value={stats.toBeEvaluated}
               prefix={<StarOutlined style={{ color: "#7eb8da" }} />}
@@ -949,6 +991,7 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
               <Option value="all">全部状态</Option>
               <Option value="pending">待受理</Option>
               <Option value="processing">处理中</Option>
+              <Option value="awaiting_confirmation">待确认</Option>
               <Option value="to_be_evaluated">待评价</Option>
               <Option value="completed">已完成</Option>
               <Option value="closed">已关闭</Option>

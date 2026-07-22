@@ -205,7 +205,7 @@ public class TicketService {
             }
 
             TicketStatus status = ticket.getStatus();
-            if (status != TicketStatus.WAITING_FEEDBACK && status != TicketStatus.CLOSED) {
+            if (status != TicketStatus.WAITING_FEEDBACK) {
                 throw new BusinessException("当前状态不可评价");
             }
 
@@ -549,7 +549,7 @@ public class TicketService {
         return switch (oldStatus) {
             case WAITING_ACCEPT -> newStatus == TicketStatus.IN_PROGRESS || newStatus == TicketStatus.REJECTED;
             case IN_PROGRESS -> newStatus == TicketStatus.RESOLVED || newStatus == TicketStatus.REJECTED;
-            case RESOLVED -> newStatus == TicketStatus.CLOSED;
+            case RESOLVED -> false;
             case WAITING_FEEDBACK -> newStatus == TicketStatus.FEEDBACKED || newStatus == TicketStatus.CLOSED;
             case FEEDBACKED -> newStatus == TicketStatus.CLOSED;
             case REJECTED, CLOSED -> false;

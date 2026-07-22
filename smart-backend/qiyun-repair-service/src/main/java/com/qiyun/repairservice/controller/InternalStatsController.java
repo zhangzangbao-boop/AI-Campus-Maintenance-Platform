@@ -18,6 +18,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -381,6 +382,10 @@ public class InternalStatsController {
 
         List<RatingDto> allRatings = ratings.stream()
             .map(ratingDtoMapper::toDto)
+            .sorted(Comparator.comparing(
+                RatingDto::ratedAt,
+                Comparator.nullsLast(Comparator.reverseOrder())
+            ))
             .collect(Collectors.toList());
 
         LocalDateTime startAt = parseStartDate(startDate);
@@ -404,13 +409,6 @@ public class InternalStatsController {
         }
 
         // 简单分页
-        if (sentiment != null && !sentiment.isBlank()) {
-            String normalizedSentiment = sentiment.trim().toUpperCase();
-            allRatings = allRatings.stream()
-                .filter(r -> normalizedSentiment.equals(r.sentiment()))
-                .collect(Collectors.toList());
-        }
-
         if (followUpStatus != null && !followUpStatus.isBlank()) {
             String normalizedFollowUpStatus = followUpStatus.trim().toUpperCase();
             allRatings = allRatings.stream()
@@ -418,7 +416,27 @@ public class InternalStatsController {
                 .collect(Collectors.toList());
         }
 
+        Map<String, Long> sentimentCounts = new HashMap<>();
+        sentimentCounts.put("POSITIVE", allRatings.stream().filter(r -> "POSITIVE".equals(r.sentiment()) && !isNegativeFeedback(r)).count());
+        sentimentCounts.put("NEUTRAL", allRatings.stream().filter(r -> "NEUTRAL".equals(r.sentiment()) && !isNegativeFeedback(r)).count());
+        sentimentCounts.put("NEGATIVE", allRatings.stream().filter(this::isNegativeFeedback).count());
+
+        if (sentiment != null && !sentiment.isBlank()) {
+            String normalizedSentiment = sentiment.trim().toUpperCase();
+            allRatings = allRatings.stream()
+                .filter(r -> matchesSentimentFilter(r, normalizedSentiment))
+                .collect(Collectors.toList());
+        }
+
         int total = allRatings.size();
+        long followUpTotal = allRatings.stream()
+            .filter(r -> r.followUpStatus() != null && !r.followUpStatus().isBlank())
+            .count();
+        double averageRating = allRatings.stream()
+            .filter(r -> r.score() != null)
+            .mapToInt(RatingDto::score)
+            .average()
+            .orElse(0);
         int fromIndex = Math.min(page * size, total);
         int toIndex = Math.min(fromIndex + size, total);
         List<RatingDto> pagedRatings = fromIndex < total ?
@@ -429,9 +447,27 @@ public class InternalStatsController {
         result.put("message", "获取成功");
         result.put("data", Map.of(
             "list", pagedRatings,
-            "total", total
+            "total", total,
+            "averageRating", averageRating,
+            "followUpTotal", followUpTotal,
+            "sentimentCounts", sentimentCounts
         ));
         return ResponseEntity.ok(result);
+    }
+
+    private boolean matchesSentimentFilter(RatingDto rating, String sentiment) {
+        if ("NEGATIVE".equals(sentiment)) {
+            return isNegativeFeedback(rating);
+        }
+        if ("POSITIVE".equals(sentiment) || "NEUTRAL".equals(sentiment)) {
+            return sentiment.equals(rating.sentiment()) && !isNegativeFeedback(rating);
+        }
+        return sentiment.equals(rating.sentiment());
+    }
+
+    private boolean isNegativeFeedback(RatingDto rating) {
+        return (rating.score() != null && rating.score() <= 2)
+            || "NEGATIVE".equals(rating.sentiment());
     }
 
     private boolean backfillMissingSentiment(List<Rating> ratings) {

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Card, Col, Input, Modal, Rate, Row, Select, Space, Statistic, Tag, message } from 'antd';
+import { Button, Card, Col, Input, Modal, Pagination, Rate, Row, Select, Space, Statistic, Tag, message } from 'antd';
 import { DownloadOutlined, EditOutlined, MessageOutlined, StarOutlined, UserOutlined } from '@ant-design/icons';
 import { feedbackService } from './feedbackService';
 import api from '../services/api';
@@ -33,18 +33,30 @@ const FeedbackManagement = () => {
   const [followUpNote, setFollowUpNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalFeedbacks, setTotalFeedbacks] = useState(0);
+  const [averageRating, setAverageRating] = useState('0.0');
+  const [followUpCount, setFollowUpCount] = useState(0);
+  const [sentimentCounts, setSentimentCounts] = useState({});
 
   const loadFeedbacks = async () => {
     setLoading(true);
     try {
-      const params = {};
-      if (sentimentFilter === 'NEGATIVE') {
-        params.sentiment = 'NEGATIVE';
+      const params = { page: currentPage - 1, size: pageSize };
+      if (sentimentFilter !== 'ALL') {
+        params.sentiment = sentimentFilter;
       }
       if (followUpFilter !== 'ALL') {
         params.followUpStatus = followUpFilter;
       }
-      setFeedbacks(await feedbackService.getAllFeedbacks(params));
+
+      const result = await feedbackService.getAllFeedbacks(params);
+      setFeedbacks(result.list);
+      setTotalFeedbacks(result.total);
+      setAverageRating(Number(result.averageRating || 0).toFixed(1));
+      setFollowUpCount(result.followUpTotal || 0);
+      setSentimentCounts(result.sentimentCounts || {});
     } finally {
       setLoading(false);
     }
@@ -52,7 +64,22 @@ const FeedbackManagement = () => {
 
   useEffect(() => {
     loadFeedbacks();
-  }, [sentimentFilter, followUpFilter]);
+  }, [sentimentFilter, followUpFilter, currentPage, pageSize]);
+
+  const handleSentimentFilterChange = (value) => {
+    setCurrentPage(1);
+    setSentimentFilter(value);
+  };
+
+  const handleFollowUpFilterChange = (value) => {
+    setCurrentPage(1);
+    setFollowUpFilter(value);
+  };
+
+  const handlePageChange = (page, size) => {
+    setCurrentPage(page);
+    setPageSize(size);
+  };
 
   const openFollowUp = (feedback) => {
     setEditing(feedback);
@@ -79,8 +106,8 @@ const FeedbackManagement = () => {
 
   const currentExportParams = () => {
     const params = {};
-    if (sentimentFilter === 'NEGATIVE') {
-      params.sentiment = 'NEGATIVE';
+    if (sentimentFilter !== 'ALL') {
+      params.sentiment = sentimentFilter;
     }
     if (followUpFilter !== 'ALL') {
       params.followUpStatus = followUpFilter;
@@ -104,12 +131,7 @@ const FeedbackManagement = () => {
     ? feedback.sentimentKeywords
     : String(feedback.sentimentKeywords || '').split(/[,\s]+/).filter(Boolean);
 
-  const totalFeedbacks = feedbacks.length;
-  const averageRating = totalFeedbacks > 0
-    ? (feedbacks.reduce((sum, item) => sum + item.rating, 0) / totalFeedbacks).toFixed(1)
-    : 0;
-  const followUpCount = feedbacks.filter(item => item.followUpStatus).length;
-  const negativeCount = feedbacks.filter(item => item.sentiment === 'NEGATIVE' || item.rating <= 2).length;
+  const negativeCount = sentimentCounts.NEGATIVE || 0;
 
   const renderFeedbackCard = (feedback) => {
     const sentiment = sentimentMeta[feedback.sentiment] || { color: 'default', label: '未分析' };
@@ -201,7 +223,7 @@ const FeedbackManagement = () => {
         </Col>
         <Col xs={24} sm={6}>
           <Card size="small">
-            <Statistic title="需关注评价" value={negativeCount} />
+            <Statistic title="负面评价" value={negativeCount} />
           </Card>
         </Col>
         <Col xs={24} sm={6}>
@@ -217,9 +239,10 @@ const FeedbackManagement = () => {
           <Select
             value={sentimentFilter}
             style={{ width: 160 }}
-            onChange={setSentimentFilter}
+            onChange={handleSentimentFilterChange}
             options={[
               { value: 'ALL', label: '全部评价' },
+              { value: 'POSITIVE', label: '仅正面评价' },
               { value: 'NEGATIVE', label: '仅负面评价' },
             ]}
           />
@@ -227,7 +250,7 @@ const FeedbackManagement = () => {
           <Select
             value={followUpFilter}
             style={{ width: 160 }}
-            onChange={setFollowUpFilter}
+            onChange={handleFollowUpFilterChange}
             options={followUpOptions}
           />
           <Button onClick={loadFeedbacks} loading={loading}>刷新</Button>
@@ -242,7 +265,20 @@ const FeedbackManagement = () => {
       ) : feedbacks.length === 0 ? (
         <Card><div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>暂无评价数据</div></Card>
       ) : (
-        feedbacks.map(renderFeedbackCard)
+        <>
+          {feedbacks.map(renderFeedbackCard)}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+            <Pagination
+              current={currentPage}
+              pageSize={pageSize}
+              total={totalFeedbacks}
+              showSizeChanger
+              showTotal={(total) => `共 ${total} 条评价`}
+              onChange={handlePageChange}
+              onShowSizeChange={handlePageChange}
+            />
+          </div>
+        </>
       )}
 
       <Modal

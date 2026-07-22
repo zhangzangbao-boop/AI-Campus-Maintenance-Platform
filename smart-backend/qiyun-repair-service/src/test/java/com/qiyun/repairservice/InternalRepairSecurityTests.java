@@ -1,8 +1,17 @@
 package com.qiyun.repairservice;
 
+import com.qiyun.repairservice.domain.entity.Rating;
+import com.qiyun.repairservice.domain.entity.RepairTicket;
+import com.qiyun.repairservice.domain.entity.UserReference;
+import com.qiyun.repairservice.domain.enums.TicketStatus;
+import com.qiyun.repairservice.domain.enums.UserRole;
+import com.qiyun.repairservice.repository.RatingRepository;
+import com.qiyun.repairservice.repository.TicketRepository;
+import com.qiyun.repairservice.repository.UserReferenceRepository;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +28,7 @@ import java.util.Map;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -38,6 +48,15 @@ class InternalRepairSecurityTests {
 
     @MockBean
     private com.qiyun.repairservice.service.FacilityHealthService facilityHealthService;
+
+    @Autowired
+    private UserReferenceRepository userReferenceRepository;
+
+    @Autowired
+    private TicketRepository ticketRepository;
+
+    @Autowired
+    private RatingRepository ratingRepository;
 
     private String adminToken;
     private String studentToken;
@@ -168,5 +187,55 @@ class InternalRepairSecurityTests {
         mockMvc.perform(get("/internal/repair/feedbacks")
                 .header("Authorization", "Bearer " + adminToken))
             .andExpect(status().isOk());
+    }
+
+    @Test
+    void negativeFeedbackFilterIncludesLowRatingFeedbacks() throws Exception {
+        Rating rating = createRating(2, "POSITIVE");
+
+        mockMvc.perform(get("/internal/repair/feedbacks")
+                .param("sentiment", "NEGATIVE")
+                .header("Authorization", "Bearer " + adminToken))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.total").value(1))
+            .andExpect(jsonPath("$.data.sentimentCounts.NEGATIVE").value(1))
+            .andExpect(jsonPath("$.data.list[0].ratingId").value(rating.getRatingId()));
+    }
+
+    private Rating createRating(int score, String sentiment) {
+        UserReference student = createUser("negative-filter-student", "Negative Filter Student", UserRole.STUDENT);
+        UserReference staff = createUser("negative-filter-staff", "Negative Filter Staff", UserRole.STAFF);
+
+        RepairTicket ticket = new RepairTicket();
+        ticket.setStudent(student);
+        ticket.setStaff(staff);
+        ticket.setStatus(TicketStatus.FEEDBACKED);
+        ticket.setLocationText("Dorm A");
+        ticket.setDescription("Test ticket");
+        ticket.setCompletedAt(LocalDateTime.now().minusHours(1));
+        ticket.setStudentConfirmedAt(LocalDateTime.now().minusMinutes(30));
+        ticket = ticketRepository.save(ticket);
+
+        Rating rating = new Rating();
+        rating.setTicket(ticket);
+        rating.setStudent(student);
+        rating.setStaff(staff);
+        rating.setScore(score);
+        rating.setComment("Low score should be treated as negative");
+        rating.setSentiment(sentiment);
+        rating.setRatedAt(LocalDateTime.now());
+        rating.setAnonymous(false);
+        return ratingRepository.save(rating);
+    }
+
+    private UserReference createUser(String id, String name, UserRole role) {
+        return userReferenceRepository.findById(id).orElseGet(() -> {
+            UserReference user = new UserReference();
+            user.setUserId(id);
+            user.setNickname(name);
+            user.setRole(role);
+            user.setIsActive(true);
+            return userReferenceRepository.save(user);
+        });
     }
 }

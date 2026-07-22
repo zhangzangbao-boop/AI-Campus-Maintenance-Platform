@@ -30,6 +30,7 @@ const emptyStats = {
   total: 0,
   pending: 0,
   processing: 0,
+  awaitingConfirmation: 0,
   toEvaluate: 0,
   completed: 0,
 };
@@ -67,14 +68,15 @@ const StudentDashboard = ({ orders, loading, onNavigate, onRefresh }) => {
       acc.total += 1;
       if (status === "pending") acc.pending += 1;
       if (status === "processing") acc.processing += 1;
-      if (status === "to_be_evaluated" || (status === "completed" && !order.rating)) acc.toEvaluate += 1;
+      if (status === "awaiting_confirmation") acc.awaitingConfirmation += 1;
+      if (status === "to_be_evaluated") acc.toEvaluate += 1;
       if (status === "closed" || (status === "completed" && order.rating)) acc.completed += 1;
       return acc;
     }, { ...emptyStats });
   }, [orders]);
 
   const activeOrders = useMemo(
-    () => (orders || []).filter((item) => ["pending", "processing", "to_be_evaluated", "completed"].includes(item.status)).slice(0, 5),
+    () => (orders || []).filter((item) => ["pending", "processing", "awaiting_confirmation", "to_be_evaluated", "completed"].includes(item.status)).slice(0, 5),
     [orders]
   );
 
@@ -101,7 +103,7 @@ const StudentDashboard = ({ orders, loading, onNavigate, onRefresh }) => {
       >
         <div className="hero-status-card">
           <div>当前待处理</div>
-          <strong>{stats.pending + stats.processing + stats.toEvaluate}</strong>
+          <strong>{stats.pending + stats.processing + stats.awaitingConfirmation + stats.toEvaluate}</strong>
           <span>条需要关注</span>
         </div>
       </PageHero>

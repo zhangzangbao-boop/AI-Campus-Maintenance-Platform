@@ -286,7 +286,7 @@ public class TicketService {
             case IN_PROGRESS ->
                     newStatus == TicketStatus.RESOLVED || newStatus == TicketStatus.REJECTED;
             case RESOLVED ->
-                    newStatus == TicketStatus.WAITING_FEEDBACK || newStatus == TicketStatus.CLOSED;
+                    false;
             case WAITING_FEEDBACK ->
                     newStatus == TicketStatus.FEEDBACKED || newStatus == TicketStatus.CLOSED;
             case FEEDBACKED ->
@@ -319,14 +319,8 @@ public class TicketService {
                 throw new BusinessException("该报修单已评价");
             }
 
-            // 允许在以下状态下评价：
-            // - WAITING_FEEDBACK：正常待评价
-            // - RESOLVED：已完成但还未进入待评价状态
-            // - CLOSED：已关闭但尚未评价（例如管理员直接关闭）
             TicketStatus status = ticket.getStatus();
-            if (status != TicketStatus.WAITING_FEEDBACK
-                    && status != TicketStatus.RESOLVED
-                    && status != TicketStatus.CLOSED) {
+            if (status != TicketStatus.WAITING_FEEDBACK) {
                 throw new BusinessException("当前状态不可评价");
             }
 

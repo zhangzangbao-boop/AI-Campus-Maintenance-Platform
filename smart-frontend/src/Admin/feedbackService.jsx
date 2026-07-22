@@ -1,6 +1,33 @@
 import api from '../services/api';
 import { message } from 'antd';
 
+const mapFeedback = (item) => ({
+  id: item.ratingId ?? item.id,
+  rating: item.score ?? item.rating ?? 0,
+  comment: item.comment ?? '',
+  studentId: item.studentId ?? item.studentID,
+  studentName: item.studentName ?? null,
+  repairmanId: item.staffId ?? item.repairmanId,
+  repairmanName: item.staffName ?? item.repairmanName ?? null,
+  repairOrderId: item.repairOrderId ?? null,
+  speedRating: item.speedRating ?? null,
+  qualityRating: item.qualityRating ?? null,
+  attitudeRating: item.attitudeRating ?? null,
+  resolved: item.resolved,
+  anonymous: item.anonymous,
+  sentiment: item.sentiment ?? null,
+  sentimentScore: item.sentimentScore ?? null,
+  sentimentKeywords: item.sentimentKeywords ?? item.keywords ?? [],
+  sentimentSummary: item.sentimentSummary ?? item.summary ?? '',
+  sentimentAnalyzedAt: item.sentimentAnalyzedAt ?? null,
+  followUpStatus: item.followUpStatus ?? null,
+  followUpNote: item.followUpNote ?? '',
+  followUpOperatorId: item.followUpOperatorId ?? null,
+  followUpOperatorName: item.followUpOperatorName ?? null,
+  followUpUpdatedAt: item.followUpUpdatedAt ?? null,
+  createdAt: item.ratedAt ?? item.createdAt ?? item.created_at,
+});
+
 export const feedbackService = {
   getAllFeedbacks: async (params = {}) => {
     try {
@@ -9,46 +36,24 @@ export const feedbackService = {
         throw new Error('评价响应为空');
       }
 
-      const listRaw =
-        response.list ||
-        response.data?.list ||
-        response.data ||
-        [];
+      const data = response.data && !Array.isArray(response.data) ? response.data : response;
+      const listRaw = data.list || response.list || (Array.isArray(response.data) ? response.data : []) || [];
 
       if (!Array.isArray(listRaw)) {
         throw new Error('评价响应格式不正确');
       }
 
-      return listRaw.map(item => ({
-        id: item.ratingId ?? item.id,
-        rating: item.score ?? item.rating ?? 0,
-        comment: item.comment ?? '',
-        studentId: item.studentId ?? item.studentID,
-        studentName: item.studentName ?? null,
-        repairmanId: item.staffId ?? item.repairmanId,
-        repairmanName: item.staffName ?? item.repairmanName ?? null,
-        repairOrderId: item.repairOrderId ?? null,
-        speedRating: item.speedRating ?? null,
-        qualityRating: item.qualityRating ?? null,
-        attitudeRating: item.attitudeRating ?? null,
-        resolved: item.resolved,
-        anonymous: item.anonymous,
-        sentiment: item.sentiment ?? null,
-        sentimentScore: item.sentimentScore ?? null,
-        sentimentKeywords: item.sentimentKeywords ?? item.keywords ?? [],
-        sentimentSummary: item.sentimentSummary ?? item.summary ?? '',
-        sentimentAnalyzedAt: item.sentimentAnalyzedAt ?? null,
-        followUpStatus: item.followUpStatus ?? null,
-        followUpNote: item.followUpNote ?? '',
-        followUpOperatorId: item.followUpOperatorId ?? null,
-        followUpOperatorName: item.followUpOperatorName ?? null,
-        followUpUpdatedAt: item.followUpUpdatedAt ?? null,
-        createdAt: item.ratedAt ?? item.createdAt ?? item.created_at,
-      }));
+      return {
+        list: listRaw.map(mapFeedback),
+        total: data.total ?? listRaw.length,
+        averageRating: data.averageRating ?? 0,
+        followUpTotal: data.followUpTotal ?? 0,
+        sentimentCounts: data.sentimentCounts ?? {},
+      };
     } catch (error) {
       console.error('加载评价失败:', error);
       message.error('加载评价失败');
-      return [];
+      return { list: [], total: 0, averageRating: 0, followUpTotal: 0, sentimentCounts: {} };
     }
   },
 

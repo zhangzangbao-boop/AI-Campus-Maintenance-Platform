@@ -9,6 +9,7 @@ const GATEWAY_URL = 'http://localhost:8070';
 export const REPAIR_STATUS = {
   PENDING: { value: "pending", label: "待受理", color: "orange" },
   PROCESSING: { value: "processing", label: "处理中", color: "blue" },
+  AWAITING_CONFIRMATION: { value: "awaiting_confirmation", label: "待确认", color: "cyan" },
   COMPLETED: { value: "completed", label: "已完成", color: "green" },
   TO_BE_EVALUATED: {value: "to_be_evaluated",label: "待评价", color: "purple"},
   CLOSED: { value: "closed", label: "已关闭", color: "default" },
@@ -39,13 +40,14 @@ export const priority_LEVELS = {
 };
 
 // 状态映射函数：将后端枚举值转换为前端状态值
-const mapStatusToFrontend = (backendStatus) => {
+const mapStatusToFrontend = (backendStatus, options = {}) => {
   if (!backendStatus) return 'pending';
   
+  const resolvedStatus = options.resolvedAsAwaitingConfirmation ? 'awaiting_confirmation' : 'completed';
   const statusMap = {
     'WAITING_ACCEPT': 'pending',
     'IN_PROGRESS': 'processing',
-    'RESOLVED': 'completed',
+    'RESOLVED': resolvedStatus,
     'WAITING_FEEDBACK': 'to_be_evaluated',
     'FEEDBACKED': 'closed',
     'CLOSED': 'closed',
@@ -58,7 +60,7 @@ const mapStatusToFrontend = (backendStatus) => {
   }
   
   // 如果已经是小写格式（前端格式），直接返回
-  if (['pending', 'processing', 'completed', 'to_be_evaluated', 'closed', 'rejected'].includes(backendStatus.toLowerCase())) {
+  if (['pending', 'processing', 'awaiting_confirmation', 'completed', 'to_be_evaluated', 'closed', 'rejected'].includes(backendStatus.toLowerCase())) {
     return backendStatus.toLowerCase();
   }
   
@@ -187,7 +189,7 @@ export const repairService = {
           
           // 映射状态，添加调试日志
           const backendStatus = order.status;
-          const frontendStatus = mapStatusToFrontend(backendStatus);
+          const frontendStatus = mapStatusToFrontend(backendStatus, { resolvedAsAwaitingConfirmation: true });
           if (backendStatus && backendStatus !== frontendStatus) {
             console.log(`状态映射: ${backendStatus} -> ${frontendStatus} (订单ID: ${order.ticketId || order.id})`);
           }
@@ -260,7 +262,7 @@ export const repairService = {
           studentName: orderDetail.studentNickname || orderDetail.studentName || '未知',
           repairmanId: orderDetail.staffId || orderDetail.repairmanId || null,
           repairmanName: orderDetail.staffNickname || orderDetail.staffName || null,
-          status: mapStatusToFrontend(orderDetail.status), // 映射状态
+          status: mapStatusToFrontend(orderDetail.status, { resolvedAsAwaitingConfirmation: true }), // 映射状态
           originalStatus: orderDetail.status,
           // 确保 title 正确
           title: (orderDetail.title && orderDetail.title !== orderDetail.description)
@@ -650,6 +652,7 @@ export const repairUtils = {
     const statusMap = {
       pending: { label: "待受理", color: "orange" },
       processing: { label: "处理中", color: "blue" },
+      awaiting_confirmation: { label: "待确认", color: "cyan" },
       completed: { label: "已完成", color: "green" },
       to_be_evaluated: { label: "待评价", color: "purple" },
       closed: { label: "已关闭", color: "default" },

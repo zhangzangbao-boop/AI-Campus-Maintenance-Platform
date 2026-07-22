@@ -17,14 +17,21 @@ import com.qiyun.repairservice.dto.request.TicketRatingRequest;
 import com.qiyun.repairservice.dto.request.TicketStatusUpdateRequest;
 import com.qiyun.repairservice.repository.*;
 import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 import java.util.stream.Collectors;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
@@ -37,6 +44,16 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 @RequiredArgsConstructor
 public class TicketService {
+
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Shanghai");
+    private static final Set<TicketStatus> TODAY_TASK_STATUSES = EnumSet.of(TicketStatus.WAITING_ACCEPT, TicketStatus.IN_PROGRESS);
+    private static final Set<TicketStatus> PROCESSING_TASK_STATUSES = EnumSet.of(TicketStatus.IN_PROGRESS);
+    private static final Set<TicketStatus> RECORD_TASK_STATUSES = EnumSet.of(
+        TicketStatus.RESOLVED,
+        TicketStatus.WAITING_FEEDBACK,
+        TicketStatus.FEEDBACKED,
+        TicketStatus.CLOSED
+    );
 
     private final TicketRepository ticketRepository;
     private final TicketImageRepository imageRepository;
@@ -496,9 +513,84 @@ public class TicketService {
 
     @Transactional(readOnly = true)
     public Map<String, Object> listStaffTasksPage(String staffId, TicketStatus status, int page, int size) {
-        Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
-        Page<RepairTicket> ticketPage = ticketRepository.findByStaffIdWithFilter(staffId, status, pageable);
+        return listStaffTasksPage(staffId, status, null, null, null, null, page, size);
+    }
 
+    @Transactional(readOnly = true)
+    public Map<String, Object> listStaffTasksPage(
+        String staffId,
+        TicketStatus status,
+        String scope,
+        String category,
+        String priority,
+        String keyword,
+        int page,
+        int size
+    ) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "assignedAt", "createdAt"));
+
+        Set<TicketStatus> allowedStatuses = allowedStaffTaskStatuses(scope);
+        if (status != null && allowedStatuses != null && !allowedStatuses.contains(status)) {
+            return staffTaskPageResult(new PageImpl<>(List.of(), pageable, 0), safePage, safeSize);
+        }
+
+        Page<RepairTicket> ticketPage = ticketRepository.findAll((Specification<RepairTicket>) (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            predicates.add(cb.equal(root.get("staff").get("userId"), staffId));
+            predicates.add(cb.or(cb.isNull(root.get("deleted")), cb.isFalse(root.get("deleted"))));
+
+            if (allowedStatuses != null) {
+                predicates.add(root.get("status").in(allowedStatuses));
+            }
+            if (status == TicketStatus.CLOSED && "records".equalsIgnoreCase(scope)) {
+                predicates.add(root.get("status").in(EnumSet.of(TicketStatus.FEEDBACKED, TicketStatus.CLOSED)));
+            } else if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
+            }
+            if ("today".equalsIgnoreCase(scope)) {
+                LocalDate today = LocalDate.now(BUSINESS_ZONE);
+                LocalDateTime start = today.atStartOfDay();
+                LocalDateTime end = today.plusDays(1).atStartOfDay();
+                predicates.add(cb.greaterThanOrEqualTo(root.get("assignedAt"), start));
+                predicates.add(cb.lessThan(root.get("assignedAt"), end));
+            }
+            if (category != null && !category.isBlank() && !"all".equalsIgnoreCase(category)) {
+                predicates.add(cb.equal(root.get("category").get("categoryName"), category));
+            }
+            if (priority != null && !priority.isBlank() && !"all".equalsIgnoreCase(priority)) {
+                predicates.add(cb.equal(root.get("priority"), priority));
+            }
+            if (keyword != null && !keyword.isBlank()) {
+                String pattern = "%" + keyword.trim().toLowerCase(Locale.ROOT) + "%";
+                predicates.add(cb.or(
+                    cb.like(cb.lower(root.get("locationText")), pattern),
+                    cb.like(cb.lower(root.get("description")), pattern),
+                    cb.like(cb.lower(root.get("student").get("userId")), pattern),
+                    cb.like(cb.lower(root.get("student").get("nickname")), pattern)
+                ));
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        }, pageable);
+
+        return staffTaskPageResult(ticketPage, safePage, safeSize);
+    }
+
+    private Set<TicketStatus> allowedStaffTaskStatuses(String scope) {
+        if (scope == null || scope.isBlank() || "all".equalsIgnoreCase(scope)) {
+            return null;
+        }
+        return switch (scope.toLowerCase(Locale.ROOT)) {
+            case "today" -> TODAY_TASK_STATUSES;
+            case "processing" -> PROCESSING_TASK_STATUSES;
+            case "records" -> RECORD_TASK_STATUSES;
+            default -> null;
+        };
+    }
+
+    private Map<String, Object> staffTaskPageResult(Page<RepairTicket> ticketPage, int page, int size) {
         List<TicketSummaryDto> summaries = ticketPage.getContent().stream()
             .map(this::toSummaryDto)
             .collect(Collectors.toList());

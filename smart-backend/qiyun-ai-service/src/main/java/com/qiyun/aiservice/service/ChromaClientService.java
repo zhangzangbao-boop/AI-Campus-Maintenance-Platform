@@ -33,6 +33,7 @@ public class ChromaClientService {
         this.config = config;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_1_1)
             .connectTimeout(Duration.ofSeconds(config.getTimeoutSeconds()))
             .build();
     }
@@ -63,7 +64,7 @@ public class ChromaClientService {
 
     public Map<String, Object> diagnosticStatus() {
         Map<String, Object> status = new HashMap<>();
-        status.put("codeMarker", "chroma-v2-get-or-create-20260721-3");
+        status.put("codeMarker", "chroma-v2-find-v1-ops-2d-embeddings-20260722");
         status.put("url", normalizeUrl(config.getUrl()));
         status.put("collection", config.getCollection());
         status.put("tenant", safeTenant());
@@ -154,6 +155,8 @@ public class ChromaClientService {
                 this.collectionApiBase = url + "/api/v1/collections";
                 log.info("Chroma 闆嗗悎鍒涘缓鎴愬姛: {} (id={})", collectionName, collectionId);
                 return true;
+            } else if (createResponse.statusCode() == 409 && findCollectionV2ByName(url, collectionName)) {
+                return true;
             } else {
                 log.error("鍒涘缓 Chroma 闆嗗悎澶辫触: status={}", createResponse.statusCode());
                 return false;
@@ -176,6 +179,10 @@ public class ChromaClientService {
 
     private boolean ensureCollectionV2(String url, String collectionName) {
         try {
+            if (findCollectionV2ByName(url, collectionName)) {
+                return true;
+            }
+
             String apiBase = url + "/api/v2/tenants/" + safeTenant()
                 + "/databases/" + safeDatabase() + "/collections";
             Map<String, Object> body = buildCreateCollectionBody(collectionName);
@@ -194,8 +201,11 @@ public class ChromaClientService {
                     response.body(), new TypeReference<Map<String, Object>>() {}
                 );
                 this.collectionId = String.valueOf(responseMap.get("id"));
-                this.collectionApiBase = apiBase;
+                this.collectionApiBase = url + "/api/v1/collections";
                 log.info("Chroma v2 ?????: {} (id={})", collectionName, collectionId);
+                return true;
+            }
+            if (response.statusCode() == 409 && findCollectionV2ByName(url, collectionName)) {
                 return true;
             }
             log.warn("Chroma v2 ??????????? v1: status={}, body={}",
@@ -205,6 +215,49 @@ public class ChromaClientService {
             log.warn("Chroma v2 ??????????? v1: {}", e.getMessage());
             return false;
         }
+    }
+
+    private boolean findCollectionV2ByName(String url, String collectionName) {
+        try {
+            String apiBase = url + "/api/v2/tenants/" + safeTenant()
+                + "/databases/" + safeDatabase() + "/collections";
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(apiBase))
+                .timeout(Duration.ofSeconds(config.getTimeoutSeconds()))
+                .GET()
+                .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                return false;
+            }
+
+            List<Map<String, Object>> collections = parseCollectionsResponse(response.body());
+            for (Map<String, Object> collection : collections) {
+                if (collectionName.equals(String.valueOf(collection.get("name")))) {
+                    this.collectionId = String.valueOf(collection.get("id"));
+                    this.collectionApiBase = url + "/api/v1/collections";
+                    log.info("Chroma collection found by v2 list: {} (id={})", collectionName, collectionId);
+                    return true;
+                }
+            }
+            return false;
+        } catch (Exception e) {
+            log.warn("Find Chroma collection by v2 list failed: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> parseCollectionsResponse(String responseBody) throws Exception {
+        Object response = objectMapper.readValue(responseBody, Object.class);
+        if (response instanceof List<?> list) {
+            return (List<Map<String, Object>>) list;
+        }
+        if (response instanceof Map<?, ?> map && map.get("value") instanceof List<?> list) {
+            return (List<Map<String, Object>>) list;
+        }
+        return List.of();
     }
 
     private Map<String, Object> buildCreateCollectionBody(String collectionName) {
@@ -217,16 +270,16 @@ public class ChromaClientService {
     }
 
     public boolean addDocument(String id, String document, float[] embedding, Map<String, String> metadata) {
-        if (collectionId == null) {
-            if (!ensureCollection()) {
-                return false;
-            }
-        }
-
         // 鏍￠獙 embedding
         if (embedding == null || embedding.length == 0) {
             log.error("Embedding 涓虹┖锛屾棤娉曟坊鍔犳枃妗? id={}", id);
             return false;
+        }
+
+        if (collectionId == null) {
+            if (!ensureCollection()) {
+                return false;
+            }
         }
 
         try {
@@ -235,7 +288,7 @@ public class ChromaClientService {
             Map<String, Object> body = new HashMap<>();
             body.put("ids", List.of(id));
             body.put("documents", List.of(document));
-            body.put("embeddings", List.of(toBoxedArray(embedding)));
+            body.put("embeddings", List.of(toBoxedList(embedding)));
             if (metadata != null && !metadata.isEmpty()) {
                 body.put("metadatas", List.of(metadata));
             }
@@ -276,16 +329,16 @@ public class ChromaClientService {
      * @return 鏄惁鎴愬姛
      */
     public boolean updateDocument(String id, String document, float[] embedding, Map<String, String> metadata) {
-        if (collectionId == null) {
-            if (!ensureCollection()) {
-                return false;
-            }
-        }
-
         // 鏍￠獙 embedding
         if (embedding == null || embedding.length == 0) {
             log.error("Embedding 涓虹┖锛屾棤娉曟洿鏂版枃妗? id={}", id);
             return false;
+        }
+
+        if (collectionId == null) {
+            if (!ensureCollection()) {
+                return false;
+            }
         }
 
         try {
@@ -294,7 +347,7 @@ public class ChromaClientService {
             Map<String, Object> body = new HashMap<>();
             body.put("ids", List.of(id));
             body.put("documents", List.of(document));
-            body.put("embeddings", List.of(toBoxedArray(embedding)));
+            body.put("embeddings", List.of(toBoxedList(embedding)));
             if (metadata != null && !metadata.isEmpty()) {
                 body.put("metadatas", List.of(metadata));
             }
@@ -370,23 +423,23 @@ public class ChromaClientService {
      * @return 妫€绱㈢粨鏋滃垪琛?
      */
     public List<RetrievalResult> queryWithEmbedding(float[] queryEmbedding, int topK, Map<String, String> whereFilter) {
-        if (collectionId == null) {
-            if (!ensureCollection()) {
-                return List.of();
-            }
-        }
-
         // 鏍￠獙 embedding
         if (queryEmbedding == null || queryEmbedding.length == 0) {
             log.error("Query embedding is empty, cannot search Chroma");
             return List.of();
         }
 
+        if (collectionId == null) {
+            if (!ensureCollection()) {
+                return List.of();
+            }
+        }
+
         try {
             String url = normalizeUrl(config.getUrl());
 
             Map<String, Object> body = new HashMap<>();
-            body.put("query_embeddings", List.of(toBoxedArray(queryEmbedding)));
+            body.put("query_embeddings", List.of(toBoxedList(queryEmbedding)));
             body.put("n_results", topK > 0 ? topK : config.getTopK());
             if (whereFilter != null && !whereFilter.isEmpty()) {
                 body.put("where", whereFilter);
@@ -451,6 +504,38 @@ public class ChromaClientService {
             return true;
         } catch (Exception e) {
             log.error("娓呯┖ Chroma 闆嗗悎澶辫触: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 删除集合中的维修知识文档，保留集合本身和其它类型向量。
+     */
+    public boolean clearKnowledgeBaseDocuments() {
+        if (collectionId == null && !ensureCollection()) {
+            return false;
+        }
+
+        try {
+            Map<String, Object> body = new HashMap<>();
+            body.put("where", Map.of("type", "knowledge-base"));
+
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(collectionEndpoint("/delete")))
+                .timeout(Duration.ofSeconds(config.getTimeoutSeconds()))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
+                .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 200) {
+                log.info("Chroma knowledge-base documents cleared from collection {}", config.getCollection());
+                return true;
+            }
+            log.warn("Chroma knowledge-base clear failed: status={}, body={}", response.statusCode(), response.body());
+            return false;
+        } catch (Exception e) {
+            log.error("Failed to clear Chroma knowledge-base documents: {}", e.getMessage());
             return false;
         }
     }
@@ -532,9 +617,6 @@ public class ChromaClientService {
     }
 
     private String collectionDeleteEndpoint(String url, String collectionName) {
-        if (collectionApiBase != null && collectionApiBase.contains("/api/v2/") && collectionId != null) {
-            return collectionApiBase + "/" + collectionId;
-        }
         return url + "/api/v1/collections/" + collectionName;
     }
 
@@ -548,10 +630,10 @@ public class ChromaClientService {
         return database == null || database.isBlank() ? "default_database" : database.trim();
     }
 
-    private Float[] toBoxedArray(float[] arr) {
-        Float[] boxed = new Float[arr.length];
+    private List<Float> toBoxedList(float[] arr) {
+        List<Float> boxed = new ArrayList<>(arr.length);
         for (int i = 0; i < arr.length; i++) {
-            boxed[i] = arr[i];
+            boxed.add(arr[i]);
         }
         return boxed;
     }

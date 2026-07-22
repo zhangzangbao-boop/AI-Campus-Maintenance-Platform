@@ -130,9 +130,9 @@ export const mytaskService = {
 
       return {
         data: mappedData,
-        total: paginationSource.total || mappedData.length,
-        page: paginationSource.page || 0,
-        pageSize: paginationSource.pageSize || 10,
+        total: paginationSource.total ?? mappedData.length,
+        page: paginationSource.page ?? 0,
+        pageSize: paginationSource.pageSize ?? 10,
       };
     } catch (error) {
       console.error('获取任务失败:', error);

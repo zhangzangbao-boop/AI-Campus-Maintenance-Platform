@@ -83,7 +83,7 @@ class RagKnowledgeServiceTest {
         RagKnowledgeService.RagAnswer answer = ragKnowledgeService.ask("空调不制冷怎么办？", null);
         assertFalse(answer.success());
         assertFalse(answer.fallback());
-        assertEquals("未找到相关维修知识，请先在管理端维护知识库并重建索引", answer.message());
+        assertEquals("未检索到相关维修知识，建议提交报修，由维修人员现场确认处理", answer.message());
     }
 
     @Test
@@ -95,12 +95,12 @@ class RagKnowledgeServiceTest {
         when(chromaClientService.isAvailable()).thenReturn(true);
         when(chromaClientService.ensureCollection()).thenReturn(true);
         when(chromaClientService.queryWithEmbedding(any(float[].class), anyInt(), any())).thenReturn(List.of());
+        when(chromaClientService.countDocuments()).thenReturn(0);
         when(chromaConfig.getTopK()).thenReturn(5);
-        when(localKnowledgeIndexService.search("这是什么？", 5, null)).thenReturn(List.of());
 
         RagKnowledgeService.RagAnswer answer = ragKnowledgeService.ask("这是什么？", null);
         assertFalse(answer.success());
-        assertEquals("未找到相关维修知识，请先在管理端维护知识库并重建索引", answer.message());
+        assertEquals("知识向量索引为空，请等待自动同步或在管理端重建索引；建议提交报修，由维修人员现场确认处理", answer.message());
     }
 
     @Test
@@ -115,11 +115,10 @@ class RagKnowledgeServiceTest {
         RetrievalResult lowSimilarity = new RetrievalResult("kb-1", "测试内容", Map.of("title", "测试"), 0.1);
         when(chromaClientService.queryWithEmbedding(any(float[].class), anyInt(), any())).thenReturn(List.of(lowSimilarity));
         when(chromaConfig.getTopK()).thenReturn(5);
-        when(localKnowledgeIndexService.search("空调不制冷怎么办？", 5, null)).thenReturn(List.of());
 
         RagKnowledgeService.RagAnswer answer = ragKnowledgeService.ask("空调不制冷怎么办？", null);
         assertFalse(answer.success());
-        assertEquals("未找到相关维修知识，请先在管理端维护知识库并重建索引", answer.message());
+        assertEquals("未检索到相关维修知识，建议提交报修，由维修人员现场确认处理", answer.message());
     }
 
     @Test
@@ -146,7 +145,7 @@ class RagKnowledgeServiceTest {
     }
 
     @Test
-    @DisplayName("分类过滤参数正确传递")
+    @DisplayName("Chroma 检索限制为维修知识条目")
     void testCategoryFilter() {
         when(embeddingService.isAvailable()).thenReturn(true);
         when(embeddingService.getDimensions()).thenReturn(384);
@@ -155,13 +154,34 @@ class RagKnowledgeServiceTest {
         when(chromaClientService.ensureCollection()).thenReturn(true);
         when(chromaClientService.queryWithEmbedding(any(float[].class), anyInt(), any())).thenReturn(List.of());
         when(chromaConfig.getTopK()).thenReturn(5);
-        when(localKnowledgeIndexService.search("空调问题", 5, "ac")).thenReturn(List.of());
 
         ragKnowledgeService.ask("空调问题", "ac");
 
         verify(chromaClientService).queryWithEmbedding(any(float[].class), anyInt(), argThat(filter ->
-            filter != null && filter.containsKey("categoryKey") && "ac".equals(filter.get("categoryKey"))
+            filter != null
+                && "knowledge-base".equals(filter.get("type"))
+                && !filter.containsKey("categoryKey")
         ));
+    }
+
+    @Test
+    @DisplayName("前端分类键可匹配管理端中文知识分类")
+    void testCategoryAliasMatch() {
+        when(embeddingService.isAvailable()).thenReturn(true);
+        when(embeddingService.getDimensions()).thenReturn(384);
+        when(embeddingService.embed(anyString())).thenReturn(new float[384]);
+        when(chromaClientService.isAvailable()).thenReturn(true);
+        when(chromaClientService.ensureCollection()).thenReturn(true);
+        when(deepSeekClientService.isAvailable()).thenReturn(false);
+
+        Map<String, String> metadata = Map.of("title", "空调维修处理", "categoryKey", "空调维修", "type", "knowledge-base");
+        RetrievalResult result = new RetrievalResult("kb-8", "检查空调模式和滤网", metadata, 0.88);
+        when(chromaClientService.queryWithEmbedding(any(float[].class), anyInt(), any())).thenReturn(List.of(result));
+
+        RagKnowledgeService.RagAnswer answer = ragKnowledgeService.ask("空调不制冷", "ac");
+
+        assertTrue(answer.success());
+        assertEquals("空调维修处理", answer.sources().get(0).title());
     }
 
     @Test
@@ -185,5 +205,7 @@ class RagKnowledgeServiceTest {
         assertEquals("kb-5", answer.sources().get(0).id());
         assertEquals("漏水处理", answer.sources().get(0).title());
         assertEquals(0.92, answer.sources().get(0).similarity());
+        assertEquals("关闭总阀门，检查漏水点", answer.sources().get(0).snippet());
+        assertEquals("关闭总阀门，检查漏水点", answer.sources().get(0).content());
     }
 }

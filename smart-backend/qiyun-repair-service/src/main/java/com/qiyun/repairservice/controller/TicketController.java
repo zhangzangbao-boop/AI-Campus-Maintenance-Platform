@@ -421,6 +421,10 @@ public class TicketController {
     @PreAuthorize("hasRole('STAFF')")
     public Map<String, Object> listMyTasks(
             @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "scope", required = false) String scope,
+            @RequestParam(value = "category", required = false) String category,
+            @RequestParam(value = "priority", required = false) String priority,
+            @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size) {
         // 从Security Context中获取当前维修工ID
@@ -441,7 +445,7 @@ public class TicketController {
         }
 
         // 使用分页查询
-        return ticketService.listStaffTasksPage(staffId, ticketStatus, page, size);
+        return ticketService.listStaffTasksPage(staffId, ticketStatus, scope, category, priority, keyword, page, size);
     }
 
     /**

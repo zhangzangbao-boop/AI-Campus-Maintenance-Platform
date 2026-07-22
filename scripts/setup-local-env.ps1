@@ -73,9 +73,6 @@ try {
         throw "DB_PASSWORD cannot be empty."
     }
 
-    $relativeModelPath = "local-models/paraphrase-multilingual-MiniLM-L12-v2/model.onnx"
-    $relativeTokenizerPath = "local-models/paraphrase-multilingual-MiniLM-L12-v2/tokenizer.json"
-
     $lines = @(
         "AI_ENABLED=true",
         "AI_MODEL=deepseek-v4-flash",
@@ -84,9 +81,9 @@ try {
         "JWT_SECRET=$(Escape-DotEnvValue $jwtSecret)",
         "INTERNAL_SERVICE_SECRET=$(Escape-DotEnvValue $internalServiceSecret)",
         "NACOS_SERVER_ADDR=127.0.0.1:8848",
-        "CHROMA_BASE_URL=http://127.0.0.1:8000",
-        "EMBEDDING_MODEL_PATH=$(Escape-DotEnvValue $relativeModelPath)",
-        "EMBEDDING_TOKENIZER_PATH=$(Escape-DotEnvValue $relativeTokenizerPath)"
+        "CHROMA_URL=http://127.0.0.1:8000",
+        "EMBEDDING_MODEL_PATH=$(Escape-DotEnvValue $ModelPath)",
+        "EMBEDDING_TOKENIZER_PATH=$(Escape-DotEnvValue $TokenizerPath)"
     )
 
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)

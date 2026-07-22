@@ -230,7 +230,6 @@ const WorkerHome = () => {
       children: [
         { key: "high-priority", icon: <FireOutlined />, label: "高优先级" },
         { key: "overdue", icon: <AlertOutlined />, label: "即将超时" },
-        { key: "to-evaluate", icon: <ClockCircleOutlined />, label: "待评价" },
       ],
     },
     {
@@ -292,11 +291,10 @@ const WorkerHome = () => {
   }, []);
 
   const taskFilters = {
-    today: { today: true },
-    processing: { status: "processing" },
+    today: { scope: "today" },
+    processing: { scope: "processing" },
     "high-priority": { priority: "high" },
-    "to-evaluate": { status: "to_be_evaluated" },
-    records: { status: "closed" },
+    records: { scope: "records" },
   }[currentMenu];
 
   const moduleTitle = {
@@ -304,7 +302,6 @@ const WorkerHome = () => {
     processing: "处理中任务",
     "high-priority": "高优先级任务",
     overdue: "即将超时任务",
-    "to-evaluate": "待评价任务",
     records: "维修记录",
   }[currentMenu];
 
@@ -324,7 +321,7 @@ const WorkerHome = () => {
         {currentMenu === "dashboard" ? (
           <WorkerDashboard worker={currentWorker} onNavigate={setCurrentMenu} />
         ) : currentMenu === "knowledge-qa" ? (
-          <KnowledgeQA />
+          <KnowledgeQA role="staff" />
         ) : currentMenu === "announcements" ? (
           <AnnouncementList />
         ) : (
@@ -338,7 +335,6 @@ const WorkerHome = () => {
             <MyTask
               initialFilters={taskFilters}
               overdueOnly={currentMenu === "overdue"}
-              todayOnly={currentMenu === "today"}
               title={moduleTitle}
               targetTaskId={targetTaskId}
               onTargetTaskHandled={() => setTargetTaskId(null)}

@@ -311,7 +311,7 @@ const Home = () => {
     }
 
     if (currentMenu === "knowledge-qa") {
-      return <KnowledgeQA />;
+      return <KnowledgeQA role="student" onCreateRepair={() => setCurrentMenu("create-repair")} />;
     }
 
     if (currentMenu === "announcements") {

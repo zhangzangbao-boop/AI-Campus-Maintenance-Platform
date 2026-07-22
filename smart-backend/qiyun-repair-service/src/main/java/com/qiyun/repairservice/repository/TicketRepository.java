@@ -6,6 +6,7 @@ import com.qiyun.repairservice.domain.entity.UserReference;
 import com.qiyun.repairservice.domain.entity.Rating;
 import com.qiyun.repairservice.domain.enums.TicketStatus;
 import java.time.LocalDateTime;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -16,7 +17,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface TicketRepository extends JpaRepository<RepairTicket, Long> {
+public interface TicketRepository extends JpaRepository<RepairTicket, Long>, JpaSpecificationExecutor<RepairTicket> {
     // 查询未删除的工单
     @Query("SELECT rt FROM RepairTicket rt WHERE rt.student = :student AND (rt.deleted IS NULL OR rt.deleted = false)")
     List<RepairTicket> findByStudent(@Param("student") UserReference student);

@@ -90,17 +90,39 @@ public class EmbeddingService {
     private String getModelPath() {
         String envPath = System.getenv("EMBEDDING_MODEL_PATH");
         if (envPath != null && !envPath.isBlank()) {
-            return envPath;
+            return resolveConfiguredPath(envPath);
         }
-        return config.getModelPath();
+        return resolveConfiguredPath(config.getModelPath());
     }
 
     private String getTokenizerPath() {
         String envPath = System.getenv("EMBEDDING_TOKENIZER_PATH");
         if (envPath != null && !envPath.isBlank()) {
-            return envPath;
+            return resolveConfiguredPath(envPath);
         }
-        return config.getTokenizerPath();
+        return resolveConfiguredPath(config.getTokenizerPath());
+    }
+
+    private String resolveConfiguredPath(String configuredPath) {
+        if (configuredPath == null || configuredPath.isBlank()) {
+            return configuredPath;
+        }
+
+        Path path = Path.of(configuredPath.trim());
+        if (path.isAbsolute() || Files.exists(path)) {
+            return path.toString();
+        }
+
+        Path current = Path.of("").toAbsolutePath();
+        for (int i = 0; i < 6 && current != null; i++) {
+            Path candidate = current.resolve(path).normalize();
+            if (Files.exists(candidate)) {
+                return candidate.toString();
+            }
+            current = current.getParent();
+        }
+
+        return path.toString();
     }
 
     public boolean isAvailable() {
@@ -131,10 +153,8 @@ public class EmbeddingService {
         }
 
         if (!isAvailable()) {
-            log.warn("Embedding service is unavailable, using deterministic local fallback embeddings");
-            return texts.stream()
-                .map(this::fallbackEmbed)
-                .toList();
+            log.warn("Embedding service is unavailable; refusing to generate fallback vectors");
+            return Collections.emptyList();
         }
 
         try {
@@ -152,35 +172,6 @@ public class EmbeddingService {
             log.error("Failed to generate embeddings: {}", e.getMessage(), e);
             return Collections.emptyList();
         }
-    }
-
-    private float[] fallbackEmbed(String text) {
-        int dimensions = config.getDimensions() > 0 ? config.getDimensions() : 384;
-        float[] vector = new float[dimensions];
-        String normalized = text == null ? "" : text.trim().toLowerCase();
-
-        if (normalized.isBlank()) {
-            return vector;
-        }
-
-        for (int i = 0; i < normalized.length(); i++) {
-            char current = normalized.charAt(i);
-            addToken(vector, String.valueOf(current), 1.0f);
-            if (i + 1 < normalized.length()) {
-                addToken(vector, normalized.substring(i, i + 2), 1.35f);
-            }
-            if (i + 2 < normalized.length()) {
-                addToken(vector, normalized.substring(i, i + 3), 1.15f);
-            }
-        }
-
-        normalize(vector);
-        return vector;
-    }
-
-    private void addToken(float[] vector, String token, float weight) {
-        int index = Math.floorMod(token.hashCode(), vector.length);
-        vector[index] += weight;
     }
 
     private List<float[]> processBatch(List<String> texts) throws OrtException {
@@ -263,6 +254,29 @@ public class EmbeddingService {
 
     public int getDimensions() {
         return config.getDimensions();
+    }
+
+    public Map<String, Object> diagnosticStatus() {
+        String modelPath = getModelPath();
+        String tokenizerPath = getTokenizerPath();
+        boolean modelExists = modelPath != null && !modelPath.isBlank()
+            && Files.isRegularFile(Path.of(modelPath));
+        boolean tokenizerExists = tokenizerPath != null && !tokenizerPath.isBlank()
+            && Files.isRegularFile(Path.of(tokenizerPath));
+
+        Map<String, Object> status = new HashMap<>();
+        status.put("enabled", config.isEnabled());
+        status.put("available", isAvailable());
+        status.put("initialized", initialized);
+        status.put("initializationFailed", initializationFailed);
+        status.put("modelPath", modelPath);
+        status.put("modelExists", modelExists);
+        status.put("tokenizerPath", tokenizerPath);
+        status.put("tokenizerExists", tokenizerExists);
+        status.put("dimensions", config.getDimensions());
+        status.put("maxSequenceLength", config.getMaxSequenceLength());
+        status.put("fallbackEmbeddings", !initialized || initializationFailed);
+        return status;
     }
 
     public void close() {

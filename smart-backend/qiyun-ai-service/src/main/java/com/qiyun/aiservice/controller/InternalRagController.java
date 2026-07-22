@@ -71,7 +71,12 @@ public class InternalRagController {
         localKnowledgeIndexService.upsertKnowledge(docId, request.document(), metadata);
 
         if (!embeddingService.isAvailable()) {
-            log.warn("Embedding 模型不可用，知识条目将使用内置兜底向量写入 Chroma: id={}", id);
+            log.warn("Embedding 模型不可用，知识条目仅同步到本地索引，暂不写入 Chroma: id={}", id);
+            return ResponseEntity.ok(Map.of(
+                "code", 200,
+                "message", "知识已同步到本地索引，Embedding 模型不可用，暂未写入向量库",
+                "data", Map.of("id", docId, "localIndexed", true, "vectorSynced", false)
+            ));
         }
 
         // 生成 embedding
@@ -254,11 +259,11 @@ public class InternalRagController {
         }
 
         localKnowledgeIndexService.clear();
-        boolean success = chromaClientService.clearCollection();
+        boolean success = chromaClientService.clearKnowledgeBaseDocuments();
 
         return ResponseEntity.ok(Map.of(
             "code", 200,
-            "message", success ? "知识索引已清空，请重新同步知识条目" : "本地知识索引已清空，向量索引清空失败",
+            "message", success ? "知识索引已清空，请重新同步知识条目" : "本地知识索引已清空，向量知识索引清空失败",
             "data", Map.of("localCleared", true, "vectorCleared", success)
         ));
     }

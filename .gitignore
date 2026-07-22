@@ -124,6 +124,9 @@ smart-backend/database-backups/*.sql
 # ========================================
 models/
 local-models/
+!local-models/
+!local-models/**/
+!local-models/**/README.md
 local-cache/
 *.onnx
 tokenizer.json

@@ -43,6 +43,54 @@ function Import-LocalEnv($Path) {
     }
 }
 
+function Set-EnvIfBlank($Key, $Value) {
+    $current = [Environment]::GetEnvironmentVariable($Key, "Process")
+    if ([string]::IsNullOrWhiteSpace($current)) {
+        [Environment]::SetEnvironmentVariable($Key, $Value, "Process")
+    }
+}
+
+function Resolve-ProjectEnvPath($Key) {
+    $value = [Environment]::GetEnvironmentVariable($Key, "Process")
+    if ([string]::IsNullOrWhiteSpace($value)) {
+        return
+    }
+
+    $expanded = [Environment]::ExpandEnvironmentVariables($value)
+    if ([System.IO.Path]::IsPathRooted($expanded)) {
+        return
+    }
+
+    $candidate = Join-Path $Root $expanded
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+        [Environment]::SetEnvironmentVariable($Key, (Resolve-Path -LiteralPath $candidate).Path, "Process")
+    }
+}
+
+function Prepare-RagEnvironment {
+    if ([string]::IsNullOrWhiteSpace($env:CHROMA_URL) -and -not [string]::IsNullOrWhiteSpace($env:CHROMA_BASE_URL)) {
+        $env:CHROMA_URL = $env:CHROMA_BASE_URL
+    }
+
+    Set-EnvIfBlank "CHROMA_URL" "http://127.0.0.1:8000"
+    Set-EnvIfBlank "CHROMA_COLLECTION" "campus_maintenance_kb"
+    Set-EnvIfBlank "INTERNAL_SERVICE_SECRET" "qiyun-local-internal-secret"
+    Set-EnvIfBlank "EMBEDDING_MODEL_PATH" (Join-Path $Root "local-models\paraphrase-multilingual-MiniLM-L12-v2\model.onnx")
+    Set-EnvIfBlank "EMBEDDING_TOKENIZER_PATH" (Join-Path $Root "local-models\paraphrase-multilingual-MiniLM-L12-v2\tokenizer.json")
+
+    Resolve-ProjectEnvPath "EMBEDDING_MODEL_PATH"
+    Resolve-ProjectEnvPath "EMBEDDING_TOKENIZER_PATH"
+
+    $modelPath = [Environment]::GetEnvironmentVariable("EMBEDDING_MODEL_PATH", "Process")
+    $tokenizerPath = [Environment]::GetEnvironmentVariable("EMBEDDING_TOKENIZER_PATH", "Process")
+    if ([string]::IsNullOrWhiteSpace($modelPath) -or -not (Test-Path -LiteralPath $modelPath -PathType Leaf)) {
+        Write-Host "[WARN] EMBEDDING_MODEL_PATH is not a valid file. RAG embedding will be unavailable until the ONNX model is configured." -ForegroundColor Yellow
+    }
+    if ([string]::IsNullOrWhiteSpace($tokenizerPath) -or -not (Test-Path -LiteralPath $tokenizerPath -PathType Leaf)) {
+        Write-Host "[WARN] EMBEDDING_TOKENIZER_PATH is not a valid file. RAG embedding will be unavailable until the tokenizer is configured." -ForegroundColor Yellow
+    }
+}
+
 function Test-PortListening($Port) {
     try {
         return [bool](Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
@@ -145,6 +193,7 @@ try {
 
     Write-Host "Loading local environment variables from .env..."
     Import-LocalEnv $EnvFile
+    Prepare-RagEnvironment
     Write-Host "Environment loaded."
 
     if (-not (Get-Command mvn -ErrorAction SilentlyContinue)) {

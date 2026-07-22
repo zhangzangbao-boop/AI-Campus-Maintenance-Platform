@@ -28,14 +28,19 @@ public class KnowledgeBaseService {
 
     private static final String DEFAULT_INTERNAL_SECRET = "qiyun-local-internal-secret";
 
-    private static final Map<String, Set<String>> CATEGORY_ALIASES = Map.of(
-        "ac", Set.of("ac", "空调维修", "空调故障", "电器故障"),
-        "plumbing", Set.of("plumbing", "水电维修", "管道故障"),
-        "electrical", Set.of("electrical", "电器故障", "电力故障", "水电维修"),
-        "network", Set.of("network", "网络故障"),
-        "furniture", Set.of("furniture", "家具维修", "家具故障"),
-        "door_window", Set.of("door_window", "公共设施", "门窗故障"),
-        "other", Set.of("other", "其他故障", "公共设施")
+    private static final Map<String, Set<String>> CATEGORY_ALIASES = Map.ofEntries(
+        Map.entry("ac", Set.of("ac", "空调维修", "空调故障", "电器故障")),
+        Map.entry("plumbing", Set.of("plumbing", "水电维修", "管道故障")),
+        Map.entry("electrical", Set.of("electrical", "电器故障", "电力故障", "水电维修")),
+        Map.entry("network", Set.of("network", "网络故障")),
+        Map.entry("furniture", Set.of("furniture", "家具维修", "家具故障")),
+        Map.entry("door_window", Set.of("door_window", "门窗维修", "门窗故障", "公共设施")),
+        Map.entry("elevator", Set.of("elevator", "公共设施")),
+        Map.entry("fire_safety", Set.of("fire_safety", "消防安全")),
+        Map.entry("public_facility", Set.of("public_facility", "公共设施", "卫生清洁")),
+        Map.entry("multimedia", Set.of("multimedia", "电器故障", "公共设施")),
+        Map.entry("lab_safety", Set.of("lab_safety", "电器故障", "水电维修", "公共设施", "消防安全")),
+        Map.entry("other", Set.of("other", "其他", "其他故障", "公共设施", "卫生清洁", "消防安全"))
     );
 
     private final KnowledgeBaseRepository knowledgeBaseRepository;
@@ -134,12 +139,25 @@ public class KnowledgeBaseService {
             throw new BusinessException("清空向量索引失败: " + e.getMessage());
         }
 
-        // 获取所有启用状态的知识条目
+        int syncedCount = syncEnabledKnowledgeIndex();
+
+        auditLogService.record("知识库", "重建向量索引", "KNOWLEDGE", null,
+            "已同步 " + syncedCount + " 条知识");
+        return syncedCount;
+    }
+
+    /**
+     * 同步所有启用知识条目到 AI 服务索引。
+     *
+     * <p>用于服务启动、Chroma 晚启动后的自动补偿，以及手动重建索引后的重新写入。
+     * 单条同步失败不会影响其他知识条目。</p>
+     */
+    @Transactional(readOnly = true)
+    public int syncEnabledKnowledgeIndex() {
         List<KnowledgeBase> enabledItems = knowledgeBaseRepository.findAllWithCategory().stream()
             .filter(item -> Boolean.TRUE.equals(item.getEnabled()))
             .toList();
 
-        // 重新同步到向量库
         int syncedCount = 0;
         for (KnowledgeBase item : enabledItems) {
             try {
@@ -151,8 +169,9 @@ public class KnowledgeBaseService {
             }
         }
 
-        auditLogService.record("知识库", "重建向量索引", "KNOWLEDGE", null,
-            "已同步 " + syncedCount + " 条知识");
+        if (!enabledItems.isEmpty()) {
+            log.info("启用知识条目索引同步完成: total={}, synced={}", enabledItems.size(), syncedCount);
+        }
         return syncedCount;
     }
 
@@ -190,7 +209,8 @@ public class KnowledgeBaseService {
         }
         Object data = response.get("data");
         if (!(data instanceof Map<?, ?> dataMap)) {
-            return false;
+            Object code = response.get("code");
+            return Integer.valueOf(200).equals(code) || "200".equals(String.valueOf(code));
         }
         Object value = dataMap.get("vectorSynced");
         return Boolean.TRUE.equals(value) || "true".equalsIgnoreCase(String.valueOf(value));

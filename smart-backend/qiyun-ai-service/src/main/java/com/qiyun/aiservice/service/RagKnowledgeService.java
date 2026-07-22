@@ -4,7 +4,9 @@ import com.qiyun.aiservice.config.ChromaConfig;
 import com.qiyun.aiservice.service.ChromaClientService.RetrievalResult;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -17,6 +19,25 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class RagKnowledgeService {
+
+    private static final String KNOWLEDGE_TYPE = "knowledge-base";
+    private static final String NO_MATCH_MESSAGE = "未检索到相关维修知识，建议提交报修，由维修人员现场确认处理";
+    private static final String EMPTY_INDEX_MESSAGE =
+        "知识向量索引为空，请等待自动同步或在管理端重建索引；建议提交报修，由维修人员现场确认处理";
+    private static final Map<String, Set<String>> CATEGORY_ALIASES = Map.ofEntries(
+        Map.entry("ac", Set.of("ac", "空调维修", "空调故障", "电器故障")),
+        Map.entry("plumbing", Set.of("plumbing", "水电维修", "管道故障")),
+        Map.entry("electrical", Set.of("electrical", "电器故障", "电力故障", "水电维修")),
+        Map.entry("network", Set.of("network", "网络故障")),
+        Map.entry("furniture", Set.of("furniture", "家具维修", "家具故障")),
+        Map.entry("door_window", Set.of("door_window", "门窗维修", "门窗故障", "公共设施")),
+        Map.entry("elevator", Set.of("elevator", "公共设施")),
+        Map.entry("fire_safety", Set.of("fire_safety", "消防安全")),
+        Map.entry("public_facility", Set.of("public_facility", "公共设施", "卫生清洁")),
+        Map.entry("multimedia", Set.of("multimedia", "电器故障", "公共设施")),
+        Map.entry("lab_safety", Set.of("lab_safety", "电器故障", "水电维修", "公共设施", "消防安全")),
+        Map.entry("other", Set.of("other", "其他", "其他故障", "公共设施", "卫生清洁", "消防安全"))
+    );
 
     private final ChromaClientService chromaClientService;
     private final DeepSeekClientService deepSeekClientService;
@@ -35,9 +56,11 @@ public class RagKnowledgeService {
         if (question == null || question.isBlank()) {
             return RagAnswer.noAnswer("问题不能为空");
         }
+        String normalizedQuestion = question.trim();
 
         if (!embeddingService.isAvailable()) {
-            log.warn("Embedding 模型不可用，使用内置兜底向量继续检索 Chroma");
+            log.warn("Embedding 模型不可用，切换到本地知识索引检索");
+            return askLocalIndex(normalizedQuestion, categoryKey, "Embedding 模型不可用，已使用本地知识库索引检索");
         }
 
         // 检查 Chroma 是否可用
@@ -53,70 +76,108 @@ public class RagKnowledgeService {
         }
 
         // 生成查询 embedding
-        float[] queryEmbedding = embeddingService.embed(question);
+        float[] queryEmbedding = embeddingService.embed(normalizedQuestion);
         if (queryEmbedding == null || queryEmbedding.length == 0) {
-            log.error("生成查询 Embedding 失败: question={}", question);
-            return askLocalIndex(question, categoryKey, "向量生成失败，已使用本地知识库索引检索");
+            log.error("生成查询 Embedding 失败: question={}", normalizedQuestion);
+            return askLocalIndex(normalizedQuestion, categoryKey, "向量生成失败，已使用本地知识库索引检索");
         }
 
         // 校验维度
         if (queryEmbedding.length != embeddingService.getDimensions()) {
             log.error("查询 Embedding 维度不匹配: expected={}, actual={}",
                 embeddingService.getDimensions(), queryEmbedding.length);
-            return askLocalIndex(question, categoryKey, "向量维度不匹配，已使用本地知识库索引检索");
+            return askLocalIndex(normalizedQuestion, categoryKey, "向量维度不匹配，已使用本地知识库索引检索");
         }
 
         // 构建过滤条件
-        Map<String, String> whereFilter = null;
-        if (categoryKey != null && !categoryKey.isBlank()) {
-            whereFilter = new HashMap<>();
-            whereFilter.put("categoryKey", categoryKey);
-        }
+        Map<String, String> whereFilter = new HashMap<>();
+        whereFilter.put("type", KNOWLEDGE_TYPE);
 
         // 检索相关文档
         int topK = chromaConfig.getTopK();
         List<RetrievalResult> results = chromaClientService.queryWithEmbedding(queryEmbedding, topK, whereFilter);
 
         if (results.isEmpty()) {
-            log.info("RAG 检索无匹配结果: question={}", question);
-            return askLocalIndex(question, categoryKey, "未找到向量匹配，已使用本地知识库索引检索");
+            log.info("RAG 检索无匹配结果: question={}", normalizedQuestion);
+            String noMatchMessage = chromaClientService.countDocuments() == 0
+                ? EMPTY_INDEX_MESSAGE
+                : NO_MATCH_MESSAGE;
+            return RagAnswer.noMatch(noMatchMessage);
         }
 
         // 过滤低相似度结果
+        double threshold = resolveSimilarityThreshold();
         List<RetrievalResult> relevantResults = results.stream()
-            .filter(r -> r.similarity() >= 0.3)
+            .filter(this::isKnowledgeBaseResult)
+            .filter(r -> categoryMatches(categoryKey, r.metadata().getOrDefault("categoryKey", "")))
+            .filter(r -> r.similarity() >= threshold)
             .toList();
 
         if (relevantResults.isEmpty()) {
             log.info("RAG 检索无高相似度匹配: question={}, maxSimilarity={}",
-                question, results.get(0).similarity());
-            return askLocalIndex(question, categoryKey, "向量匹配度较低，已使用本地知识库索引检索");
+                normalizedQuestion, results.get(0).similarity());
+            return RagAnswer.noMatch(NO_MATCH_MESSAGE);
         }
 
         // 尝试使用 AI 生成回答
         if (deepSeekClientService.isAvailable()) {
-            String answer = generateAiAnswer(question, relevantResults);
+            String answer = generateAiAnswer(normalizedQuestion, relevantResults);
             if (answer != null && !answer.isBlank()) {
                 return RagAnswer.success(answer, relevantResults, false, "chroma_ai");
             }
         }
 
         // AI 不可用，生成降级回答
-        String fallbackAnswer = generateFallbackAnswer(question, relevantResults);
+        String fallbackAnswer = generateFallbackAnswer(normalizedQuestion, relevantResults);
         return RagAnswer.success(fallbackAnswer, relevantResults, true, "chroma_basic");
     }
 
     private RagAnswer askLocalIndex(String question, String categoryKey, String reason) {
+        return askLocalIndex(question, categoryKey, reason, NO_MATCH_MESSAGE);
+    }
+
+    private RagAnswer askLocalIndex(String question, String categoryKey, String reason, String noMatchMessage) {
         int topK = chromaConfig.getTopK() > 0 ? chromaConfig.getTopK() : 5;
         List<RetrievalResult> localResults = localKnowledgeIndexService.search(question, topK, categoryKey);
         if (localResults == null || localResults.isEmpty()) {
             log.info("本地知识索引无匹配结果: question={}, categoryKey={}, indexed={}",
                 question, categoryKey, localKnowledgeIndexService.size());
-            return RagAnswer.noMatch("未找到相关维修知识，请先在管理端维护知识库并重建索引");
+            return RagAnswer.noMatch(noMatchMessage);
         }
 
         String answer = generateFallbackAnswer(question, localResults);
         return RagAnswer.success(answer + "\n\n（" + reason + "）", localResults, true, "local_index");
+    }
+
+    private double resolveSimilarityThreshold() {
+        double threshold = chromaConfig.getSimilarityThreshold();
+        if (threshold <= 0 || threshold > 1) {
+            return 0.3;
+        }
+        return threshold;
+    }
+
+    private boolean isKnowledgeBaseResult(RetrievalResult result) {
+        String type = result.metadata().get("type");
+        return type == null || type.isBlank() || KNOWLEDGE_TYPE.equals(type);
+    }
+
+    private boolean categoryMatches(String requestedCategory, String resultCategory) {
+        if (requestedCategory == null || requestedCategory.isBlank()) {
+            return true;
+        }
+        if (resultCategory == null || resultCategory.isBlank()) {
+            return false;
+        }
+
+        String requested = requestedCategory.trim();
+        String actual = resultCategory.trim();
+        if (requested.equalsIgnoreCase(actual)) {
+            return true;
+        }
+
+        Set<String> aliases = CATEGORY_ALIASES.get(requested.toLowerCase(Locale.ROOT));
+        return aliases != null && aliases.stream().anyMatch(alias -> alias.equalsIgnoreCase(actual));
     }
 
     /**
@@ -129,6 +190,8 @@ public class RagKnowledgeService {
             for (int i = 0; i < results.size(); i++) {
                 RetrievalResult r = results.get(i);
                 context.append("【知识").append(i + 1).append("】\n");
+                context.append("标题：").append(r.metadata().getOrDefault("title", "未知标题")).append("\n");
+                context.append("相似度：").append(formatSimilarity(r.similarity())).append("\n");
                 context.append(r.document()).append("\n\n");
             }
 
@@ -212,6 +275,7 @@ public class RagKnowledgeService {
             String title,
             String categoryKey,
             String snippet,
+            String content,
             double similarity
         ) {}
 
@@ -221,7 +285,8 @@ public class RagKnowledgeService {
                     r.id(),
                     r.metadata().getOrDefault("title", "未知标题"),
                     r.metadata().getOrDefault("categoryKey", ""),
-                    truncate(r.document(), 100),
+                    r.document(),
+                    r.document(),
                     r.similarity()
                 ))
                 .toList();

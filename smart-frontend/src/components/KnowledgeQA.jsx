@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Card, Input, Button, Select, Spin, Alert, Typography, Space, Tag, Empty, message } from 'antd';
-import { SearchOutlined, BulbOutlined, CheckCircleOutlined, WarningOutlined } from '@ant-design/icons';
+import { SearchOutlined, BulbOutlined, ToolOutlined, DownOutlined, UpOutlined } from '@ant-design/icons';
 import api from '../services/api';
 
 const { TextArea } = Input;
@@ -11,12 +11,13 @@ const { Option } = Select;
  * 维修知识问答页面
  * 供学生和维修工使用的 RAG 知识库问答功能
  */
-const KnowledgeQA = () => {
+const KnowledgeQA = ({ role = 'student', onCreateRepair }) => {
   const [question, setQuestion] = useState('');
   const [categoryKey, setCategoryKey] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
+  const [expandedSourceKeys, setExpandedSourceKeys] = useState({});
 
   // 故障分类选项
   const categories = [
@@ -38,66 +39,6 @@ const KnowledgeQA = () => {
     '网络连接不上怎么办？',
   ];
 
-  const buildKnowledgeFallbackAnswer = (items) => {
-    const primary = items[0];
-    const lines = [
-      `根据维修知识库，推荐先参考「${primary.title || '相关知识'}」：`,
-    ];
-
-    if (primary.solutionSteps) {
-      lines.push('', primary.solutionSteps);
-    }
-
-    if (primary.safetyNotes) {
-      lines.push('', `安全提示：${primary.safetyNotes}`);
-    }
-
-    if (primary.estimatedMinutes) {
-      lines.push('', `预计处理时长：约 ${primary.estimatedMinutes} 分钟`);
-    }
-
-    if (items.length > 1) {
-      lines.push('', '还可参考：');
-      items.slice(1, 3).forEach((item) => {
-        lines.push(`- ${item.title}`);
-      });
-    }
-
-    return lines.join('\n');
-  };
-
-  const buildKnowledgeSources = (items) =>
-    items.map((item) => ({
-      id: String(item.knowledgeId),
-      title: item.title,
-      categoryKey: item.categoryKey,
-      snippet: item.solutionSteps || item.symptomKeywords || item.safetyNotes || '',
-      similarity: 0,
-    }));
-
-  const askKnowledgeBaseFallback = async (trimmedQuestion, fallbackMessage) => {
-    const response = await api.knowledgeBase.recommend({
-      categoryKey: categoryKey || undefined,
-      text: trimmedQuestion,
-      limit: 3,
-    });
-
-    if (response.code === 200 && Array.isArray(response.data) && response.data.length > 0) {
-      setResult({
-        success: true,
-        answer: buildKnowledgeFallbackAnswer(response.data),
-        sources: buildKnowledgeSources(response.data),
-        similarity: 0,
-        fallback: true,
-        message: fallbackMessage || '已使用知识库基础检索生成回答',
-      });
-      return true;
-    }
-
-    setError(fallbackMessage || '未找到相关维修知识，请先在管理端维护维修知识库并重建索引');
-    return false;
-  };
-
   const handleAsk = async () => {
     if (!question.trim()) {
       message.warning('请输入您的问题');
@@ -108,43 +49,18 @@ const KnowledgeQA = () => {
     setLoading(true);
     setError('');
     setResult(null);
+    setExpandedSourceKeys({});
 
     try {
       const response = await api.ai.ragAsk(trimmedQuestion, categoryKey || null);
 
       if (response.code === 200 && response.data) {
-        if (response.data.success === false) {
-          const fallbackUsed = await askKnowledgeBaseFallback(
-            trimmedQuestion,
-            response.data.message || response.message
-          );
-          if (!fallbackUsed) {
-            setError(response.data.message || response.message || '未找到相关维修知识');
-          }
-        } else {
-          setResult({ success: true, ...response.data });
-        }
+        setResult({ success: true, ...response.data });
       } else {
-        const fallbackUsed = await askKnowledgeBaseFallback(
-          trimmedQuestion,
-          response.message
-        );
-        if (!fallbackUsed) {
-          setError(response.message || '问答失败，请稍后重试');
-        }
+        setError(response.message || '未检索到相关维修知识，建议提交报修');
       }
     } catch (err) {
-      try {
-        const fallbackUsed = await askKnowledgeBaseFallback(
-          trimmedQuestion,
-          err.message
-        );
-        if (!fallbackUsed) {
-          setError(err.message || '网络错误，请检查连接');
-        }
-      } catch (fallbackErr) {
-        setError(fallbackErr.message || err.message || '网络错误，请检查连接');
-      }
+      setError(err.message || '网络错误，请检查连接');
     } finally {
       setLoading(false);
     }
@@ -154,6 +70,26 @@ const KnowledgeQA = () => {
     setQuestion(q);
   };
 
+
+  const getSourceKey = (source, idx) => source.id || `${source.title || 'source'}-${idx}`;
+
+  const getSourceContent = (source) => source.content || source.snippet || '';
+
+  const summarizeSource = (source, maxLength = 120) => {
+    const content = getSourceContent(source).replace(/\s+/g, ' ').trim();
+    if (content.length <= maxLength) {
+      return content;
+    }
+    return `${content.slice(0, maxLength)}...`;
+  };
+
+  const toggleSource = (source, idx) => {
+    const key = getSourceKey(source, idx);
+    setExpandedSourceKeys(prev => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
   const getRetrievalTag = (mode, fallback) => {
     if (mode === 'chroma_ai') {
       return { color: 'green', text: 'Chroma 向量库 + AI 回答' };
@@ -166,6 +102,8 @@ const KnowledgeQA = () => {
     }
     return { color: fallback ? 'orange' : 'green', text: fallback ? '基础回答' : 'AI 回答' };
   };
+
+  const showCreateRepairAction = role === 'student' && typeof onCreateRepair === 'function';
 
   return (
     <div style={{ padding: '24px', maxWidth: '900px', margin: '0 auto' }}>
@@ -254,7 +192,16 @@ const KnowledgeQA = () => {
       {error && (
         <Alert
           message="提示"
-          description={error}
+          description={
+            <Space direction="vertical" size="small">
+              <span>{error}</span>
+              {showCreateRepairAction && (
+                <Button type="primary" icon={<ToolOutlined />} onClick={() => onCreateRepair(question.trim())}>
+                  去提交报修
+                </Button>
+              )}
+            </Space>
+          }
           type="warning"
           showIcon
           style={{ marginTop: '16px' }}
@@ -287,33 +234,62 @@ const KnowledgeQA = () => {
           {result.sources && result.sources.length > 0 && (
             <div style={{ marginTop: '24px' }}>
               <Title level={5}>知识来源</Title>
-              {result.sources.map((source, idx) => (
-                <Card
-                  key={idx}
-                  size="small"
-                  style={{
-                    marginTop: '8px',
-                    backgroundColor: '#fafafa',
-                    borderLeft: '3px solid #1890ff'
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <Text strong>{source.title || `知识条目 ${idx + 1}`}</Text>
-                    {source.similarity > 0 && (
-                      <Tag>{(source.similarity * 100).toFixed(0)}%</Tag>
-                    )}
-                  </div>
-                  <Text type="secondary" style={{ fontSize: '12px' }}>
-                    {source.categoryKey && `分类: ${source.categoryKey}`}
-                  </Text>
-                  <Paragraph
-                    style={{ marginTop: '8px', marginBottom: '0', fontSize: '13px' }}
-                    ellipsis={{ rows: 2, expandable: true }}
+              {result.sources.map((source, idx) => {
+                const sourceKey = getSourceKey(source, idx);
+                const expanded = !!expandedSourceKeys[sourceKey];
+
+                return (
+                  <Card
+                    key={sourceKey}
+                    size="small"
+                    onClick={() => toggleSource(source, idx)}
+                    style={{
+                      marginTop: '8px',
+                      backgroundColor: '#fafafa',
+                      borderLeft: '3px solid #1890ff',
+                      cursor: 'pointer'
+                    }}
                   >
-                    {source.snippet}
-                  </Paragraph>
-                </Card>
-              ))}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '4px' }}>
+                      <Text
+                        strong
+                        style={{ cursor: 'pointer' }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          toggleSource(source, idx);
+                        }}
+                      >
+                        {source.title || `知识条目 ${idx + 1}`}
+                      </Text>
+                      <Space size="small" align="center">
+                        {source.similarity > 0 && (
+                          <Tag>{(source.similarity * 100).toFixed(0)}%</Tag>
+                        )}
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={expanded ? <UpOutlined /> : <DownOutlined />}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            toggleSource(source, idx);
+                          }}
+                          style={{ padding: 0 }}
+                        >
+                          {expanded ? '收起详情' : '展开详情'}
+                        </Button>
+                      </Space>
+                    </div>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                      {source.categoryKey && `分类: ${source.categoryKey}`}
+                    </Text>
+                    <Paragraph
+                      style={{ marginTop: '8px', marginBottom: '0', fontSize: '13px', whiteSpace: 'pre-wrap' }}
+                    >
+                      {expanded ? getSourceContent(source) : summarizeSource(source)}
+                    </Paragraph>
+                  </Card>
+                );
+              })}
             </div>
           )}
 

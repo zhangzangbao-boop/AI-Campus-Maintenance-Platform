@@ -36,6 +36,11 @@ public class ChromaConfig {
     private int topK = 5;
 
     /**
+     * 低于该相似度的结果视为无关知识
+     */
+    private double similarityThreshold = 0.3;
+
+    /**
      * 连接超时时间（秒）
      */
     private int timeoutSeconds = 10;
@@ -79,6 +84,14 @@ public class ChromaConfig {
 
     public void setTopK(int topK) {
         this.topK = topK;
+    }
+
+    public double getSimilarityThreshold() {
+        return similarityThreshold;
+    }
+
+    public void setSimilarityThreshold(double similarityThreshold) {
+        this.similarityThreshold = similarityThreshold;
     }
 
     public int getTimeoutSeconds() {

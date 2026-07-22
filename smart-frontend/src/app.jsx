@@ -1,5 +1,5 @@
 import React from 'react';
-import {Routes, Route} from 'react-router-dom';
+import {Routes, Route, Navigate} from 'react-router-dom';
 
 import StuHome from './Student/stuhome';
 import WorkerHome from './Worker/workerhome';
@@ -17,6 +17,8 @@ function App(){
                 <Route path="/login" element={<Login />} />
                 <Route path="/stuhome" element={<ProtectedRoute allowedRoles={['STUDENT']}><StuHome /></ProtectedRoute>} />
                 <Route path="/workerhome" element={<ProtectedRoute allowedRoles={['STAFF']}><WorkerHome /></ProtectedRoute>} />
+                <Route path="/workerhome/to-evaluate" element={<ProtectedRoute allowedRoles={['STAFF']}><Navigate to="/workerhome" replace /></ProtectedRoute>} />
+                <Route path="/workerhome/to-evaluate/*" element={<ProtectedRoute allowedRoles={['STAFF']}><Navigate to="/workerhome" replace /></ProtectedRoute>} />
                 <Route path="/adminhome" element={<ProtectedRoute allowedRoles={['ADMIN']}><AdminHome /></ProtectedRoute>} />
                 <Route path="/repairOrders" element={<ProtectedRoute allowedRoles={['ADMIN']}><RepairOrderList repairOrders={undefined} loading={undefined} /></ProtectedRoute>} />
                 <Route path="/knowledge-qa" element={<ProtectedRoute allowedRoles={['STUDENT', 'STAFF', 'ADMIN']}><KnowledgeQA /></ProtectedRoute>} />

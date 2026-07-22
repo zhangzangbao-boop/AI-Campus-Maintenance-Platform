@@ -16,9 +16,12 @@ import com.qiyun.repairservice.dto.request.TicketAssignRequest;
 import com.qiyun.repairservice.dto.request.TicketCreateRequest;
 import com.qiyun.repairservice.dto.request.TicketStatusUpdateRequest;
 import com.qiyun.repairservice.repository.CategoryRepository;
+import com.qiyun.repairservice.repository.TicketRepository;
 import com.qiyun.repairservice.repository.UserReferenceRepository;
 import com.qiyun.repairservice.service.TicketService;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,6 +48,9 @@ class StaffFeatureTests {
 
     @Autowired
     private CategoryRepository categoryRepository;
+
+    @Autowired
+    private TicketRepository ticketRepository;
 
     @MockBean
     private AiServiceClient aiServiceClient;
@@ -253,6 +259,44 @@ class StaffFeatureTests {
         assertThat((List<?>) feedbackResult.get("list")).isNotEmpty();
     }
 
+    @Test
+    void listStaffTasksPage_shouldApplyWorkerPageOwnershipAndStatusScopes() {
+        ZoneId businessZone = ZoneId.of("Asia/Shanghai");
+        LocalDate today = LocalDate.now(businessZone);
+        LocalDateTime todayMorning = today.atTime(9, 0);
+        LocalDateTime yesterdayMorning = today.minusDays(1).atTime(9, 0);
+        String otherStaffId = "staff_scope_other_001";
+        createUserIfNotExists(otherStaffId, "其他维修工", UserRole.STAFF, "13800138999");
+
+        Long yesterdayClosed = createScopedTicket("昨天关闭", staffId, TicketStatus.CLOSED, yesterdayMorning);
+        Long todayWaiting = createScopedTicket("今天待受理", staffId, TicketStatus.WAITING_ACCEPT, todayMorning);
+        Long todayInProgress = createScopedTicket("今天处理中", staffId, TicketStatus.IN_PROGRESS, todayMorning.plusHours(1));
+        Long oldInProgress = createScopedTicket("非今日处理中", staffId, TicketStatus.IN_PROGRESS, yesterdayMorning.plusHours(1));
+        Long resolved = createScopedTicket("已完成待确认", staffId, TicketStatus.RESOLVED, yesterdayMorning.plusHours(2));
+        Long waitingFeedback = createScopedTicket("待评价", staffId, TicketStatus.WAITING_FEEDBACK, yesterdayMorning.plusHours(3));
+        Long feedbacked = createScopedTicket("已评价", staffId, TicketStatus.FEEDBACKED, yesterdayMorning.plusHours(4));
+        Long closed = createScopedTicket("已关闭", staffId, TicketStatus.CLOSED, todayMorning.plusHours(2));
+        Long otherStaffToday = createScopedTicket("其他维修工任务", otherStaffId, TicketStatus.IN_PROGRESS, todayMorning.plusHours(3));
+
+        List<Long> todayIds = taskIds(ticketService.listStaffTasksPage(staffId, null, "today", null, null, null, 0, 20));
+        assertThat(todayIds).contains(todayWaiting, todayInProgress);
+        assertThat(todayIds).doesNotContain(yesterdayClosed, oldInProgress, resolved, waitingFeedback, feedbacked, closed, otherStaffToday);
+
+        List<Long> processingIds = taskIds(ticketService.listStaffTasksPage(staffId, null, "processing", null, null, null, 0, 20));
+        assertThat(processingIds).contains(todayInProgress, oldInProgress);
+        assertThat(processingIds).doesNotContain(todayWaiting, resolved, waitingFeedback, feedbacked, closed, otherStaffToday);
+
+        List<Long> recordIds = taskIds(ticketService.listStaffTasksPage(staffId, null, "records", null, null, null, 0, 20));
+        assertThat(recordIds).contains(yesterdayClosed, resolved, waitingFeedback, feedbacked, closed);
+        assertThat(recordIds).doesNotContain(todayWaiting, todayInProgress, oldInProgress, otherStaffToday);
+
+        setTicketStatus(resolved, TicketStatus.IN_PROGRESS, yesterdayMorning.plusHours(2));
+        List<Long> recordsAfterReturn = taskIds(ticketService.listStaffTasksPage(staffId, null, "records", null, null, null, 0, 20));
+        List<Long> processingAfterReturn = taskIds(ticketService.listStaffTasksPage(staffId, null, "processing", null, null, null, 0, 20));
+        assertThat(recordsAfterReturn).doesNotContain(resolved);
+        assertThat(processingAfterReturn).contains(resolved);
+    }
+
     // ==================== Helper Methods ====================
 
     private Long createTestTicket(String description) {
@@ -271,6 +315,33 @@ class StaffFeatureTests {
     private void assignTicket(Long ticketId) {
         TicketAssignRequest assignRequest = new TicketAssignRequest(adminId, staffId);
         ticketService.assignTicket(ticketId, assignRequest);
+    }
+
+    private Long createScopedTicket(String description, String targetStaffId, TicketStatus status, LocalDateTime assignedAt) {
+        Long ticketId = createTestTicket(description);
+        ticketService.assignTicket(ticketId, new TicketAssignRequest(adminId, targetStaffId));
+        setTicketStatus(ticketId, status, assignedAt);
+        return ticketId;
+    }
+
+    private void setTicketStatus(Long ticketId, TicketStatus status, LocalDateTime assignedAt) {
+        var ticket = ticketRepository.findById(ticketId).orElseThrow();
+        ticket.setStatus(status);
+        ticket.setAssignedAt(assignedAt);
+        if (TicketStatus.RESOLVED == status || TicketStatus.WAITING_FEEDBACK == status
+            || TicketStatus.FEEDBACKED == status || TicketStatus.CLOSED == status) {
+            ticket.setCompletedAt(assignedAt.plusHours(1));
+        } else {
+            ticket.setCompletedAt(null);
+        }
+        ticketRepository.saveAndFlush(ticket);
+    }
+
+    private List<Long> taskIds(Map<String, Object> result) {
+        @SuppressWarnings("unchecked")
+        List<com.qiyun.repairservice.dto.TicketSummaryDto> tasks =
+            (List<com.qiyun.repairservice.dto.TicketSummaryDto>) result.get("list");
+        return tasks.stream().map(com.qiyun.repairservice.dto.TicketSummaryDto::ticketId).toList();
     }
 
     private void completeTicket(Long ticketId) {

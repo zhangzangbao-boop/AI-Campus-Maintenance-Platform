@@ -67,3 +67,10 @@ logging:
     root: INFO
     com.qiyun.opsservice: DEBUG
     org.springframework.security: INFO
+
+# 知识库向量索引自动补偿同步
+knowledge-base:
+  vector-sync:
+    enabled: ${KNOWLEDGE_VECTOR_SYNC_ENABLED:true}
+    initial-delay-ms: ${KNOWLEDGE_VECTOR_SYNC_INITIAL_DELAY_MS:30000}
+    fixed-delay-ms: ${KNOWLEDGE_VECTOR_SYNC_FIXED_DELAY_MS:300000}

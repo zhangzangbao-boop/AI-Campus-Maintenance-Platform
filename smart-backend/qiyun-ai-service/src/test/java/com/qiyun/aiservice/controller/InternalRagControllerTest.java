@@ -119,14 +119,14 @@ class InternalRagControllerTest {
     @Test
     @DisplayName("成功清空索引")
     void testRebuildSuccess() {
-        when(chromaClientService.clearCollection()).thenReturn(true);
+        when(chromaClientService.clearKnowledgeBaseDocuments()).thenReturn(true);
 
         ResponseEntity<Map<String, Object>> response =
             controller.rebuildIndex("test-secret");
 
         assertEquals(200, response.getStatusCode().value());
         verify(localKnowledgeIndexService).clear();
-        verify(chromaClientService).clearCollection();
+        verify(chromaClientService).clearKnowledgeBaseDocuments();
     }
 
     @Test

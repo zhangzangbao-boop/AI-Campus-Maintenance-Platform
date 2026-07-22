@@ -169,6 +169,32 @@ class KnowledgeBaseSyncTest {
     }
 
     @Test
+    @DisplayName("可自动同步所有启用知识条目到向量索引")
+    void testSyncEnabledKnowledgeIndex() {
+        KnowledgeBase enabled = new KnowledgeBase();
+        enabled.setKnowledgeId(1L);
+        enabled.setTitle("宿舍漏水处理");
+        enabled.setCategoryKey("水电维修");
+        enabled.setSolutionSteps("关闭水阀并提交报修。");
+        enabled.setEnabled(true);
+
+        KnowledgeBase disabled = new KnowledgeBase();
+        disabled.setKnowledgeId(2L);
+        disabled.setTitle("禁用知识");
+        disabled.setEnabled(false);
+
+        when(knowledgeBaseRepository.findAllWithCategory()).thenReturn(List.of(enabled, disabled));
+        when(aiInternalClient.syncKnowledge(anyString(), any(), any()))
+            .thenReturn(Map.of("code", 200, "data", Map.of("vectorSynced", true)));
+
+        int count = knowledgeBaseService.syncEnabledKnowledgeIndex();
+
+        assertEquals(1, count);
+        verify(aiInternalClient).syncKnowledge(eq("test-secret"), eq(1L), any());
+        verify(aiInternalClient, never()).syncKnowledge(eq("test-secret"), eq(2L), any());
+    }
+
+    @Test
     @DisplayName("推荐知识支持前端分类键匹配中文知识分类")
     void recommendMatchesCategoryAlias() {
         KnowledgeBase network = new KnowledgeBase();

@@ -18,26 +18,22 @@ import api from '../services/api';
 const { Option } = Select;
 const { Search } = Input;
 
-const isSameDay = (value) => {
-  if (!value) return false;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return false;
-  const now = new Date();
-  return date.getFullYear() === now.getFullYear()
-    && date.getMonth() === now.getMonth()
-    && date.getDate() === now.getDate();
-};
-
-const MyTask = ({ targetTaskId, onTargetTaskHandled, initialFilters, overdueOnly = false, todayOnly = false, title = "任务列表" }) => {
+const MyTask = ({ targetTaskId, onTargetTaskHandled, initialFilters, overdueOnly = false, title = "任务列表" }) => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState(null);
   const [filteredTasks, setFilteredTasks] = useState([]);
   const [filters, setFilters] = useState({
+    scope: 'all',
     status: 'all',
     category: 'all',
     priority: 'all',
     keyword: '',
+  });
+  const [paginationInfo, setPaginationInfo] = useState({
+    current: 1,
+    pageSize: 10,
+    total: 0,
   });
   const [startModalVisible, setStartModalVisible] = useState(false);
   const [completeModalVisible, setCompleteModalVisible] = useState(false);
@@ -50,6 +46,43 @@ const MyTask = ({ targetTaskId, onTargetTaskHandled, initialFilters, overdueOnly
   const [startForm] = Form.useForm();
   const [completeForm] = Form.useForm();
   const [notesForm] = Form.useForm();
+
+  const getStatusOptions = () => {
+    const common = [{ value: 'all', label: '全部状态' }];
+    if (filters.scope === 'today') {
+      return common.concat([
+        { value: 'pending', label: '待受理' },
+        { value: 'processing', label: '处理中' },
+      ]);
+    }
+    if (filters.scope === 'processing') {
+      return common.concat([{ value: 'processing', label: '处理中' }]);
+    }
+    if (filters.scope === 'records') {
+      return common.concat([
+        { value: 'completed', label: '已完成' },
+        { value: 'to_be_evaluated', label: '待评价' },
+        { value: 'closed', label: '已关闭' },
+      ]);
+    }
+    return common.concat([
+      { value: 'pending', label: '待受理' },
+      { value: 'processing', label: '处理中' },
+      { value: 'to_be_evaluated', label: '待评价' },
+      { value: 'completed', label: '已完成' },
+      { value: 'closed', label: '已关闭' },
+    ]);
+  };
+
+  const scopedStats = {
+    total: paginationInfo.total,
+    pending: filteredTasks.filter(task => task.status === 'pending').length,
+    processing: filteredTasks.filter(task => task.status === 'processing').length,
+    to_be_evaluated: filteredTasks.filter(task => task.status === 'to_be_evaluated').length,
+    completed: filteredTasks.filter(task => task.status === 'completed').length,
+    closed: filteredTasks.filter(task => task.status === 'closed').length,
+    averageRating: stats?.averageRating || 0,
+  };
 
   // 当前维修工人ID - 从登录信息中获取
   const getCurrentRepairmanId = () => {
@@ -84,11 +117,21 @@ const MyTask = ({ targetTaskId, onTargetTaskHandled, initialFilters, overdueOnly
 
     setLoading(true);
     try {
-      // 仅将状态筛选传给后端，其它筛选在前端本地处理
       const mergedFilters = { ...filters, ...searchFilters };
-      const requestFilters = {};
-      if (mergedFilters.status && mergedFilters.status !== 'all') {
-        requestFilters.status = mergedFilters.status;
+      const pageSize = mergedFilters.pageSize || paginationInfo.pageSize;
+      const current = mergedFilters.current || 1;
+      const requestFilters = {
+        page: Math.max(current - 1, 0),
+        size: pageSize,
+      };
+
+      ['scope', 'status', 'category', 'priority'].forEach((key) => {
+        if (mergedFilters[key] && mergedFilters[key] !== 'all') {
+          requestFilters[key] = mergedFilters[key];
+        }
+      });
+      if (mergedFilters.keyword && mergedFilters.keyword.trim()) {
+        requestFilters.keyword = mergedFilters.keyword.trim();
       }
 
       console.log('开始加载任务，维修工ID:', currentRepairmanId, '请求参数:', requestFilters);
@@ -108,41 +151,13 @@ const MyTask = ({ targetTaskId, onTargetTaskHandled, initialFilters, overdueOnly
       // 设置任务列表
       const newTasks = result.data || [];
       setTasks(newTasks);
-
-      // 立即应用本地筛选（确保 filteredTasks 同步更新）
-      let filtered = [...newTasks];
-
-      // 应用状态筛选
-      if (mergedFilters.status && mergedFilters.status !== 'all') {
-        filtered = filtered.filter(task => {
-          const taskStatus = task.status || task.originalStatus;
-          return taskStatus === mergedFilters.status;
-        });
-      }
-
-      // 应用分类筛选
-      if (mergedFilters.category && mergedFilters.category !== 'all') {
-        filtered = filtered.filter(task => task.category === mergedFilters.category);
-      }
-
-      // 应用优先级筛选
-      if (mergedFilters.priority && mergedFilters.priority !== 'all') {
-        filtered = filtered.filter(task => task.priority === mergedFilters.priority);
-      }
-
-      // 应用关键词筛选
-      if (mergedFilters.keyword && mergedFilters.keyword.trim() !== '') {
-        const kw = mergedFilters.keyword.trim().toLowerCase();
-        filtered = filtered.filter(task => {
-          const location = (task.location || '').toLowerCase();
-          const desc = (task.description || '').toLowerCase();
-          const studentName = (task.studentName || task.studentId || '').toLowerCase();
-          return location.includes(kw) || desc.includes(kw) || studentName.includes(kw);
-        });
-      }
-
-      setFilteredTasks(filtered);
-      console.log('设置过滤后的任务列表:', filtered.length, '条');
+      setFilteredTasks(overdueOnly ? newTasks.filter(task => mytaskUtils.isTaskOverdue(task)) : newTasks);
+      setPaginationInfo({
+        current,
+        pageSize,
+        total: result.total || 0,
+      });
+      console.log('设置任务列表:', newTasks.length, '条，总数:', result.total || 0);
 
     } catch (error) {
       console.error('加载任务失败:', error);
@@ -194,60 +209,19 @@ const MyTask = ({ targetTaskId, onTargetTaskHandled, initialFilters, overdueOnly
   const handleFilterChange = (key, value) => {
     const newFilters = { ...filters, [key]: value };
     setFilters(newFilters);
-    // 仅当状态变化时才重新请求后端，其它筛选在前端本地处理
-    if (key === 'status') {
-      loadTasks({ status: value });
-    }
+    loadTasks({ ...newFilters, current: 1 });
   };
 
   // 处理关键词搜索
   const handleSearch = (value) => {
     const newFilters = { ...filters, keyword: value };
     setFilters(newFilters);
-    // 关键词搜索在前端本地过滤，不重新请求后端
+    loadTasks({ ...newFilters, current: 1 });
   };
 
-  // 本地应用分类、优先级、关键词筛选
+  // 仅保留“即将超时”页面的本地二次过滤，其它页面筛选由后端统一执行
   const applyFilters = () => {
     let result = [...tasks];
-
-    // 状态筛选：后端已按状态过滤，但这里再兜底一次
-    if (filters.status && filters.status !== 'all') {
-      result = result.filter(task => {
-        const taskStatus = task.status || task.originalStatus;
-        return taskStatus === filters.status;
-      });
-    }
-
-    // 分类筛选
-    if (filters.category && filters.category !== 'all') {
-      result = result.filter(task => task.category === filters.category);
-    }
-
-    // 优先级筛选
-    if (filters.priority && filters.priority !== 'all') {
-      result = result.filter(task => task.priority === filters.priority);
-    }
-
-    // 关键词筛选（位置 / 描述 / 学生姓名）
-    if (filters.keyword && filters.keyword.trim() !== '') {
-      const kw = filters.keyword.trim().toLowerCase();
-      result = result.filter(task => {
-        const location = (task.location || '').toLowerCase();
-        const desc = (task.description || '').toLowerCase();
-        const studentName = (task.studentName || task.studentId || '').toLowerCase();
-        return (
-          location.includes(kw) ||
-          desc.includes(kw) ||
-          studentName.includes(kw)
-        );
-      });
-    }
-
-    if (todayOnly) {
-      result = result.filter(task => isSameDay(task.assigned_at || task.created_at));
-    }
-
     if (overdueOnly) {
       result = result.filter(task => mytaskUtils.isTaskOverdue(task));
     }
@@ -258,18 +232,23 @@ const MyTask = ({ targetTaskId, onTargetTaskHandled, initialFilters, overdueOnly
   // 当任务列表或筛选条件变化时，重新计算本地筛选结果
   useEffect(() => {
     applyFilters();
-  }, [tasks, filters, todayOnly, overdueOnly]);
+  }, [tasks, overdueOnly]);
 
   useEffect(() => {
     if (!initialFilters) return;
-    setFilters((prev) => ({
-      ...prev,
+    const nextFilters = {
+      scope: initialFilters.scope || 'all',
       status: initialFilters.status || 'all',
       category: initialFilters.category || 'all',
       priority: initialFilters.priority || 'all',
       keyword: initialFilters.keyword || '',
-    }));
+    };
+    setFilters(nextFilters);
+    if (currentRepairmanId) {
+      loadTasks({ ...nextFilters, current: 1 });
+    }
   }, [
+    initialFilters?.scope,
     initialFilters?.status,
     initialFilters?.category,
     initialFilters?.priority,
@@ -494,7 +473,14 @@ const MyTask = ({ targetTaskId, onTargetTaskHandled, initialFilters, overdueOnly
       console.log('维修工端 - 组件初始化');
       console.log('维修工ID:', currentRepairmanId);
       console.log('========================================');
-      loadTasks();
+      const initialRequestFilters = {
+        scope: initialFilters?.scope || 'all',
+        status: initialFilters?.status || 'all',
+        category: initialFilters?.category || 'all',
+        priority: initialFilters?.priority || 'all',
+        keyword: initialFilters?.keyword || '',
+      };
+      loadTasks(initialRequestFilters);
       loadStats();
     } else {
       console.warn('无法获取维修工ID，请先登录');
@@ -729,24 +715,24 @@ const MyTask = ({ targetTaskId, onTargetTaskHandled, initialFilters, overdueOnly
         <Card className="task-stats-card" style={{ marginBottom: 16 }}>
           <Row gutter={16}>
             <Col span={4}>
-              <Statistic title="总任务数" value={stats.total} />
+              <Statistic title="总任务数" value={scopedStats.total} />
             </Col>
             <Col span={4}>
-              <Statistic title="待受理" value={stats.pending} valueStyle={{ color: '#faad14' }} />
+              <Statistic title="待受理" value={scopedStats.pending} valueStyle={{ color: '#faad14' }} />
             </Col>
             <Col span={4}>
-              <Statistic title="处理中" value={stats.processing} valueStyle={{ color: '#1890ff' }} />
+              <Statistic title="处理中" value={scopedStats.processing} valueStyle={{ color: '#1890ff' }} />
             </Col>
             <Col span={4}>
-              <Statistic title="待评价" value={stats.to_be_evaluated} valueStyle={{ color: '#722ed1' }} />
+              <Statistic title="待评价" value={scopedStats.to_be_evaluated} valueStyle={{ color: '#722ed1' }} />
             </Col>
             <Col span={4}>
-              <Statistic title="已完成" value={stats.completed} valueStyle={{ color: '#52c41a' }} />
+              <Statistic title="已完成" value={scopedStats.completed + scopedStats.closed} valueStyle={{ color: '#52c41a' }} />
             </Col>
             <Col span={4}>
               <Statistic
                 title="平均评分"
-                value={stats.averageRating}
+                value={scopedStats.averageRating}
                 prefix={<StarOutlined />}
                 valueStyle={{ color: '#fadb14' }}
               />
@@ -765,11 +751,9 @@ const MyTask = ({ targetTaskId, onTargetTaskHandled, initialFilters, overdueOnly
               value={filters.status}
               onChange={(value) => handleFilterChange('status', value)}
             >
-              <Option value="all">全部状态</Option>
-              <Option value="pending">待受理</Option>
-              <Option value="processing">处理中</Option>
-              <Option value="to_be_evaluated">待评价</Option>
-              <Option value="completed">已完成</Option>
+              {getStatusOptions().map(option => (
+                <Option key={option.value} value={option.value}>{option.label}</Option>
+              ))}
             </Select>
           </Col>
 
@@ -826,11 +810,20 @@ const MyTask = ({ targetTaskId, onTargetTaskHandled, initialFilters, overdueOnly
             rowKey={(record) => record.ticketId || record.id || record.key || Math.random()}
             loading={loading}
         pagination={{
-          pageSize: 10,
+          current: paginationInfo.current,
+          pageSize: paginationInfo.pageSize,
+          total: paginationInfo.total,
           showSizeChanger: true,
           showQuickJumper: true,
           showTotal: (total, range) => 
             `第 ${range[0]}-${range[1]} 条，共 ${total} 条`
+        }}
+        onChange={(pagination) => {
+          loadTasks({
+            ...filters,
+            current: pagination.current,
+            pageSize: pagination.pageSize,
+          });
         }}
         scroll={{ x: 1500 }}
       />

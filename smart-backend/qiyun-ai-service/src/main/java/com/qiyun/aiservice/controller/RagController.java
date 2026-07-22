@@ -1,6 +1,7 @@
 package com.qiyun.aiservice.controller;
 
 import com.qiyun.aiservice.service.ChromaClientService;
+import com.qiyun.aiservice.service.EmbeddingService;
 import com.qiyun.aiservice.service.RagKnowledgeService;
 import com.qiyun.aiservice.service.RagKnowledgeService.RagAnswer;
 import java.util.HashMap;
@@ -22,6 +23,7 @@ public class RagController {
 
     private final RagKnowledgeService ragKnowledgeService;
     private final ChromaClientService chromaClientService;
+    private final EmbeddingService embeddingService;
 
     /**
      * 知识问答接口
@@ -60,9 +62,13 @@ public class RagController {
     @GetMapping("/status")
     public ResponseEntity<Map<String, Object>> status() {
         Map<String, Object> response = new HashMap<>();
+        Map<String, Object> data = new HashMap<>();
+        data.put("chroma", chromaClientService.diagnosticStatus());
+        data.put("embedding", embeddingService.diagnosticStatus());
+
         response.put("code", 200);
         response.put("message", "RAG status");
-        response.put("data", chromaClientService.diagnosticStatus());
+        response.put("data", data);
         return ResponseEntity.ok(response);
     }
 

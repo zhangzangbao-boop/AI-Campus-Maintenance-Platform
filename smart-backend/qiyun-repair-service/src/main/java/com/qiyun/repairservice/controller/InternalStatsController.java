@@ -408,9 +408,8 @@ public class InternalStatsController {
                 .collect(Collectors.toList());
         }
 
-        // 简单分页
         if (followUpStatus != null && !followUpStatus.isBlank()) {
-            String normalizedFollowUpStatus = followUpStatus.trim().toUpperCase();
+            String normalizedFollowUpStatus = normalizeFollowUpStatusFilter(followUpStatus);
             allRatings = allRatings.stream()
                 .filter(r -> normalizedFollowUpStatus.equals(r.followUpStatus()))
                 .collect(Collectors.toList());
@@ -430,7 +429,7 @@ public class InternalStatsController {
 
         int total = allRatings.size();
         long followUpTotal = allRatings.stream()
-            .filter(r -> r.followUpStatus() != null && !r.followUpStatus().isBlank())
+            .filter(r -> "PENDING".equals(r.followUpStatus()))
             .count();
         double averageRating = allRatings.stream()
             .filter(r -> r.score() != null)
@@ -467,7 +466,17 @@ public class InternalStatsController {
 
     private boolean isNegativeFeedback(RatingDto rating) {
         return (rating.score() != null && rating.score() <= 2)
-            || "NEGATIVE".equals(rating.sentiment());
+            || "NEGATIVE".equals(rating.sentiment())
+            || !Boolean.TRUE.equals(rating.resolved());
+    }
+
+    private String normalizeFollowUpStatusFilter(String followUpStatus) {
+        String normalized = followUpStatus.trim().toUpperCase();
+        return switch (normalized) {
+            case "RESOLVED" -> "HANDLED";
+            case "PROCESSING" -> "PENDING";
+            default -> normalized;
+        };
     }
 
     private boolean backfillMissingSentiment(List<Rating> ratings) {

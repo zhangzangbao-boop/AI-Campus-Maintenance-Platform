@@ -286,7 +286,7 @@ public class TicketService {
             case IN_PROGRESS ->
                     newStatus == TicketStatus.RESOLVED || newStatus == TicketStatus.REJECTED;
             case RESOLVED ->
-                    false;
+                    newStatus == TicketStatus.WAITING_FEEDBACK;
             case WAITING_FEEDBACK ->
                     newStatus == TicketStatus.FEEDBACKED || newStatus == TicketStatus.CLOSED;
             case FEEDBACKED ->

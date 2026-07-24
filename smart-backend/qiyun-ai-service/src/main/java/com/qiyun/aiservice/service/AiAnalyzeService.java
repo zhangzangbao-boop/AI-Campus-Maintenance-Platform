@@ -146,7 +146,6 @@ public class AiAnalyzeService {
 
         try {
             String category = getStringValue(result, "category");
-            String urgency = getStringValue(result, "urgency");
             String suggestion = getStringValue(result, "suggestion");
             List<String> keywords = getStringListValue(result, "keywords");
             String locationText = firstNonBlank(
@@ -159,9 +158,7 @@ public class AiAnalyzeService {
             if (category == null || category.isBlank()) {
                 category = "其他故障";
             }
-            if (urgency == null || urgency.isBlank()) {
-                urgency = "一般";
-            }
+            String urgency = calibrateUrgency(description, locationText);
             if (suggestion == null || suggestion.isBlank()) {
                 suggestion = "建议现场检查后确定故障原因";
             }
@@ -187,8 +184,8 @@ public class AiAnalyzeService {
         // 1. 根据关键词判断故障分类
         String category = determineCategory(description);
 
-        // 2. 根据关键词判断紧急程度
-        String urgency = determineUrgency(description);
+        // 2. 根据故障描述、地点、影响范围和安全风险判断紧急程度
+        String urgency = determineUrgency(description, providedLocation);
 
         // 3. 生成维修建议
         String suggestion = generateSuggestion(category, description);
@@ -333,17 +330,108 @@ public class AiAnalyzeService {
     }
 
     /**
-     * 根据关键词判断紧急程度
+     * 综合故障描述、地点、影响范围和安全风险判断紧急程度。
      */
-    private String determineUrgency(String description) {
+    private String determineUrgency(String description, String location) {
+        String text = mergeText(description, location);
+        if (text.isBlank()) {
+            return "中";
+        }
+        if (hasImmediateSafetyRisk(text)) {
+            return "高";
+        }
+        if (hasLowImpactSignal(text)) {
+            return "低";
+        }
+        if (hasOperationalImpact(text) || matchesConfiguredUrgencyRule(text)) {
+            return "中";
+        }
+        return "中";
+    }
+
+    private String calibrateUrgency(String description, String location) {
+        return determineUrgency(description, location);
+    }
+
+    private String normalizeUrgency(String urgency) {
+        if (urgency == null || urgency.isBlank()) {
+            return "中";
+        }
+        String value = urgency.trim().toLowerCase(Locale.ROOT);
+        return switch (value) {
+            case "高", "紧急", "high" -> "高";
+            case "低", "一般", "low" -> "低";
+            case "中", "普通", "medium" -> "中";
+            default -> "中";
+        };
+    }
+
+    private boolean hasImmediateSafetyRisk(String text) {
+        if (containsAny(text, "火灾", "着火", "起火", "明火", "冒烟", "浓烟", "烧焦", "焦味", "糊味", "火花", "电弧", "爆炸")) {
+            return true;
+        }
+        if (containsAny(text, "漏电", "触电", "电人", "电线裸露", "线头裸露", "插座冒火", "电箱冒烟", "配电箱冒烟")) {
+            return true;
+        }
+        if (containsAny(text, "被困", "困在", "锁在", "出不来", "无法脱困")) {
+            return true;
+        }
+        if (containsAny(text, "全楼", "整栋", "整层", "大范围", "多个楼栋", "整个宿舍")
+            && containsAny(text, "停电", "断电", "停水", "没水", "无水")) {
+            return true;
+        }
+        if (containsAny(text, "水漫", "爆管", "管爆", "喷涌", "大量积水", "严重积水")) {
+            return true;
+        }
+        if (containsAny(text, "漏水", "滴水", "积水")
+            && (containsAny(text, "严重", "大量", "很大", "不停", "水流很急", "漫到")
+                || containsAny(text, "插座", "电线", "电箱", "配电", "开关", "设备间"))) {
+            return true;
+        }
+        return containsAny(text, "坍塌", "掉落砸人", "可能伤人", "玻璃碎裂散落", "玻璃掉落", "严重安全隐患");
+    }
+
+    private boolean hasLowImpactSignal(String text) {
+        if (containsAny(text, "无法使用", "不能用", "用不了", "停电", "停水", "断网", "堵塞", "关不上", "打不开")) {
+            return false;
+        }
+        if (containsAny(text, "不影响正常使用", "暂不影响使用", "还能使用", "可以使用", "能正常使用", "不急")
+            && containsAny(text, "轻微", "少量", "局部", "外观", "划痕", "污渍", "掉漆", "小块", "松动", "滴水")) {
+            return true;
+        }
+        return containsAny(text, "外观损坏", "表面划痕", "轻微污渍", "少量污渍", "轻微掉漆", "小块墙皮", "墙皮小块");
+    }
+
+    private boolean hasOperationalImpact(String text) {
+        return containsAny(text,
+            "无法使用", "不能使用", "不能用", "用不了", "无法连接", "没网", "断网", "断线",
+            "不制冷", "不制热", "堵塞", "不通", "没电", "停电", "断电", "停水", "没水",
+            "损坏", "坏了", "频闪", "影响", "受影响", "不能关", "关不上", "打不开",
+            "漏水", "滴水", "松动", "脱落");
+    }
+
+    private boolean matchesConfiguredUrgencyRule(String text) {
         for (AiRuleConfigService.KeywordRule rule : aiRuleConfigService.rules().urgencyRules()) {
-            if (containsAny(description, rule.keywords().toArray(String[]::new))) {
-                return rule.result();
+            String normalizedResult = normalizeUrgency(rule.result());
+            if (!"低".equals(normalizedResult) && containsAny(text, rule.keywords().toArray(String[]::new))) {
+                return true;
             }
         }
+        return false;
+    }
 
-        // 低紧急度 - 一般问题
-        return "一般";
+    private String mergeText(String... values) {
+        StringBuilder builder = new StringBuilder();
+        for (String value : values) {
+            String cleaned = cleanText(value);
+            if (!cleaned.isBlank()) {
+                if (!builder.isEmpty()) {
+                    builder.append(' ');
+                }
+                builder.append(cleaned);
+            }
+        }
+        return builder.toString().toLowerCase(Locale.ROOT);
     }
 
     /**

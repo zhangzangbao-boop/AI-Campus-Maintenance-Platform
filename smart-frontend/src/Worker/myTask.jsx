@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Table, Tag, Button, Space, Select, Input,
   Modal, Form,  Card, Row, Col,
-  Statistic, Progress, Descriptions, Image, message, List, Spin, Alert
+  Progress, Descriptions, Image, message, List, Spin, Alert
 } from 'antd';
 import { SearchOutlined, PlayCircleOutlined, CheckCircleOutlined,
   EditOutlined, EyeOutlined, ClockCircleOutlined,
@@ -21,7 +21,6 @@ const { Search } = Input;
 const MyTask = ({ targetTaskId, onTargetTaskHandled, initialFilters, overdueOnly = false, title = "任务列表" }) => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [stats, setStats] = useState(null);
   const [filteredTasks, setFilteredTasks] = useState([]);
   const [filters, setFilters] = useState({
     scope: 'all',
@@ -72,16 +71,6 @@ const MyTask = ({ targetTaskId, onTargetTaskHandled, initialFilters, overdueOnly
       { value: 'completed', label: '已完成' },
       { value: 'closed', label: '已关闭' },
     ]);
-  };
-
-  const scopedStats = {
-    total: paginationInfo.total,
-    pending: filteredTasks.filter(task => task.status === 'pending').length,
-    processing: filteredTasks.filter(task => task.status === 'processing').length,
-    to_be_evaluated: filteredTasks.filter(task => task.status === 'to_be_evaluated').length,
-    completed: filteredTasks.filter(task => task.status === 'completed').length,
-    closed: filteredTasks.filter(task => task.status === 'closed').length,
-    averageRating: stats?.averageRating || 0,
   };
 
   // 当前维修工人ID - 从登录信息中获取
@@ -166,42 +155,6 @@ const MyTask = ({ targetTaskId, onTargetTaskHandled, initialFilters, overdueOnly
       message.error('加载任务失败: ' + error.message);
     } finally {
       setLoading(false);
-    }
-  };
-
-  // 加载统计数据
-  const loadStats = async () => {
-    if (!currentRepairmanId) {
-      console.warn('无法加载统计：维修工ID为空');
-      setStats({
-        total: 0,
-        pending: 0,
-        processing: 0,
-        completed: 0,
-        to_be_evaluated: 0,
-        closed: 0,
-        averageRating: 0,
-      });
-      return;
-    }
-    
-    try {
-      console.log('开始加载统计数据，维修工ID:', currentRepairmanId);
-      const statsData = await mytaskService.getRepairmanStats(currentRepairmanId);
-      console.log('获取到的统计数据:', statsData);
-      setStats(statsData);
-    } catch (error) {
-      console.error('加载统计数据失败:', error);
-      // 设置默认统计数据
-      setStats({
-        total: 0,
-        pending: 0,
-        processing: 0,
-        completed: 0,
-        to_be_evaluated: 0,
-        closed: 0,
-        averageRating: 0,
-      });
     }
   };
 
@@ -375,14 +328,10 @@ const MyTask = ({ targetTaskId, onTargetTaskHandled, initialFilters, overdueOnly
 
       message.success('任务开始处理成功！');
 
-      // 刷新任务列表和统计数据
+      // 刷新任务列表
       console.log('开始刷新任务列表...');
       await loadTasks();
       console.log('任务列表刷新完成');
-
-      console.log('开始刷新统计数据...');
-      await loadStats();
-      console.log('统计数据刷新完成');
 
     } catch (error) {
       console.error('开始任务失败:', error);
@@ -417,14 +366,10 @@ const MyTask = ({ targetTaskId, onTargetTaskHandled, initialFilters, overdueOnly
 
       message.success('任务已完成！');
 
-      // 刷新任务列表和统计数据
+      // 刷新任务列表
       console.log('开始刷新任务列表...');
       await loadTasks();
       console.log('任务列表刷新完成');
-
-      console.log('开始刷新统计数据...');
-      await loadStats();
-      console.log('统计数据刷新完成');
 
     } catch (error) {
       console.error('完成任务失败:', error);
@@ -481,31 +426,11 @@ const MyTask = ({ targetTaskId, onTargetTaskHandled, initialFilters, overdueOnly
         keyword: initialFilters?.keyword || '',
       };
       loadTasks(initialRequestFilters);
-      loadStats();
     } else {
       console.warn('无法获取维修工ID，请先登录');
       message.warning('无法获取用户信息，请重新登录');
     }
   }, []);
-
-  // ⚠️ 重要：添加轮询刷新机制，每10秒自动刷新统计数据
-  useEffect(() => {
-    if (!currentRepairmanId) return;
-
-    const interval = setInterval(() => {
-      console.log('========================================');
-      console.log('维修工端 - 轮询刷新统计数据（10秒）');
-      console.log('当前时间:', new Date().toLocaleString());
-      console.log('维修工ID:', currentRepairmanId);
-      console.log('========================================');
-      loadStats();
-    }, 10000); // 10秒刷新一次
-
-    return () => {
-      console.log('维修工端 - 清除轮询定时器');
-      clearInterval(interval);
-    };
-  }, [currentRepairmanId]);
 
   // 表格列定义
   const columns = [
@@ -702,44 +627,12 @@ const MyTask = ({ targetTaskId, onTargetTaskHandled, initialFilters, overdueOnly
           onClick={() => {
             console.log('手动刷新任务列表...');
             loadTasks();
-            loadStats();
           }}
           loading={loading}
         >
           刷新数据
         </Button>
       </div>
-
-      {/* 统计卡片 */}
-      {stats && (
-        <Card className="task-stats-card" style={{ marginBottom: 16 }}>
-          <Row gutter={16}>
-            <Col span={4}>
-              <Statistic title="总任务数" value={scopedStats.total} />
-            </Col>
-            <Col span={4}>
-              <Statistic title="待受理" value={scopedStats.pending} valueStyle={{ color: '#faad14' }} />
-            </Col>
-            <Col span={4}>
-              <Statistic title="处理中" value={scopedStats.processing} valueStyle={{ color: '#1890ff' }} />
-            </Col>
-            <Col span={4}>
-              <Statistic title="待评价" value={scopedStats.to_be_evaluated} valueStyle={{ color: '#722ed1' }} />
-            </Col>
-            <Col span={4}>
-              <Statistic title="已完成" value={scopedStats.completed + scopedStats.closed} valueStyle={{ color: '#52c41a' }} />
-            </Col>
-            <Col span={4}>
-              <Statistic
-                title="平均评分"
-                value={scopedStats.averageRating}
-                prefix={<StarOutlined />}
-                valueStyle={{ color: '#fadb14' }}
-              />
-            </Col>
-          </Row>
-        </Card>
-      )}
 
       {/* 搜索和筛选区域 */}
       <Card className="task-filter-card" style={{ marginBottom: 16 }}>

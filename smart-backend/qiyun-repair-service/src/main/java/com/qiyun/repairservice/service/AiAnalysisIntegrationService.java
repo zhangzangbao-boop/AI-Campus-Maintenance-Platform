@@ -142,9 +142,10 @@ public class AiAnalysisIntegrationService {
         if (urgency == null) {
             return "medium";
         }
-        return switch (urgency) {
-            case "紧急", "high", "HIGH" -> "high";
-            case "一般", "low", "LOW" -> "low";
+        return switch (urgency.trim().toLowerCase(java.util.Locale.ROOT)) {
+            case "高", "紧急", "high" -> "high";
+            case "低", "一般", "low" -> "low";
+            case "中", "普通", "medium" -> "medium";
             default -> "medium";
         };
     }

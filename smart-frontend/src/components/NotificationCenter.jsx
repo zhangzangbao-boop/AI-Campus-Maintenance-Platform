@@ -134,7 +134,11 @@ const NotificationCenter = () => {
 
     if (item.relatedOrderId) {
       window.dispatchEvent(new CustomEvent("open-related-order", {
-        detail: { orderId: item.relatedOrderId },
+        detail: {
+          orderId: item.relatedOrderId,
+          title: item.title,
+          content: item.content,
+        },
       }));
       setOpen(false);
     }

@@ -203,6 +203,7 @@ public class UserService implements UserDetailsService {
             user.getUserId(),
             user.getNickname(),
             user.getContactPhone(),
+            user.getAvatarUrl(),
             user.getRole(),
             Boolean.TRUE.equals(user.getIsActive()),
             staff ? user.getResponsibleArea() : null,

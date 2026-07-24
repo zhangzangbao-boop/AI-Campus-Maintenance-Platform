@@ -114,4 +114,4 @@ UPDATE `repair_feedback`
 SET `follow_up_status` = 'PENDING',
     `follow_up_updated_at` = COALESCE(`sentiment_analyzed_at`, `created_at`)
 WHERE `follow_up_status` IS NULL
-  AND (`rating` <= 2 OR UPPER(COALESCE(`sentiment`, '')) = 'NEGATIVE');
+  AND (`rating` <= 2 OR UPPER(COALESCE(`sentiment`, '')) = 'NEGATIVE' OR COALESCE(`resolved`, 0) = 0);

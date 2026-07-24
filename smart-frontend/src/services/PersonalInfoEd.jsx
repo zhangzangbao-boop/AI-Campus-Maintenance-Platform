@@ -21,6 +21,52 @@ import api from './api.jsx';
 // Gateway 网关地址（用于图片等静态资源）
 const GATEWAY_URL = 'http://localhost:8070';
 
+const getResponseData = (response) => response?.data ?? response;
+
+const getUploadItems = (response) => {
+  const data = getResponseData(response);
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.list)) return data.list;
+  return [];
+};
+
+const toAbsoluteAvatarUrl = (url) => {
+  const trimmedUrl = (url || '').trim();
+  if (!trimmedUrl) return '';
+  if (trimmedUrl.startsWith('http://') || trimmedUrl.startsWith('https://')) {
+    return trimmedUrl;
+  }
+  return trimmedUrl.startsWith('/')
+    ? `${GATEWAY_URL}${trimmedUrl}`
+    : `${GATEWAY_URL}/${trimmedUrl}`;
+};
+
+const mergeUpdatedUser = (userInfo, updatedUser, updateRequest) => {
+  const mergedUser = {
+    ...userInfo,
+    ...(updatedUser || {}),
+    nickname: updatedUser?.nickname || updateRequest.nickname,
+    contactPhone: updatedUser?.contactPhone || updateRequest.contactPhone,
+    avatarUrl: updatedUser?.avatarUrl || updateRequest.avatarUrl,
+  };
+
+  return {
+    ...mergedUser,
+    username: mergedUser.nickname || mergedUser.username || mergedUser.userId,
+    phone: mergedUser.contactPhone || mergedUser.phone || '',
+    avatar: mergedUser.avatarUrl || mergedUser.avatar || '',
+  };
+};
+
+const persistCurrentUser = (user) => {
+  try {
+    const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+    localStorage.setItem('user', JSON.stringify({ ...storedUser, ...user }));
+  } catch (error) {
+    localStorage.setItem('user', JSON.stringify(user));
+  }
+};
+
 const PersonalInfoEd = ({ visible, onCancel, userInfo, onUpdate }) => {
   const [form] = Form.useForm();
   const [passwordForm] = Form.useForm();
@@ -91,13 +137,12 @@ const PersonalInfoEd = ({ visible, onCancel, userInfo, onUpdate }) => {
       if (avatarFile) {
         try {
           const uploadResponse = await api.common.uploadImages([avatarFile]);
-          if (uploadResponse && uploadResponse.length > 0 && uploadResponse[0].url) {
+          const uploadItems = getUploadItems(uploadResponse);
+          if (uploadItems.length > 0 && uploadItems[0].url) {
             // 后端返回的是相对路径，需要转换为完整 URL（因为后端 @URL 验证要求）
-            const uploadedUrl = uploadResponse[0].url;
+            const uploadedUrl = uploadItems[0].url;
             // 转换为完整 URL
-            avatarUrlToUpdate = uploadedUrl.startsWith('http')
-              ? uploadedUrl
-              : `${GATEWAY_URL}${uploadedUrl.startsWith('/') ? uploadedUrl : '/' + uploadedUrl}`;
+            avatarUrlToUpdate = toAbsoluteAvatarUrl(uploadedUrl);
             console.log('头像上传成功，URL:', avatarUrlToUpdate);
           } else {
             throw new Error('头像上传失败：未返回有效的 URL');
@@ -178,11 +223,15 @@ const PersonalInfoEd = ({ visible, onCancel, userInfo, onUpdate }) => {
       // PUT /api/users/me
       try {
         const updatedUser = await api.users.updateMe(updateRequest);
+        const normalizedUser = mergeUpdatedUser(userInfo, getResponseData(updatedUser), updateRequest);
+        persistCurrentUser(normalizedUser);
+        setAvatarUrl(normalizedUser.avatarUrl || null);
+        setAvatarFile(null);
         console.log('更新成功，返回数据:', updatedUser);
         
         // 调用父组件传递的更新函数
         if (onUpdate) {
-          onUpdate(updatedUser);
+          onUpdate(normalizedUser);
         }
         
         message.success('个人信息更新成功！');

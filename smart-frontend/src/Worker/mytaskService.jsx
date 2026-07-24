@@ -258,105 +258,34 @@ export const mytaskService = {
   // 获取维修工人的统计数据
   getRepairmanStats: async (repairmanId) => {
     try {
-      // 获取所有任务来计算统计数据
-      const result = await mytaskService.getMyTasks(repairmanId, {});
-      const tasks = result.data || [];
-
-      console.log('========================================');
-      console.log('维修工统计数据计算开始...');
-      console.log('维修工ID:', repairmanId);
-      console.log('任务总数:', tasks.length);
-      console.log('任务列表:', tasks.map(t => ({
-        id: t.id || t.ticketId,
-        status: t.status,
-        originalStatus: t.originalStatus,
-        title: t.title || t.description
-      })));
-      console.log('========================================');
-
-      const stats = {
-        total: tasks.length,
-        pending: 0,
-        processing: 0,
-        completed: 0,
-        to_be_evaluated: 0,
+      const response = await api.repairman.getDashboard();
+      const data = response?.code === 200 ? response.data : response;
+      return {
+        total: Number(data?.totalTaskCount ?? 0),
+        pending: Number(data?.pendingCount ?? 0),
+        processing: Number(data?.inProgressCount ?? 0),
+        completed: Number(data?.finishedCount ?? 0),
         closed: 0,
-        averageRating: 0,
+        averageRating: Number(data?.avgRating ?? 0).toFixed(1),
+        todayTaskCount: Number(data?.todayTaskCount ?? 0),
+        highPriorityCount: Number(data?.highPriorityCount ?? 0),
+        slaAlertCount: Number(data?.slaAlertCount ?? 0),
       };
-
-      // 统计各状态任务
-      tasks.forEach(task => {
-        const status = task.status || mapStatusToFrontend(task.originalStatus);
-        console.log(`任务 ${task.id || task.ticketId}: 状态=”${status}”`);
-
-        switch (status) {
-          case 'pending':
-            stats.pending++;
-            break;
-          case 'processing':
-            stats.processing++;
-            break;
-          case 'completed':
-            // 维修工视角：completed = RESOLVED（已完成维修，等待学生确认/评价）
-            stats.completed++;
-            break;
-          case 'to_be_evaluated':
-            // 维修工视角：to_be_evaluated = WAITING_FEEDBACK（学生已确认，等待评价）
-            stats.to_be_evaluated++;
-            break;
-          case 'closed':
-            // 维修工视角：closed = FEEDBACKED/CLOSED（已评价或已关闭）
-            stats.closed++;
-            break;
-          case 'rejected':
-            // 驳回的任务不计入统计，或者可以单独统计
-            break;
-          default:
-            console.warn(`未知状态: ${status} (任务ID: ${task.id || task.ticketId})`);
-        }
-      });
-
-      console.log('========================================');
-      console.log('统计结果汇总:', stats);
-      console.log(`验证: total(${stats.total}) = pending(${stats.pending}) + processing(${stats.processing}) + completed(${stats.completed}) + to_be_evaluated(${stats.to_be_evaluated}) + closed(${stats.closed})`);
-      console.log(`验证结果: ${stats.total === (stats.pending + stats.processing + stats.completed + stats.to_be_evaluated + stats.closed) ? '✓ 正确' : '✗ 错误'}`);
-      console.log('========================================');
-
-      // 计算平均评分 - 从已评价的任务中获取
-      const ratedTasks = tasks.filter(task => {
-        const rating = task.rating;
-        return rating !== null && rating !== undefined && !isNaN(Number(rating));
-      });
-
-      if (ratedTasks.length > 0) {
-        const totalRating = ratedTasks.reduce(
-          (sum, task) => sum + Number(task.rating),
-          0
-        );
-        stats.averageRating = Number(totalRating / ratedTasks.length).toFixed(1);
-        console.log(`平均评分计算: ${ratedTasks.length} 个已评价任务，总分 ${totalRating}, 平均 ${stats.averageRating}`);
-      } else {
-        console.log('暂无已评价任务，平均评分为 0');
-      }
-
-      return stats;
     } catch (error) {
-      console.error('========================================');
       console.error('获取统计数据失败:', error);
-      console.error('========================================');
-      // 返回默认统计数据
       return {
         total: 0,
         pending: 0,
         processing: 0,
         completed: 0,
-        to_be_evaluated: 0,
         closed: 0,
-        averageRating: 0,
+        averageRating: '0.0',
+        todayTaskCount: 0,
+        highPriorityCount: 0,
+        slaAlertCount: 0,
       };
     }
   },
-
   // 搜索任务
   searchMyTasks: async (repairmanId, filters = {}) => {
     try {

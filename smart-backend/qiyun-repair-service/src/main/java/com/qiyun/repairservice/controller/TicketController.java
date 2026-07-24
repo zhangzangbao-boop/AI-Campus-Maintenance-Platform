@@ -51,8 +51,8 @@ public class TicketController {
     private final TicketService ticketService;
     private final RepairProcessRecordService repairProcessRecordService;
 
-    // 处理前端发送的 multipart/form-data 报修创建请求
-    // 使用 @ModelAttribute 替代 @RequestPart，更宽松地接受 multipart 请求
+    // 婵犮垼娉涚€氼噣骞冩繝鍥х鐎广儱娴傛导鍌炴煕濞嗘劕鐏撮柍褜鍏涢懗璺衡枔?multipart/form-data 闂佺缈伴崕浼村箞閵娾晛绀嗘繛鎴烆焽缁憋箓鎮归崶顒佹暠闁?
+    // 婵炶揪缍€濞夋洟寮?@ModelAttribute 闂佸搫娲ら妵姗€宕?@RequestPart闂佹寧绋戦張顒€煤鐠恒劉鍋撶涵鍛撴繝銏☆殜瀹曠兘鎮ч崼婵嗩槻闂?multipart 闁荤姴娲弨閬嶆儑?
     @PostMapping(
             value = "/repair-orders",
             consumes = {MediaType.MULTIPART_FORM_DATA_VALUE, "multipart/form-data"},
@@ -61,7 +61,7 @@ public class TicketController {
     @PreAuthorize("hasRole('STUDENT')")
     @ResponseStatus(HttpStatus.CREATED)
     public Map<String, Object> createWithFiles(
-            // 前端虽然会传 studentId，这里统一忽略，始终使用当前登录用户
+            // 闂佸憡鎸哥粔鍫曨敂椤掑嫭鎯為柣锝呰嫰婵兠归崗鑲╃叝缂?studentId闂佹寧绋戦惌浣烘崲閺嶎厽鐓傜€光偓閳ь剛鍒掗悜妯尖枖闁逞屽墲缁犳盯鎮剧仦鐐吅闂佹寧绋戦懟顖烇綖閹邦喚纾奸柛顐ｇ矊閳诲繘鏌ｉ～顒€濡肩紓宥咁儔瀹曟粌顓奸崶顭戜划閻熸粎澧楀ú婊堝极閵堝绠?
             @RequestPart(value = "studentId", required = false) String ignoredStudentId,
             @RequestPart(value = "title", required = false) String title,
             @RequestPart(value = "categoryId", required = false) String categoryIdStr,
@@ -70,23 +70,23 @@ public class TicketController {
             @RequestPart(value = "priority", required = false) String priority,
             @RequestPart(value = "images", required = false) List<MultipartFile> images) {
 
-        // 始终从 SecurityContext 获取当前登录用户，避免前端伪造 studentId
+        // 婵犳鍠栭鍥╁垝閹惧顩?SecurityContext 闂佸吋鍎抽崲鑼躲亹閸ヮ亗浜归柟鎯у暱椤ゅ懘鏌ｈ椤曆呯礊瀹ュ鍋ㄩ柕濠忕畱閻撴洟鏌ㄥ☉妯肩劯濞村皷鏅犲畷妤€顓奸崨顓ф瀫缂備焦妫忛崹顖炲触婢舵劖鐒?studentId
         String studentId;
         try {
             studentId = SecurityContextHolder.getContext().getAuthentication().getName();
             if (studentId == null || studentId.isBlank()) {
-                throw new BusinessException("无法获取当前用户信息，请先登录");
+                throw new BusinessException("閺冪姵纭堕懢宄板絿瑜版挸澧犻悽銊﹀煕娣団剝浼呴敍宀冾嚞閸忓牏娅ヨぐ?");
             }
         } catch (Exception e) {
-            throw new BusinessException("无法获取当前用户信息，请先登录");
+            throw new BusinessException("閺冪姵纭堕懢宄板絿瑜版挸澧犻悽銊﹀煕娣団剝浼呴敍宀冾嚞閸忓牏娅ヨぐ?");
         }
 
-        // 转换 categoryId
+        // 闁哄鍎愰崜姘暦?categoryId
         Long categoryId;
         try {
             categoryId = Long.valueOf(categoryIdStr);
         } catch (NumberFormatException e) {
-            throw new BusinessException("分类ID格式错误: " + categoryIdStr);
+            throw new BusinessException("闂佸憡甯掑Λ娑氭偖閻涚眹闂佸搫绉堕崢褏妲愰敓鐘崇叆婵炲棙甯╅崵? " + categoryIdStr);
         }
 
         TicketCreateRequest request = new TicketCreateRequest(
@@ -100,10 +100,10 @@ public class TicketController {
 
         TicketDetailDto detail = ticketService.createTicket(request, images);
 
-        // 为了兼容前端统一的 { code, data, message } 响应结构，这里做一层包装
+        // 婵炴垶鎹佸銊ц姳閿熺姴绀傞柣鎾冲瘨閸熷洭鏌涢幘宕囆ゆい蹇ｅ墰缁辨帡鎮㈤崜渚囦紘闂?{ code, data, message } 闂佸憡绻傜粔瀵歌姳閼碱剛纾奸柟鎯ь嚟閳ь剦鍨堕弫宥呯暆閸愵亞顔愰梻浣瑰絻閼活垱绂掑☉娆戔枖闁逞屽墰娴狅箓宕掑顒傛▉闁?
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
-        result.put("message", "报修创建成功");
+        result.put("message", "创建成功");
         result.put("data", detail);
         return result;
     }
@@ -112,67 +112,45 @@ public class TicketController {
     @PreAuthorize("hasRole('STUDENT')")
     public Map<String, Object> listMyTickets(
             @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "scope", required = false) String scope,
+            @RequestParam(value = "category", required = false) String category,
+            @RequestParam(value = "priority", required = false) String priority,
+            @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size) {
-        // 从Security Context中获取当前用户ID
-        String studentId;
-        try {
-            studentId = SecurityContextHolder.getContext().getAuthentication().getName();
-            if (studentId == null || studentId.isBlank()) {
-                throw new BusinessException("无法获取当前用户信息，请先登录");
-            }
-        } catch (Exception e) {
-            throw new BusinessException("无法获取当前用户信息，请先登录");
-        }
-
-        // 先获取该学生的所有工单
-        List<TicketSummaryDto> allTickets = ticketService.listByStudent(studentId);
-
-        List<TicketSummaryDto> tickets;
-
-        // 根据状态筛选
+        String studentId = currentUserId();
+        TicketStatus ticketStatus = null;
         if (status != null && !status.isBlank() && !"all".equalsIgnoreCase(status)) {
-            // 将前端状态值映射到后端状态值
-            TicketStatus ticketStatus = mapStatusFromFrontend(status);
-
-            // 在该学生的工单中筛选状态
-            tickets = allTickets.stream()
-                .filter(t -> t.status() == ticketStatus)
-                .collect(java.util.stream.Collectors.toList());
-        } else {
-            // 不筛选状态，返回所有工单
-            tickets = allTickets;
+            ticketStatus = mapStatusFromFrontend(status);
         }
 
-        // 简单分页模拟
-        int total = tickets.size();
-        int fromIndex = page * size;
-        int toIndex = Math.min(fromIndex + size, total);
-        List<TicketSummaryDto> pagedTickets = fromIndex < total ? tickets.subList(fromIndex, toIndex) : new java.util.ArrayList<>();
+        Map<String, Object> data = ticketService.listStudentTicketsPage(
+            studentId,
+            ticketStatus,
+            scope,
+            category,
+            priority,
+            keyword,
+            page,
+            size
+        );
 
-        // 返回统一格式的响应
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
-        result.put("message", "获取成功");
-        Map<String, Object> data = new HashMap<>();
-        data.put("list", pagedTickets);
-        data.put("total", total);
-        data.put("page", page);
-        data.put("pageSize", size);
+        result.put("message", "闂佸吋鍎抽崲鑼躲亹閸ヮ剙绠ｉ柟閭﹀墮椤?");
         result.put("data", data);
         return result;
     }
-
     @GetMapping("/repair-orders/{id}")
     @PreAuthorize("hasAnyRole('STUDENT','STAFF','ADMIN')")
     public Map<String, Object> detail(@PathVariable("id") Long id) {
         TicketDetailDto detail = ticketService.getTicketDetail(id, hasRole("ADMIN"));
         assertCanReadTicket(detail);
 
-        // 返回统一格式的响应
+        // 闁哄鏅滈弻銊ッ洪弽顐ょ＜闁绘柨澧庨閬嶆煛瀹ュ洤甯剁紒鎲嬬節閹啴宕熼锝嗗劌闁?
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
-        result.put("message", "获取成功");
+        result.put("message", "闂佸吋鍎抽崲鑼躲亹閸ヮ剙绠ｉ柟閭﹀墮椤?");
         result.put("data", detail);
         return result;
     }
@@ -185,7 +163,7 @@ public class TicketController {
             assertStaffOwnsTicket(detail);
         }
         CompletionSummaryDto summary = ticketService.regenerateCompletionSummary(id);
-        return success("完成总结已重新生成", summary);
+        return success("鐎瑰本鍨氶幀鑽ょ波瀹告煡鍣搁弬鎵晸閹?", summary);
     }
 
     @GetMapping("/repair-orders/{id}/historical-cases")
@@ -196,28 +174,28 @@ public class TicketController {
             assertStaffOwnsTicket(detail);
         }
         List<HistoricalRepairCaseDto> cases = ticketService.recommendHistoricalCases(id);
-        return success("相似维修案例获取成功", cases);
+        return success("闂佺儵鏅犻弲鏌ュ箮閳ь剛绱撴担铏圭瘈闁逛究鍔岄々濂稿醇濠婂懍绱ｉ梺鍏煎劤閸㈣尪銇愰崶顒€绠ｉ柟閭﹀墮椤?", cases);
     }
 
     @DeleteMapping("/repair-orders/{id}")
     @PreAuthorize("hasRole('STUDENT')")
     public Map<String, Object> delete(@PathVariable("id") Long id) {
-        // 从 SecurityContext 获取当前登录学生ID
+        // 婵?SecurityContext 闂佸吋鍎抽崲鑼躲亹閸ヮ亗浜归柟鎯у暱椤ゅ懘鏌ｈ椤曆呯礊瀹ュ洠鍋撳☉鍐差洭闁轰焦褰侱
         String studentId;
         try {
             studentId = SecurityContextHolder.getContext().getAuthentication().getName();
             if (studentId == null || studentId.isBlank()) {
-                throw new BusinessException("无法获取当前用户信息，请先登录");
+                throw new BusinessException("閺冪姵纭堕懢宄板絿瑜版挸澧犻悽銊﹀煕娣団剝浼呴敍宀冾嚞閸忓牏娅ヨぐ?");
             }
         } catch (Exception e) {
-            throw new BusinessException("无法获取当前用户信息，请先登录");
+            throw new BusinessException("閺冪姵纭堕懢宄板絿瑜版挸澧犻悽銊﹀煕娣団剝浼呴敍宀冾嚞閸忓牏娅ヨぐ?");
         }
 
         ticketService.deleteTicket(id, studentId);
 
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
-        result.put("message", "删除报修单成功");
+        result.put("message", "閸掔娀娅庨幎銉ゆ叏閸楁洘鍨氶崝?");
         result.put("data", null);
         return result;
     }
@@ -253,10 +231,10 @@ public class TicketController {
         );
         TicketDetailDto detail = ticketService.rateTicket(id, checkedRequest);
 
-        // 统一返回结构 { code, data, message }
+        // 缂傚倷鑳堕崰宥囩博鐎涙ɑ浜ら柡鍌涘缁€鈧紓鍌欑劍閹稿鎮?{ code, data, message }
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
-        result.put("message", "评价成功");
+        result.put("message", "闁荤姴娲ょ€氼亪鎮抽鐐茬闁归偊鍓欓～?");
         result.put("data", detail);
         return result;
     }
@@ -266,7 +244,7 @@ public class TicketController {
     public TicketDetailDto assign(@PathVariable("id") Long id,
                                   @RequestBody TicketAssignRequest request) {
         if (request == null || request.staffId() == null || request.staffId().isBlank()) {
-            throw new BusinessException("维修工ID不能为空");
+            throw new BusinessException("缂傚倷鑳剁换婵嬪箞閵娿儺鍟呮い褍绮氭繛鎴炴尭缁夌兘宕楀Ο鑽も枖闁惧繐鍘滈弫?");
         }
         TicketAssignRequest checkedRequest = new TicketAssignRequest(currentUserId(), request.staffId());
         return ticketService.assignTicket(id, checkedRequest);
@@ -276,33 +254,33 @@ public class TicketController {
     @PreAuthorize("hasAnyRole('STAFF','ADMIN')")
     public Map<String, Object> changeTaskStatus(@PathVariable("id") Long id,
                                           @RequestBody Map<String, Object> requestBody) {
-        // 从 SecurityContext 获取当前操作员ID
+        // 婵?SecurityContext 闂佸吋鍎抽崲鑼躲亹閸ヮ亗浜归柟鎯у暱椤ゅ懘鏌熼崹顔拘＄紓宥嗘瀹曘劌螖閻?
         String operatorId;
         try {
             operatorId = SecurityContextHolder.getContext().getAuthentication().getName();
             if (operatorId == null || operatorId.isBlank()) {
-                throw new BusinessException("无法获取当前用户信息，请先登录");
+                throw new BusinessException("閺冪姵纭堕懢宄板絿瑜版挸澧犻悽銊﹀煕娣団剝浼呴敍宀冾嚞閸忓牏娅ヨぐ?");
             }
         } catch (Exception e) {
-            throw new BusinessException("无法获取当前用户信息，请先登录");
+            throw new BusinessException("閺冪姵纭堕懢宄板絿瑜版挸澧犻悽銊﹀煕娣団剝浼呴敍宀冾嚞閸忓牏娅ヨぐ?");
         }
 
-        // 从请求体中获取状态
+        // 婵炲濮村锕傤敋椤掆偓鏁堥柛灞剧懅缁夌厧鈽夐幙鍐ㄥ绩妤犵偛绻樺畷锝夊冀椤愨懣锕傛煙?
         if (hasRole("STAFF") && !hasRole("ADMIN")) {
             assertStaffOwnsTicket(ticketService.getTicketDetail(id));
         }
 
         String newStatusStr = (String) requestBody.get("newStatus");
         if (newStatusStr == null || newStatusStr.isBlank()) {
-            throw new BusinessException("新状态不能为空");
+            throw new BusinessException("閺傛壆濮搁幀浣风瑝閼虫垝璐熺粚?");
         }
 
-        // 将字符串状态转换为枚举
+        // 闁诲繐绻愬Λ妤呮偤瑜忕划顓㈡晜閼愁垼娲梺缁橆焾閸╂牠鍩€椤戞寧绁版繛鏉戞楠炴垿锝為锛勵槹闂佸搫顑嗛惌顔戒繆?
         TicketStatus newStatus;
         try {
             newStatus = TicketStatus.valueOf(newStatusStr);
         } catch (IllegalArgumentException e) {
-            // 尝试从前端状态值映射
+            // 闁诲繐绻戠换鍡涙儊椤栨稓顩烽幖绮光偓鎰佹瀫缂備焦妫忛崹铏叏閹间礁绠戝ù锝囩《閸嬫捇宕楅崗澶逛線鎮?
             newStatus = mapStatusFromFrontend(newStatusStr);
         }
 
@@ -318,7 +296,7 @@ public class TicketController {
 
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
-        result.put("message", "任务状态更新成功");
+        result.put("message", "娴犺濮熼悩鑸碘偓浣规纯閺傜増鍨氶崝?");
         result.put("data", detail);
         return result;
     }
@@ -327,18 +305,18 @@ public class TicketController {
     @PreAuthorize("hasRole('STAFF')")
     public Map<String, Object> completeTask(@PathVariable("id") Long id,
                                       @RequestBody Map<String, Object> requestBody) {
-        // 从 SecurityContext 获取当前操作员ID
+        // 婵?SecurityContext 闂佸吋鍎抽崲鑼躲亹閸ヮ亗浜归柟鎯у暱椤ゅ懘鏌熼崹顔拘＄紓宥嗘瀹曘劌螖閻?
         String operatorId;
         try {
             operatorId = SecurityContextHolder.getContext().getAuthentication().getName();
             if (operatorId == null || operatorId.isBlank()) {
-                throw new BusinessException("无法获取当前用户信息，请先登录");
+                throw new BusinessException("閺冪姵纭堕懢宄板絿瑜版挸澧犻悽銊﹀煕娣団剝浼呴敍宀冾嚞閸忓牏娅ヨぐ?");
             }
         } catch (Exception e) {
-            throw new BusinessException("无法获取当前用户信息，请先登录");
+            throw new BusinessException("閺冪姵纭堕懢宄板絿瑜版挸澧犻悽銊﹀煕娣団剝浼呴敍宀冾嚞閸忓牏娅ヨぐ?");
         }
 
-        // 完成任务时，状态应该是 RESOLVED
+        // 闁诲海鎳撻張顒勫垂濮橆厾顩烽悹鍥ㄥ絻椤倝鏌￠崘顓у晣缂佽鲸绻堥幃鈺呮嚋绾版ê浜惧ù锝呮憸鐎瑰鎮归崶銉ュ姕婵?RESOLVED
         String rejectionReason = (String) requestBody.get("rejectionReason");
         String notes = (String) requestBody.get("notes");
 
@@ -358,7 +336,7 @@ public class TicketController {
 
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
-        result.put("message", "任务完成成功");
+        result.put("message", "娴犺濮熼悩鑸碘偓浣规纯閺傜増鍨氶崝?");
         result.put("data", detail);
         return result;
     }
@@ -368,14 +346,14 @@ public class TicketController {
     public Map<String, Object> arriveTask(@PathVariable("id") Long id,
                                           @RequestBody(required = false) Map<String, Object> requestBody) {
         assertStaffOwnsTicket(ticketService.getTicketDetail(id));
-        String content = textValue(requestBody, "content", "维修人员已到达现场并开始核查故障。");
+        String content = textValue(requestBody, "content", "缂佺繝鎱ㄦ禍鍝勬喅瀹告彃鍩屾潏鍓у箛閸﹀搫鑻熷鈧慨瀣壋閺屻儲鏅犻梾婧库偓?");
         String imageUrl = textValue(requestBody, "imageUrl", null);
         RepairProcessRecordDto record = repairProcessRecordService.addRecord(
             id,
             currentUserId(),
             new RepairProcessRecordRequest(RepairProcessActionType.ARRIVED, content, imageUrl)
         );
-        return success("到场确认已提交", record);
+        return success("閸掓澘婧€绾喛顓诲鍙夊絹娴?", record);
     }
 
     @PostMapping("/tasks/{id}/process-records")
@@ -384,7 +362,7 @@ public class TicketController {
                                                     @Valid @RequestBody RepairProcessRecordRequest request) {
         assertStaffOwnsTicket(ticketService.getTicketDetail(id));
         RepairProcessRecordDto record = repairProcessRecordService.addRecord(id, currentUserId(), request);
-        return success("维修过程记录已提交", record);
+        return success("缂佺繝鎱ㄦ潻鍥┾柤鐠佹澘缍嶅鍙夊絹娴?", record);
     }
 
     @PostMapping(value = "/tasks/{id}/process-records/with-images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -394,7 +372,7 @@ public class TicketController {
                                                               @RequestPart(value = "images", required = false) List<MultipartFile> images) {
         assertStaffOwnsTicket(ticketService.getTicketDetail(id));
         RepairProcessRecordDto record = repairProcessRecordService.addRecordWithImages(id, currentUserId(), request, images);
-        return success("维修过程记录已提交", record);
+        return success("缂佺繝鎱ㄦ潻鍥┾柤鐠佹澘缍嶅鍙夊絹娴?", record);
     }
 
     @PostMapping("/tasks/{id}/transfer-request")
@@ -407,14 +385,14 @@ public class TicketController {
             reason = textValue(requestBody, "content", "");
         }
         if (reason.isBlank()) {
-            throw new BusinessException("请填写转派原因");
+            throw new BusinessException("鐠囧嘲锝為崘娆掓祮濞叉儳甯崶?");
         }
         RepairProcessRecordDto record = repairProcessRecordService.addRecord(
             id,
             currentUserId(),
             new RepairProcessRecordRequest(RepairProcessActionType.TRANSFER_REQUEST, reason, textValue(requestBody, "imageUrl", null))
         );
-        return success("转派申请已提交", record);
+        return success("鏉烆剚娣抽悽瀹狀嚞瀹稿弶褰佹禍?", record);
     }
 
     @GetMapping("/tasks/my")
@@ -427,29 +405,29 @@ public class TicketController {
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size) {
-        // 从Security Context中获取当前维修工ID
+        // 婵炲濮村ú鐎峜urity Context婵炴垶鎼╅崣鈧鐐茬箻瀹曪綁寮借缁夊ジ鏌涢幘宕囆ゆ繛锝庡枟缁岄亶顢欓梻瀵哥煑ID
         String staffId;
         try {
             staffId = SecurityContextHolder.getContext().getAuthentication().getName();
             if (staffId == null || staffId.isBlank()) {
-                throw new BusinessException("无法获取当前用户信息，请先登录");
+                throw new BusinessException("閺冪姵纭堕懢宄板絿瑜版挸澧犻悽銊﹀煕娣団剝浼呴敍宀冾嚞閸忓牏娅ヨぐ?");
             }
         } catch (Exception e) {
-            throw new BusinessException("无法获取当前用户信息，请先登录");
+            throw new BusinessException("閺冪姵纭堕懢宄板絿瑜版挸澧犻悽銊﹀煕娣団剝浼呴敍宀冾嚞閸忓牏娅ヨぐ?");
         }
 
-        // 转换状态参数
+        // 闁哄鍎愰崜姘暦閺屻儲鍋愰柤鍝ヮ暯閸嬫挻鎷呯粙鎸庮棟闂?
         TicketStatus ticketStatus = null;
         if (status != null && !status.isBlank() && !"all".equalsIgnoreCase(status)) {
             ticketStatus = mapStatusFromFrontend(status);
         }
 
-        // 使用分页查询
+        // 婵炶揪缍€濞夋洟寮妶澶婄闁糕剝绋忛埀顒€顦靛濠氬Ψ椤垵娈?
         return ticketService.listStaffTasksPage(staffId, ticketStatus, scope, category, priority, keyword, page, size);
     }
 
     /**
-     * 获取维修工工作台统计数据
+     * 闂佸吋鍎抽崲鑼躲亹閸モ晝纾肩紓鍫㈠У閸欏繒鈧鎮堕崕杈ㄥ閹邦厽濯存繝濠傚暙闁拌京绱撴担鍝勬灆妞ゆ挻鎮傚顐︽偋閸繄銈?
      */
     @GetMapping("/staff/dashboard")
     @PreAuthorize("hasRole('STAFF')")
@@ -459,13 +437,13 @@ public class TicketController {
 
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
-        result.put("message", "获取维修工统计数据成功");
+        result.put("message", "閼惧嘲褰囩紒缈犳叏瀹搞儳绮虹拋鈩冩殶閹诡喗鍨氶崝?");
         result.put("data", dashboard);
         return result;
     }
 
     /**
-     * 获取维修工任务详情（增强版，包含更多关联数据）
+     * 闂佸吋鍎抽崲鑼躲亹閸モ晝纾肩紓鍫㈠У閸欏繒鈧鎮堕崕浼村箲閵忋倕绀夐梽鍥敋濞戙垹绠氶柛婊冨暟缁€鍕熆瑜忛崑娑橆啅闁秵鍋嬮柛顐墰缁€澶愭煕閺嵮勫櫣闁诡垰鐗撳鎾级閹搭厽鈻奸梺绋跨箰閻ゅ洦绂掗崼銉ユ瀬闁绘鐗嗙粊锕傛煥?
      */
     @GetMapping("/tasks/{id}/detail")
     @PreAuthorize("hasRole('STAFF')")
@@ -473,21 +451,21 @@ public class TicketController {
         TicketDetailDto detail = ticketService.getTicketDetail(id);
         assertStaffOwnsTicket(detail);
 
-        // 返回统一格式的响应
+        // 闁哄鏅滈弻銊ッ洪弽顐ょ＜闁绘柨澧庨閬嶆煛瀹ュ洤甯剁紒鎲嬬節閹啴宕熼锝嗗劌闁?
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
-        result.put("message", "获取成功");
+        result.put("message", "闂佸吋鍎抽崲鑼躲亹閸ヮ剙绠ｉ柟閭﹀墮椤?");
         result.put("data", detail);
         return result;
     }
 
-    // ==================== 工单处理流程接口 ====================
+    // ==================== 閻庤鎮堕崕鍗炵暦閻旂绶為柛鏇ㄥ幗閸婄偞绻涚紙鐘哄厡闁宠銈搁獮鎺楀Ψ閵夈儳绋?====================
 
     /**
-     * 维修工主动接单
+     * 缂傚倷鑳剁换婵嬪箞閵娿儺鍟呴柕澶堝€曢惁婊堟煕閺傝濡介悽顖涙尦瀹?
      * POST /api/tasks/{id}/accept
      *
-     * 状态流转: WAITING_ACCEPT -> IN_PROGRESS
+     * 闂佺粯顭堥崺鏍焵椤戣法鍔嶇紒渚婇檮濞? WAITING_ACCEPT -> IN_PROGRESS
      */
     @PostMapping("/tasks/{id}/accept")
     @PreAuthorize("hasRole('STAFF')")
@@ -497,16 +475,16 @@ public class TicketController {
 
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
-        result.put("message", "接单成功，请尽快处理");
+        result.put("message", "閼惧嘲褰囬幋鎰");
         result.put("data", detail);
         return result;
     }
 
     /**
-     * 维修工完成工单
+     * 缂傚倷鑳剁换婵嬪箞閵娿儺鍟呴柕澶堝劤閺嗘岸鏌熺€涙ê濮囧ù鍏煎姍瀹?
      * PUT /api/tasks/{id}/resolve
      *
-     * 状态流转: IN_PROGRESS -> RESOLVED
+     * 闂佺粯顭堥崺鏍焵椤戣法鍔嶇紒渚婇檮濞? IN_PROGRESS -> RESOLVED
      */
     @PutMapping("/tasks/{id}/resolve")
     @PreAuthorize("hasRole('STAFF')")
@@ -519,7 +497,7 @@ public class TicketController {
 
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
-        result.put("message", "工单已完成，等待学生确认");
+        result.put("message", "閻庤鎮堕崕鍗炵暦閻斿鍟呴柟缁樺笧閺嗘岸鏌熺€涙ê濮х紒杈ㄧ箘缁灚寰勬繝鍕€€闁诲孩鍐绘俊鍥极閹捐埖鍏滄い鏃€顑欓崥?");
         result.put("data", detail);
         return result;
     }
@@ -530,10 +508,10 @@ public class TicketController {
         TicketDetailDto detail = ticketService.getTicketDetail(id);
         assertStaffOwnsTicket(detail);
 
-        // 返回统一格式的响应
+        // 闁哄鏅滈弻銊ッ洪弽顐ょ＜闁绘柨澧庨閬嶆煛瀹ュ洤甯剁紒鎲嬬節閹啴宕熼锝嗗劌闁?
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
-        result.put("message", "获取成功");
+        result.put("message", "闂佸吋鍎抽崲鑼躲亹閸ヮ剙绠ｉ柟閭﹀墮椤?");
         result.put("data", detail);
         return result;
     }
@@ -547,63 +525,23 @@ public class TicketController {
             @RequestParam(value = "category", required = false) String category,
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "includeDeleted", defaultValue = "false") boolean includeDeleted) {
-
-        // 先取出所有工单摘要（根据 includeDeleted 参数决定是否包含已删除的）
-        List<TicketSummaryDto> allTickets = ticketService.listAll(includeDeleted);
-
-        // 按照前端传入的条件在内存中过滤（数据量不大时足够）
-        java.util.stream.Stream<TicketSummaryDto> stream = allTickets.stream();
-
-        // 1. 状态筛选（前端传的是 pending/processing/...）
+        TicketStatus targetStatus = null;
         if (status != null && !status.isBlank() && !"all".equalsIgnoreCase(status)) {
-            TicketStatus targetStatus = mapStatusFromFrontend(status);
-            stream = stream.filter(t -> t.status() == targetStatus);
+            targetStatus = mapStatusFromFrontend(status);
         }
 
-        // 2. 分类筛选（前端传的是 categoryName / categoryKey，当前我们用 categoryName 直接对比）
-        if (category != null && !category.isBlank() && !"all".equalsIgnoreCase(category)) {
-            stream = stream.filter(t -> category.equalsIgnoreCase(t.categoryName()));
-        }
+        Map<String, Object> data = ticketService.listAdminTicketsPage(
+            targetStatus,
+            category,
+            keyword,
+            includeDeleted,
+            page,
+            size
+        );
 
-        // 3. 关键词筛选（在描述、位置、工单ID、学生ID、维修工ID、分类名称中模糊匹配）
-        if (keyword != null && !keyword.isBlank()) {
-            String lower = keyword.toLowerCase().trim();
-            final String searchKeyword = lower; // 用于lambda表达式
-            stream = stream.filter(t -> {
-                String desc = t.description() != null ? t.description().toLowerCase() : "";
-                String loc = t.locationText() != null ? t.locationText().toLowerCase() : "";
-                String ticketIdStr = t.ticketId() != null ? String.valueOf(t.ticketId()) : "";
-                String studentIdStr = t.studentId() != null ? t.studentId().toLowerCase() : "";
-                String staffIdStr = t.staffId() != null ? t.staffId().toLowerCase() : "";
-                String categoryNameStr = t.categoryName() != null ? t.categoryName().toLowerCase() : "";
-                boolean matches = desc.contains(searchKeyword)
-                    || loc.contains(searchKeyword)
-                    || ticketIdStr.contains(searchKeyword)
-                    || studentIdStr.contains(searchKeyword)
-                    || staffIdStr.contains(searchKeyword)
-                    || categoryNameStr.contains(searchKeyword);
-                return matches;
-            });
-        }
-
-        List<TicketSummaryDto> filtered = stream.toList();
-
-        // 简单分页模拟
-        int total = filtered.size();
-        int fromIndex = page * size;
-        int toIndex = Math.min(fromIndex + size, total);
-        List<TicketSummaryDto> pagedTickets =
-                fromIndex < total ? filtered.subList(fromIndex, toIndex) : new java.util.ArrayList<>();
-
-        // 返回统一格式，兼容前端对 { code, data: { list, total, page, pageSize } } 的处理
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
         result.put("message", "获取成功");
-        Map<String, Object> data = new HashMap<>();
-        data.put("list", pagedTickets);
-        data.put("total", total);
-        data.put("page", page);
-        data.put("pageSize", size);
         result.put("data", data);
         return result;
     }
@@ -612,31 +550,31 @@ public class TicketController {
     @PreAuthorize("hasRole('ADMIN')")
     public Map<String, Object> adminAssign(@PathVariable("id") Long id,
                                      @Valid @RequestBody Map<String, String> requestBody) {
-        // 从 SecurityContext 获取当前操作员ID
+        // 婵?SecurityContext 闂佸吋鍎抽崲鑼躲亹閸ヮ亗浜归柟鎯у暱椤ゅ懘鏌熼崹顔拘＄紓宥嗘瀹曘劌螖閻?
         String operatorId;
         try {
             operatorId = SecurityContextHolder.getContext().getAuthentication().getName();
             if (operatorId == null || operatorId.isBlank()) {
-                throw new BusinessException("无法获取当前用户信息，请先登录");
+                throw new BusinessException("閺冪姵纭堕懢宄板絿瑜版挸澧犻悽銊﹀煕娣団剝浼呴敍宀冾嚞閸忓牏娅ヨぐ?");
             }
         } catch (Exception e) {
-            throw new BusinessException("无法获取当前用户信息，请先登录");
+            throw new BusinessException("閺冪姵纭堕懢宄板絿瑜版挸澧犻悽銊﹀煕娣団剝浼呴敍宀冾嚞閸忓牏娅ヨぐ?");
         }
 
-        // 从请求体中获取维修工ID
+        // 婵炲濮村锕傤敋椤掆偓鏁堥柛灞剧懅缁夌厧鈽夐幙鍐ㄥ绩妤犵偛绻樺畷锝夊冀椤愶絾鈻曟繛锝呮祩閸犳牗瀵奸幀娆?
         String staffId = requestBody.get("repairmanId") != null ? requestBody.get("repairmanId") : requestBody.get("staffId");
         if (staffId == null || staffId.isBlank()) {
-            throw new BusinessException("维修工ID不能为空");
+            throw new BusinessException("缂傚倷鑳剁换婵嬪箞閵娿儺鍟呮い褍绮氭繛鎴炴尭缁夌兘宕楀Ο鑽も枖闁惧繐鍘滈弫?");
         }
 
-        // 构造分配请求
+        // 闂佸搫顑呯€氫即鍩€椤掑倸孝闁搞劌閰ｉ弻濠傤吋閸偄娈插┑?
         TicketAssignRequest request = new TicketAssignRequest(operatorId, staffId);
         TicketDetailDto detail = ticketService.assignTicket(id, request);
 
-        // 返回统一格式
+        // 闁哄鏅滈弻銊ッ洪弽顐ょ＜闁绘柨澧庨閬嶆煛瀹ュ洤甯剁紒?
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
-        result.put("message", "工单分配成功");
+        result.put("message", "分配成功");
         result.put("data", detail);
         return result;
     }
@@ -648,7 +586,7 @@ public class TicketController {
 
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
-        result.put("message", "维修人员推荐成功");
+        result.put("message", "缂傚倷鑳剁换婵嬪箞閵婏妇顩查柛婵嗗閸犲懘鏌熼幁鎺戝鐎规洘锕㈤獮瀣箛椤掆偓椤?");
         result.put("data", recommendations);
         return result;
     }
@@ -673,7 +611,7 @@ public class TicketController {
     public TicketDetailDto adminChangeStatus(@PathVariable("id") Long id,
                                            @RequestBody TicketStatusUpdateRequest request) {
         if (request == null || request.newStatus() == null) {
-            throw new BusinessException("请选择新的工单状态");
+            throw new BusinessException("鐠囩兘鈧瀚ㄩ弬鎵畱瀹搞儱宕熼悩鑸碘偓?");
         }
         TicketStatusUpdateRequest checkedRequest = new TicketStatusUpdateRequest(
             currentUserId(),
@@ -707,7 +645,7 @@ public class TicketController {
         return ticketService.setEstimatedCompletionTime(id, request.estimatedTime(), operatorId);
     }
 
-    // 将前端状态值映射到后端枚举值
+    // 闁诲繐绻愬Λ妤佹櫠閻樼數鍗氭い鏍ㄧ矊绗戦梺璇″厸缁€渚€鍩€椤掆偓閸氬危瑜忔禍鎼佸礋椤愩垻鍘掗梺鍛婅壘濞寸兘顢旈鍕嚑婵﹩鍋勯々顒勬煕?
     private String currentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || authentication.getName() == null || authentication.getName().isBlank()) {
@@ -739,12 +677,12 @@ public class TicketController {
             return;
         }
 
-        throw new BusinessException(HttpStatus.FORBIDDEN, "当前账号无权查看该工单");
+        throw new BusinessException(HttpStatus.FORBIDDEN, "瑜版挸澧犵拹锕€褰块弮鐘虫綀閺屻儳婀呯拠銉ヤ紣閸?");
     }
 
     private void assertStaffOwnsTicket(TicketDetailDto detail) {
         if (!currentUserId().equals(detail.staffId())) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, "当前账号无权查看该维修任务");
+            throw new BusinessException(HttpStatus.FORBIDDEN, "瑜版挸澧犵拹锕€褰块弮鐘虫綀閺屻儳婀呯拠銉ф樊娣囶喕鎹㈤崝?");
         }
     }
 
@@ -753,16 +691,17 @@ public class TicketController {
         return switch (status) {
             case "pending" -> TicketStatus.WAITING_ACCEPT;
             case "processing" -> TicketStatus.IN_PROGRESS;
-            case "completed", "resolved" -> TicketStatus.RESOLVED;
+            case "awaiting_confirmation", "completed", "resolved" -> TicketStatus.RESOLVED;
             case "to_be_evaluated", "waiting_feedback" -> TicketStatus.WAITING_FEEDBACK;
+            case "feedbacked" -> TicketStatus.FEEDBACKED;
             case "closed" -> TicketStatus.CLOSED;
             case "rejected" -> TicketStatus.REJECTED;
             default -> {
-                // 尝试直接转换为枚举值
+                // 闁诲繐绻戠换鍡涙儊椤栫偞鍎庨悗娑櫭径宥夊级閻戝棗澧€规洖寮剁粙澶愭倻濡棿娴锋繛鎴炴尰閸庢娊鍩€?
                 try {
                     yield TicketStatus.valueOf(frontendStatus.toUpperCase());
                 } catch (IllegalArgumentException e) {
-                    throw new BusinessException("无效的任务状态: " + frontendStatus);
+                    throw new BusinessException("闂佸搫鍟版慨鐢稿疾閵夆晜鍎嶉柛鏇ㄤ簼瀹曟煡鏌涢弮鎾剁？濠殿喗鎮傞獮鈧? " + frontendStatus);
                 }
             }
         };
@@ -783,8 +722,9 @@ public class TicketController {
         return String.valueOf(body.get(key)).trim();
     }
 
-    // 内部请求类
+    // 闂佸憡鍔曢幊姗€宕曠€靛憡瀚氶梺鍨儑濠€瀵哥磼?
     public record UpdateNotesRequest(String notes) {}
 
     public record SetEstimatedTimeRequest(java.time.LocalDateTime estimatedTime) {}
 }
+

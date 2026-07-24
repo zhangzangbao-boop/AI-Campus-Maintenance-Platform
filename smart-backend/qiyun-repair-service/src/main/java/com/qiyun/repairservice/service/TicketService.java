@@ -23,7 +23,10 @@ import java.time.ZoneId;
 import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 import java.util.stream.Collectors;
+import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -46,13 +49,30 @@ import org.springframework.web.multipart.MultipartFile;
 public class TicketService {
 
     private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Shanghai");
+    private static final Set<TicketStatus> STAFF_OVERVIEW_STATUSES = EnumSet.of(
+        TicketStatus.WAITING_ACCEPT,
+        TicketStatus.IN_PROGRESS,
+        TicketStatus.RESOLVED
+    );
     private static final Set<TicketStatus> TODAY_TASK_STATUSES = EnumSet.of(TicketStatus.WAITING_ACCEPT, TicketStatus.IN_PROGRESS);
     private static final Set<TicketStatus> PROCESSING_TASK_STATUSES = EnumSet.of(TicketStatus.IN_PROGRESS);
+    private static final Set<TicketStatus> ACTIVE_TASK_STATUSES = EnumSet.of(TicketStatus.WAITING_ACCEPT, TicketStatus.IN_PROGRESS);
     private static final Set<TicketStatus> RECORD_TASK_STATUSES = EnumSet.of(
         TicketStatus.RESOLVED,
         TicketStatus.WAITING_FEEDBACK,
         TicketStatus.FEEDBACKED,
         TicketStatus.CLOSED
+    );
+    private static final Set<TicketStatus> STUDENT_PROGRESS_STATUSES = EnumSet.of(
+        TicketStatus.WAITING_ACCEPT,
+        TicketStatus.IN_PROGRESS,
+        TicketStatus.RESOLVED
+    );
+    private static final Set<TicketStatus> STUDENT_FEEDBACK_STATUSES = EnumSet.of(TicketStatus.WAITING_FEEDBACK);
+    private static final Set<TicketStatus> STUDENT_HISTORY_STATUSES = EnumSet.of(
+        TicketStatus.FEEDBACKED,
+        TicketStatus.CLOSED,
+        TicketStatus.REJECTED
     );
 
     private final TicketRepository ticketRepository;
@@ -308,6 +328,108 @@ public class TicketService {
     }
 
     @Transactional(readOnly = true)
+    public Map<String, Object> listStudentTicketsPage(
+        String studentId,
+        TicketStatus status,
+        String scope,
+        String category,
+        String priority,
+        String keyword,
+        int page,
+        int size
+    ) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        Set<TicketStatus> allowedStatuses = allowedStudentStatuses(scope);
+        if (status != null && allowedStatuses != null && !allowedStatuses.contains(status)) {
+            return studentTicketPageResult(new PageImpl<>(List.of(), pageable, 0), safePage, safeSize, studentId);
+        }
+
+        Page<RepairTicket> ticketPage = ticketRepository.findAll((Specification<RepairTicket>) (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            predicates.add(cb.equal(root.get("student").get("userId"), studentId));
+            predicates.add(cb.or(cb.isNull(root.get("deleted")), cb.isFalse(root.get("deleted"))));
+            if (allowedStatuses != null) {
+                predicates.add(root.get("status").in(allowedStatuses));
+            }
+            if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
+            }
+            addCommonTicketFilters(predicates, root, cb, category, priority, keyword);
+            return cb.and(predicates.toArray(new Predicate[0]));
+        }, pageable);
+
+        return studentTicketPageResult(ticketPage, safePage, safeSize, studentId);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> listAdminTicketsPage(
+        TicketStatus status,
+        String category,
+        String keyword,
+        boolean includeDeleted,
+        int page,
+        int size
+    ) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        Page<RepairTicket> ticketPage = ticketRepository.findAll((Specification<RepairTicket>) (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (!includeDeleted) {
+                predicates.add(cb.or(cb.isNull(root.get("deleted")), cb.isFalse(root.get("deleted"))));
+            }
+            if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
+            }
+            addCommonTicketFilters(predicates, root, cb, category, null, keyword);
+            return cb.and(predicates.toArray(new Predicate[0]));
+        }, pageable);
+
+        return staffTaskPageResult(ticketPage, safePage, safeSize);
+    }
+
+    private Set<TicketStatus> allowedStudentStatuses(String scope) {
+        if (scope == null || scope.isBlank() || "all".equalsIgnoreCase(scope)) {
+            return null;
+        }
+        return switch (scope.trim().toLowerCase(Locale.ROOT).replace('_', '-')) {
+            case "progress", "active" -> STUDENT_PROGRESS_STATUSES;
+            case "feedback", "to-evaluate", "waiting-feedback" -> STUDENT_FEEDBACK_STATUSES;
+            case "history", "completed", "records" -> STUDENT_HISTORY_STATUSES;
+            default -> null;
+        };
+    }
+
+    private void addCommonTicketFilters(
+        List<Predicate> predicates,
+        Root<RepairTicket> root,
+        CriteriaBuilder cb,
+        String category,
+        String priority,
+        String keyword
+    ) {
+        if (category != null && !category.isBlank() && !"all".equalsIgnoreCase(category)) {
+            predicates.add(cb.equal(root.get("category").get("categoryName"), category));
+        }
+        if (priority != null && !priority.isBlank() && !"all".equalsIgnoreCase(priority)) {
+            predicates.add(cb.equal(root.get("priority"), priority));
+        }
+        if (keyword != null && !keyword.isBlank()) {
+            String pattern = "%" + keyword.trim().toLowerCase(Locale.ROOT) + "%";
+            predicates.add(cb.or(
+                cb.like(cb.lower(root.get("locationText")), pattern),
+                cb.like(cb.lower(root.get("description")), pattern),
+                cb.like(cb.lower(root.get("student").get("userId")), pattern),
+                cb.like(cb.lower(root.get("student").get("nickname")), pattern)
+            ));
+        }
+    }
+
+    @Transactional(readOnly = true)
     public List<StaffRecommendationDto> recommendStaffForTicket(Long ticketId) {
         RepairTicket targetTicket = ticketRepository.findById(ticketId)
             .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "工单不存在"));
@@ -334,13 +456,17 @@ public class TicketService {
         if (ticket.getStatus() != TicketStatus.WAITING_ACCEPT) {
             throw new BusinessException("当前工单状态不允许接单");
         }
-        if (ticket.getStaff() != null) {
+        if (ticket.getStaff() != null && !Objects.equals(ticket.getStaff().getUserId(), staffId)) {
             throw new BusinessException("该工单已被分配");
         }
 
         TicketStatus oldStatus = ticket.getStatus();
-        ticket.setStaff(staff);
-        ticket.setAssignedAt(LocalDateTime.now());
+        if (ticket.getStaff() == null) {
+            ticket.setStaff(staff);
+        }
+        if (ticket.getAssignedAt() == null) {
+            ticket.setAssignedAt(LocalDateTime.now());
+        }
         ticket.setStatus(TicketStatus.IN_PROGRESS);
         appendStatusLog(ticket, oldStatus, TicketStatus.IN_PROGRESS, staff);
         notifyTicketAssigned(ticket, staff);
@@ -418,11 +544,11 @@ public class TicketService {
         }
 
         TicketStatus oldStatus = ticket.getStatus();
-        ticket.setStatus(TicketStatus.IN_PROGRESS);
+        ticket.setStatus(TicketStatus.WAITING_ACCEPT);
         ticket.setCompletedAt(null);
         ticket.setStudentConfirmedAt(null);
         ticket.setStudentRejectionReason(cleanReason);
-        appendStatusLog(ticket, oldStatus, TicketStatus.IN_PROGRESS, student);
+        appendStatusLog(ticket, oldStatus, TicketStatus.WAITING_ACCEPT, student);
         notifyStaffCompletionRejected(ticket, cleanReason);
         return toDetailDto(ticket);
     }
@@ -461,9 +587,32 @@ public class TicketService {
         Long inProgressCount = ticketRepository.countByStaffIdAndStatus(staffId, "IN_PROGRESS");
         Long completedCount = ticketRepository.countCompletedTasksByStaffId(staffId);
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(BUSINESS_ZONE);
         LocalDateTime todayStart = now.toLocalDate().atStartOfDay();
         LocalDateTime todayEnd = todayStart.plusDays(1);
+        List<RepairTicket> staffTickets = ticketRepository.findAll((Specification<RepairTicket>) (root, query, cb) -> cb.and(
+            cb.equal(root.get("staff").get("userId"), staffId),
+            cb.or(cb.isNull(root.get("deleted")), cb.isFalse(root.get("deleted")))
+        ));
+        Long totalTaskCount = (long) staffTickets.size();
+        Long awaitingFeedbackCount = staffTickets.stream()
+            .filter(ticket -> ticket.getStatus() == TicketStatus.RESOLVED || ticket.getStatus() == TicketStatus.WAITING_FEEDBACK)
+            .count();
+        Long finishedCount = staffTickets.stream()
+            .filter(ticket -> ticket.getStatus() == TicketStatus.FEEDBACKED || ticket.getStatus() == TicketStatus.CLOSED)
+            .count();
+        Long todayTaskCount = staffTickets.stream()
+            .filter(this::isActiveStaffTask)
+            .filter(ticket -> isTodayStaffTask(ticket, todayStart, todayEnd))
+            .count();
+        Long highPriorityCount = staffTickets.stream()
+            .filter(this::isActiveStaffTask)
+            .filter(this::isHighPriority)
+            .count();
+        Long slaAlertCount = staffTickets.stream()
+            .filter(this::isActiveStaffTask)
+            .filter(ticket -> isHighPriority(ticket) || isOverdueStaffTask(ticket, now))
+            .count();
         Long todayCompleted = ticketRepository.countCompletedByStaffIdAndCompletedAtBetween(staffId, todayStart, todayEnd);
 
         LocalDateTime weekStart = now.toLocalDate().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).atStartOfDay();
@@ -476,6 +625,9 @@ public class TicketService {
 
         Double avgRating = ticketRepository.findAverageRatingByStaffId(staffId);
         if (avgRating == null) avgRating = 0.0;
+
+        Long totalRatingCount = ticketRepository.countRatingsByStaffId(staffId);
+        if (totalRatingCount == null) totalRatingCount = 0L;
 
         Double avgProcessingHours = ticketRepository.findAverageProcessingHoursByStaffId(staffId);
         if (avgProcessingHours == null) avgProcessingHours = 0.0;
@@ -497,14 +649,20 @@ public class TicketService {
         }
 
         return new StaffDashboardDto(
+            totalTaskCount,
             pendingCount != null ? pendingCount : 0L,
             inProgressCount != null ? inProgressCount : 0L,
+            awaitingFeedbackCount,
+            finishedCount,
             completedCount != null ? completedCount : 0L,
+            todayTaskCount,
+            highPriorityCount,
+            slaAlertCount,
             todayCompleted != null ? todayCompleted : 0L,
             weekCompleted != null ? weekCompleted : 0L,
             monthCompleted != null ? monthCompleted : 0L,
             avgRating,
-            0L,
+            totalRatingCount,
             priorityDistribution,
             categoryDistribution,
             avgProcessingHours
@@ -540,21 +698,25 @@ public class TicketService {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(cb.equal(root.get("staff").get("userId"), staffId));
             predicates.add(cb.or(cb.isNull(root.get("deleted")), cb.isFalse(root.get("deleted"))));
+            String normalizedScope = normalizeScope(scope);
 
             if (allowedStatuses != null) {
                 predicates.add(root.get("status").in(allowedStatuses));
             }
-            if (status == TicketStatus.CLOSED && "records".equalsIgnoreCase(scope)) {
+            if (status == TicketStatus.CLOSED && "records".equals(normalizedScope)) {
                 predicates.add(root.get("status").in(EnumSet.of(TicketStatus.FEEDBACKED, TicketStatus.CLOSED)));
             } else if (status != null) {
                 predicates.add(cb.equal(root.get("status"), status));
             }
-            if ("today".equalsIgnoreCase(scope)) {
+            if ("today".equals(normalizedScope)) {
                 LocalDate today = LocalDate.now(BUSINESS_ZONE);
                 LocalDateTime start = today.atStartOfDay();
                 LocalDateTime end = today.plusDays(1).atStartOfDay();
-                predicates.add(cb.greaterThanOrEqualTo(root.get("assignedAt"), start));
-                predicates.add(cb.lessThan(root.get("assignedAt"), end));
+                predicates.add(todayStaffTaskPredicate(root, query, cb, start, end));
+            } else if ("high-priority".equals(normalizedScope)) {
+                predicates.add(cb.equal(cb.lower(root.get("priority")), "high"));
+            } else if ("overdue".equals(normalizedScope)) {
+                predicates.add(overdueStaffTaskPredicate(root, cb, LocalDateTime.now(BUSINESS_ZONE)));
             }
             if (category != null && !category.isBlank() && !"all".equalsIgnoreCase(category)) {
                 predicates.add(cb.equal(root.get("category").get("categoryName"), category));
@@ -579,15 +741,117 @@ public class TicketService {
     }
 
     private Set<TicketStatus> allowedStaffTaskStatuses(String scope) {
-        if (scope == null || scope.isBlank() || "all".equalsIgnoreCase(scope)) {
-            return null;
+        String normalizedScope = normalizeScope(scope);
+        if (normalizedScope == null || "all".equals(normalizedScope)) {
+            return STAFF_OVERVIEW_STATUSES;
         }
-        return switch (scope.toLowerCase(Locale.ROOT)) {
+        return switch (normalizedScope) {
             case "today" -> TODAY_TASK_STATUSES;
             case "processing" -> PROCESSING_TASK_STATUSES;
             case "records" -> RECORD_TASK_STATUSES;
+            case "high-priority", "overdue" -> ACTIVE_TASK_STATUSES;
             default -> null;
         };
+    }
+
+    private String normalizeScope(String scope) {
+        if (scope == null || scope.isBlank()) {
+            return null;
+        }
+        return scope.trim().toLowerCase(Locale.ROOT).replace('_', '-');
+    }
+
+    private Predicate todayStaffTaskPredicate(
+        Root<RepairTicket> root,
+        jakarta.persistence.criteria.CriteriaQuery<?> query,
+        CriteriaBuilder cb,
+        LocalDateTime start,
+        LocalDateTime end
+    ) {
+        Subquery<Long> returnedToday = query.subquery(Long.class);
+        Root<TicketStatusLog> log = returnedToday.from(TicketStatusLog.class);
+        returnedToday.select(cb.literal(1L)).where(
+            cb.equal(log.get("ticket"), root),
+            cb.equal(log.get("oldStatus"), TicketStatus.RESOLVED),
+            cb.equal(log.get("newStatus"), TicketStatus.WAITING_ACCEPT),
+            cb.greaterThanOrEqualTo(log.get("logTime"), start),
+            cb.lessThan(log.get("logTime"), end)
+        );
+        return cb.or(
+            cb.and(cb.greaterThanOrEqualTo(root.get("assignedAt"), start), cb.lessThan(root.get("assignedAt"), end)),
+            cb.and(cb.greaterThanOrEqualTo(root.get("estimatedCompletionTime"), start), cb.lessThan(root.get("estimatedCompletionTime"), end)),
+            cb.exists(returnedToday)
+        );
+    }
+
+    private Predicate overdueStaffTaskPredicate(Root<RepairTicket> root, CriteriaBuilder cb, LocalDateTime now) {
+        LocalDateTime fallbackDeadline = now.minusDays(2);
+        return cb.lessThan(root.get("createdAt"), fallbackDeadline);
+    }
+
+    private boolean isActiveStaffTask(RepairTicket ticket) {
+        return ticket.getStatus() == TicketStatus.WAITING_ACCEPT || ticket.getStatus() == TicketStatus.IN_PROGRESS;
+    }
+
+    private boolean isHighPriority(RepairTicket ticket) {
+        return "high".equalsIgnoreCase(ticket.getPriority());
+    }
+
+    private boolean isOverdueStaffTask(RepairTicket ticket, LocalDateTime now) {
+        if (!isActiveStaffTask(ticket)) {
+            return false;
+        }
+        return ticket.getCreatedAt() != null && ticket.getCreatedAt().isBefore(now.minusDays(2));
+    }
+
+    private boolean isTodayStaffTask(RepairTicket ticket, LocalDateTime start, LocalDateTime end) {
+        return isWithinHalfOpenRange(ticket.getAssignedAt(), start, end)
+            || isWithinHalfOpenRange(ticket.getEstimatedCompletionTime(), start, end)
+            || wasReturnedToday(ticket, start, end);
+    }
+
+    private boolean wasReturnedToday(RepairTicket ticket, LocalDateTime start, LocalDateTime end) {
+        return statusLogRepository.existsByTicketAndOldStatusAndNewStatusAndLogTimeGreaterThanEqualAndLogTimeLessThan(
+            ticket,
+            TicketStatus.RESOLVED,
+            TicketStatus.WAITING_ACCEPT,
+            start,
+            end
+        );
+    }
+
+    private boolean isWithinHalfOpenRange(LocalDateTime value, LocalDateTime start, LocalDateTime end) {
+        return value != null && !value.isBefore(start) && value.isBefore(end);
+    }
+
+    private Map<String, Object> studentTicketPageResult(Page<RepairTicket> ticketPage, int page, int size, String studentId) {
+        Map<String, Object> result = staffTaskPageResult(ticketPage, page, size);
+        result.put("stats", buildStudentTicketStats(studentId));
+        return result;
+    }
+
+    private Map<String, Object> buildStudentTicketStats(String studentId) {
+        List<RepairTicket> tickets = ticketRepository.findAll((Specification<RepairTicket>) (root, query, cb) -> cb.and(
+            cb.equal(root.get("student").get("userId"), studentId),
+            cb.or(cb.isNull(root.get("deleted")), cb.isFalse(root.get("deleted")))
+        ));
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("total", (long) tickets.size());
+        stats.put("pending", countTicketsByStatus(tickets, TicketStatus.WAITING_ACCEPT));
+        stats.put("processing", countTicketsByStatus(tickets, TicketStatus.IN_PROGRESS));
+        stats.put("awaitingConfirmation", countTicketsByStatus(tickets, TicketStatus.RESOLVED));
+        stats.put("toBeEvaluated", countTicketsByStatus(tickets, TicketStatus.WAITING_FEEDBACK));
+        stats.put("completed", tickets.stream()
+            .filter(ticket -> ticket.getStatus() == TicketStatus.FEEDBACKED || ticket.getStatus() == TicketStatus.CLOSED)
+            .count());
+        stats.put("rejected", countTicketsByStatus(tickets, TicketStatus.REJECTED));
+        return stats;
+    }
+
+    private long countTicketsByStatus(List<RepairTicket> tickets, TicketStatus status) {
+        return tickets.stream()
+            .filter(ticket -> ticket.getStatus() == status)
+            .count();
     }
 
     private Map<String, Object> staffTaskPageResult(Page<RepairTicket> ticketPage, int page, int size) {
@@ -1082,6 +1346,7 @@ public class TicketService {
         int alertTotal = overdueAcceptCount + overdueCompletionCount + warningCount;
         Map<String, Object> result = new HashMap<>();
         result.put("activeCount", activeCount);
+        result.put("uniqueActiveCount", activeCount);
         result.put("overdueAcceptCount", overdueAcceptCount);
         result.put("overdueCompletionCount", overdueCompletionCount);
         result.put("warningCount", warningCount);

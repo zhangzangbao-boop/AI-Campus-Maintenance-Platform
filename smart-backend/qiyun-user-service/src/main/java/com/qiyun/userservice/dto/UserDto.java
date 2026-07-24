@@ -6,6 +6,7 @@ public record UserDto(
     String userId,
     String nickname,
     String contactPhone,
+    String avatarUrl,
     UserRole role,
     boolean active,
     String responsibleArea,

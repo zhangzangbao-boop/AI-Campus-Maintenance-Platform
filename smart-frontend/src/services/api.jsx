@@ -263,6 +263,7 @@ const api = {
 
   repairman: {
     getMyTasks: (params) => request(`/tasks/my${toQueryString(params)}`),
+    getDashboard: () => request("/staff/dashboard"),
 
     // 修正 startTask 调用，使用后端已有的 status 更新接口
     startTask: (id, estimatedCompletionTime) =>

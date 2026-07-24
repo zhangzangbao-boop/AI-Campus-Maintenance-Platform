@@ -6,6 +6,7 @@ import com.qiyun.aiservice.service.AiAnalyzeService;
 import com.qiyun.aiservice.service.AiRuleConfigService;
 import com.qiyun.aiservice.service.DeepSeekClientService;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -46,8 +47,8 @@ class AiAnalyzeServiceTest {
                 new AiRuleConfigService.KeywordRule("门窗故障", List.of("门", "窗", "玻璃", "闭门器"))
             ),
             List.of(
-                new AiRuleConfigService.KeywordRule("紧急", List.of("漏水", "积水", "触电", "烧焦", "冒烟", "火花", "异味", "总闸", "消防", "灭火器", "玻璃", "危险")),
-                new AiRuleConfigService.KeywordRule("普通", List.of("无法使用", "不能用", "断线", "频闪", "损坏", "不制冷", "堵塞", "松动", "脱落"))
+                new AiRuleConfigService.KeywordRule("高", List.of("触电", "漏电", "烧焦", "冒烟", "火花", "火灾", "被困", "大范围停电", "大范围停水", "严重漏水")),
+                new AiRuleConfigService.KeywordRule("中", List.of("无法使用", "不能用", "断线", "频闪", "损坏", "不制冷", "堵塞", "松动", "脱落", "漏水", "滴水"))
             )
         ));
         aiAnalyzeService = new AiAnalyzeService(deepSeekClientService, aiRuleConfigService);
@@ -82,7 +83,7 @@ class AiAnalyzeServiceTest {
 
         assertNotNull(response);
         assertEquals("管道故障", response.category());
-        assertEquals("紧急", response.urgency()); // 漏水属于紧急
+        assertEquals("中", response.urgency());
         assertTrue(response.suggestion().contains("阀门") || response.suggestion().contains("检查"));
     }
 
@@ -143,7 +144,7 @@ class AiAnalyzeServiceTest {
 
         assertNotNull(response);
         assertEquals("门窗故障", response.category());
-        assertEquals("紧急", response.urgency()); // 玻璃破裂属于紧急
+        assertEquals("中", response.urgency());
     }
 
     @Test
@@ -166,13 +167,13 @@ class AiAnalyzeServiceTest {
     void testHighUrgency() {
         var request = new com.qiyun.aiservice.dto.AnalyzeTicketRequest(
             "电线冒烟有烧焦味道",
-            "紧急"
+            "配电间"
         );
 
         var response = aiAnalyzeService.analyze(request);
 
         assertNotNull(response);
-        assertEquals("紧急", response.urgency());
+        assertEquals("高", response.urgency());
         assertNotNull(response.suggestion());
     }
 
@@ -187,7 +188,7 @@ class AiAnalyzeServiceTest {
         var response = aiAnalyzeService.analyze(request);
 
         assertNotNull(response);
-        assertEquals("普通", response.urgency());
+        assertEquals("中", response.urgency());
     }
 
     @Test
@@ -201,7 +202,67 @@ class AiAnalyzeServiceTest {
         var response = aiAnalyzeService.analyze(request);
 
         assertNotNull(response);
-        assertEquals("一般", response.urgency());
+        assertEquals("低", response.urgency());
+    }
+
+    @Test
+    @DisplayName("紧急程度判断：典型和易误判中文场景")
+    void urgencyRulesHandleTypicalAndAmbiguousCases() {
+        assertUrgency("电线冒烟并有烧焦味，旁边有人经过", "实验楼配电箱", "高");
+        assertUrgency("三号宿舍楼整层停电，走廊和房间都没电", "三号宿舍楼", "高");
+        assertUrgency("宿舍卫生间严重漏水，水已经漫到插座附近", "2号楼305", "高");
+        assertUrgency("电梯门打不开，有同学被困在里面", "教学楼一层", "高");
+        assertUrgency("空调不制冷，晚上休息和学习都受影响", "5号楼402", "中");
+        assertUrgency("校园网无法连接，整间自习室不能上网", "图书馆201", "中");
+        assertUrgency("只说设备有点问题，没有说明影响范围", "", "中");
+        assertUrgency("门把手轻微松动但还能正常使用，不急", "宿舍门口", "低");
+        assertUrgency("墙面有少量污渍，只是外观问题，不影响正常使用", "7号楼走廊", "低");
+    }
+
+    @Test
+    @DisplayName("DeepSeek 结果：安全硬规则优先并限制为高/中/低")
+    void deepSeekUrgencyIsCalibratedBySafetyRules() {
+        DeepSeekClientService mockedDeepSeek = mock(DeepSeekClientService.class);
+        when(mockedDeepSeek.isAvailable()).thenReturn(true);
+        when(mockedDeepSeek.analyzeTicket(anyString(), anyString())).thenReturn(Map.of(
+            "category", "电力故障",
+            "urgency", "低",
+            "suggestion", "建议尽快处理",
+            "keywords", List.of("电线", "冒烟")
+        ));
+        AiAnalyzeService service = new AiAnalyzeService(mockedDeepSeek, aiRuleConfigService);
+
+        var response = service.analyze(new com.qiyun.aiservice.dto.AnalyzeTicketRequest(
+            "电线冒烟，有明显烧焦味",
+            "实验楼配电间"
+        ));
+
+        assertNotNull(response);
+        assertEquals("高", response.urgency());
+        assertTrue(List.of("高", "中", "低").contains(response.urgency()));
+        assertEquals("deepseek", response.source());
+    }
+
+    @Test
+    @DisplayName("DeepSeek 结果：非安全高风险不得误升高")
+    void deepSeekHighWithoutSafetyRiskIsDowngraded() {
+        DeepSeekClientService mockedDeepSeek = mock(DeepSeekClientService.class);
+        when(mockedDeepSeek.isAvailable()).thenReturn(true);
+        when(mockedDeepSeek.analyzeTicket(anyString(), anyString())).thenReturn(Map.of(
+            "category", "门窗故障",
+            "urgency", "高",
+            "suggestion", "建议安排维修",
+            "keywords", List.of("划痕", "门")
+        ));
+        AiAnalyzeService service = new AiAnalyzeService(mockedDeepSeek, aiRuleConfigService);
+
+        var response = service.analyze(new com.qiyun.aiservice.dto.AnalyzeTicketRequest(
+            "宿舍门表面有轻微划痕，不影响正常使用",
+            "5号楼402"
+        ));
+
+        assertNotNull(response);
+        assertEquals("低", response.urgency());
     }
 
     @Test
@@ -244,7 +305,7 @@ class AiAnalyzeServiceTest {
     void configurableRulesAffectCategory() {
         when(aiRuleConfigService.rules()).thenReturn(new AiRuleConfigService.AiRules(
             List.of(new AiRuleConfigService.KeywordRule("墙面故障", List.of("墙皮"))),
-            List.of(new AiRuleConfigService.KeywordRule("普通", List.of("脱落")))
+            List.of(new AiRuleConfigService.KeywordRule("中", List.of("脱落")))
         ));
 
         var request = new com.qiyun.aiservice.dto.AnalyzeTicketRequest(
@@ -256,7 +317,7 @@ class AiAnalyzeServiceTest {
 
         assertNotNull(response);
         assertEquals("墙面故障", response.category());
-        assertEquals("普通", response.urgency());
+        assertEquals("中", response.urgency());
     }
 
     @Test
@@ -307,6 +368,13 @@ class AiAnalyzeServiceTest {
         assertTrue(response.score() >= 0 && response.score() <= 1);
         assertFalse(response.keywords().isEmpty());
         assertNotNull(response.summary());
+    }
+
+    private void assertUrgency(String description, String location, String expectedUrgency) {
+        var response = aiAnalyzeService.analyze(new com.qiyun.aiservice.dto.AnalyzeTicketRequest(description, location));
+        assertNotNull(response);
+        assertEquals(expectedUrgency, response.urgency(), description);
+        assertTrue(List.of("高", "中", "低").contains(response.urgency()));
     }
 
 }

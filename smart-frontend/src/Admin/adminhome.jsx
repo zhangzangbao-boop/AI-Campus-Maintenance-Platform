@@ -41,6 +41,8 @@ const getStoredAdmin = () => {
       userId: user.userId,
       email: user.email || "admin@manage.edu.cn",
       phone: user.contactPhone || "",
+      avatarUrl: user.avatarUrl || user.avatar || "",
+      avatar: user.avatarUrl || user.avatar || "",
       department: "系统管理部",
       position: "系统管理员",
       role: user.role,

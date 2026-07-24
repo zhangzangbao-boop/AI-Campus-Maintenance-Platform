@@ -35,6 +35,8 @@ const getStoredWorker = () => {
       userId: user.userId,
       email: user.email || "worker@repair.com",
       phone: user.contactPhone || "",
+      avatarUrl: user.avatarUrl || user.avatar || "",
+      avatar: user.avatarUrl || user.avatar || "",
       department: "维修部",
       position: "维修工",
       role: user.role,
@@ -92,13 +94,13 @@ const WorkerDashboard = ({ worker, onNavigate }) => {
     const overdueTasks = source.filter((item) => mytaskUtils.isTaskOverdue(item));
     const highPriority = source.filter((item) => item.priority === "high");
     return {
-      today: todayTasks.length,
+      today: stats?.todayTaskCount ?? todayTasks.length,
       overdue: overdueTasks.length,
       high: highPriority.length,
       active: source.filter((item) => item.status === "processing").length,
       focusTasks: [...overdueTasks, ...highPriority, ...todayTasks].slice(0, 5),
     };
-  }, [tasks]);
+  }, [tasks, stats?.todayTaskCount]);
 
   return (
     <div className="dashboard-page worker-dashboard">
@@ -305,6 +307,13 @@ const WorkerHome = () => {
     records: "维修记录",
   }[currentMenu];
 
+  const moduleDescription = {
+    today: "展示今天分配或预计今天完成的待处理任务。",
+    processing: "展示已接单且正在维修、尚未提交完成的任务。",
+    "high-priority": "优先展示当前需要快速响应的高优先级任务。",
+    overdue: "优先检查预计完成时间已过或临近的任务。",
+  }[currentMenu];
+
   return (
     <>
       <AppShell
@@ -328,9 +337,7 @@ const WorkerHome = () => {
           <div>
             <div className="module-intro">
               <Title level={4}>{moduleTitle}</Title>
-              {currentMenu === "overdue" && (
-                <Text type="secondary">优先检查预计完成时间已过或临近的任务。</Text>
-              )}
+              {moduleDescription && <Text type="secondary">{moduleDescription}</Text>}
             </div>
             <MyTask
               initialFilters={taskFilters}

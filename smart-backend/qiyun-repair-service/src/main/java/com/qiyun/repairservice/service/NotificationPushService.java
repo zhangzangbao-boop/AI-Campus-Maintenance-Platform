@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,8 +25,8 @@ public class NotificationPushService {
     private final NotificationRepository notificationRepository;
     private final OpsServiceClient opsServiceClient;
 
-    // 内部服务密钥（无默认值，未配置时推送失败但不影响主流程）
-    private static final String INTERNAL_SECRET = System.getenv("INTERNAL_SERVICE_SECRET");
+    @Value("${internal.service.secret:}")
+    private String configuredInternalSecret;
 
     /**
      * 发送通知并实时推送
@@ -85,8 +86,9 @@ public class NotificationPushService {
      * 推送实时通知给单个用户
      */
     private void pushRealTime(String userId, String title, String content, Long ticketId) {
+        String internalSecret = internalSecret();
         // 密钥未配置时跳过推送，记录警告但不抛出异常
-        if (INTERNAL_SECRET == null || INTERNAL_SECRET.isBlank()) {
+        if (internalSecret == null || internalSecret.isBlank()) {
             log.warn("INTERNAL_SERVICE_SECRET 未配置，跳过实时推送");
             return;
         }
@@ -94,7 +96,7 @@ public class NotificationPushService {
         try {
             OpsServiceClient.NotificationPushRequest request =
                 new OpsServiceClient.NotificationPushRequest(userId, title, content, ticketId);
-            opsServiceClient.pushNotification(INTERNAL_SECRET, request);
+            opsServiceClient.pushNotification(internalSecret, request);
             log.debug("实时通知推送成功: userId={}", userId);
         } catch (Exception e) {
             log.warn("实时通知推送失败（不影响主流程）: userId={}, error={}", userId, e.getMessage());
@@ -105,8 +107,9 @@ public class NotificationPushService {
      * 批量推送实时通知
      */
     private void pushRealTimeBatch(List<String> userIds, String title, String content, Long ticketId) {
+        String internalSecret = internalSecret();
         // 密钥未配置时跳过推送，记录警告但不抛出异常
-        if (INTERNAL_SECRET == null || INTERNAL_SECRET.isBlank()) {
+        if (internalSecret == null || internalSecret.isBlank()) {
             log.warn("INTERNAL_SERVICE_SECRET 未配置，跳过批量实时推送");
             return;
         }
@@ -114,10 +117,17 @@ public class NotificationPushService {
         try {
             OpsServiceClient.NotificationBatchPushRequest request =
                 new OpsServiceClient.NotificationBatchPushRequest(userIds, title, content, ticketId);
-            opsServiceClient.pushNotificationBatch(INTERNAL_SECRET, request);
+            opsServiceClient.pushNotificationBatch(internalSecret, request);
             log.debug("批量实时通知推送成功: count={}", userIds.size());
         } catch (Exception e) {
             log.warn("批量实时通知推送失败（不影响主流程）: error={}", e.getMessage());
         }
+    }
+
+    private String internalSecret() {
+        if (configuredInternalSecret != null && !configuredInternalSecret.isBlank()) {
+            return configuredInternalSecret;
+        }
+        return System.getenv("INTERNAL_SERVICE_SECRET");
     }
 }

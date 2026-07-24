@@ -3,6 +3,7 @@ package com.qiyun.repairservice.service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qiyun.repairservice.domain.entity.Rating;
+import com.qiyun.repairservice.domain.enums.FeedbackFollowUpStatus;
 import com.qiyun.repairservice.dto.RatingDto;
 import java.util.Collections;
 import java.util.List;
@@ -47,12 +48,29 @@ public class RatingDtoMapper {
             parseKeywords(rating.getSentimentKeywords()),
             rating.getSentimentSummary(),
             rating.getSentimentAnalyzedAt(),
-            rating.getFollowUpStatus() != null ? rating.getFollowUpStatus().name() : null,
+            normalizeFollowUpStatus(rating),
             rating.getFollowUpNote(),
             rating.getFollowUpOperator() != null ? rating.getFollowUpOperator().getUserId() : null,
             followUpOperatorName,
             rating.getFollowUpUpdatedAt()
         );
+    }
+
+    private String normalizeFollowUpStatus(Rating rating) {
+        FeedbackFollowUpStatus status = rating.getFollowUpStatus();
+        if (status == FeedbackFollowUpStatus.HANDLED || status == FeedbackFollowUpStatus.RESOLVED) {
+            return FeedbackFollowUpStatus.HANDLED.name();
+        }
+        if (status == FeedbackFollowUpStatus.PENDING || status == FeedbackFollowUpStatus.PROCESSING) {
+            return FeedbackFollowUpStatus.PENDING.name();
+        }
+        if (status == FeedbackFollowUpStatus.NO_NEED) {
+            return FeedbackFollowUpStatus.NO_NEED.name();
+        }
+        boolean requiresFollowUp = (rating.getScore() != null && rating.getScore() <= 2)
+            || "NEGATIVE".equalsIgnoreCase(rating.getSentiment())
+            || !Boolean.TRUE.equals(rating.getResolved());
+        return requiresFollowUp ? FeedbackFollowUpStatus.PENDING.name() : FeedbackFollowUpStatus.NO_NEED.name();
     }
 
     private List<String> parseKeywords(String value) {

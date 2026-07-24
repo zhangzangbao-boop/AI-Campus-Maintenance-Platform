@@ -109,12 +109,25 @@ class FeedbackManagementApiTests {
             .andExpect(status().isOk());
     }
 
+
+    @Test
+    void adminCanGetFeedbacksWithNoNeedAndHandledFilters() throws Exception {
+        mockMvc.perform(get("/api/admin/feedbacks")
+                .param("followUpStatus", "NO_NEED")
+                .header("Authorization", "Bearer " + adminToken))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/admin/feedbacks")
+                .param("followUpStatus", "HANDLED")
+                .header("Authorization", "Bearer " + adminToken))
+            .andExpect(status().isOk());
+    }
     @Test
     void adminCanUpdateFeedbackFollowUp() throws Exception {
         mockMvc.perform(put("/api/admin/feedbacks/1001/follow-up")
                 .header("Authorization", "Bearer " + adminToken)
                 .contentType("application/json")
-                .content("{\"status\":\"RESOLVED\",\"note\":\"Called student\"}"))
+                .content("{\"status\":\"HANDLED\",\"note\":\"Called student\"}"))
             .andExpect(status().isOk());
     }
 
@@ -137,7 +150,7 @@ class FeedbackManagementApiTests {
         mockMvc.perform(put("/api/admin/feedbacks/1001/follow-up")
                 .header("Authorization", "Bearer " + studentToken)
                 .contentType("application/json")
-                .content("{\"status\":\"RESOLVED\",\"note\":\"Called student\"}"))
+                .content("{\"status\":\"HANDLED\",\"note\":\"Called student\"}"))
             .andExpect(status().isForbidden());
     }
 
@@ -146,7 +159,7 @@ class FeedbackManagementApiTests {
         mockMvc.perform(put("/api/admin/feedbacks/1001/follow-up")
                 .header("Authorization", "Bearer " + staffToken)
                 .contentType("application/json")
-                .content("{\"status\":\"RESOLVED\",\"note\":\"Called student\"}"))
+                .content("{\"status\":\"HANDLED\",\"note\":\"Called student\"}"))
             .andExpect(status().isForbidden());
     }
 

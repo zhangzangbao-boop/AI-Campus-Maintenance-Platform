@@ -834,14 +834,9 @@ body {
   color: var(--cm-text);
 }
 
-.task-stats-card.ant-card,
 .task-filter-card.ant-card {
   border: 1px solid #d8e6f5;
   box-shadow: 0 8px 20px rgba(15, 35, 68, 0.05);
-}
-
-.task-stats-card .ant-card-body {
-  background: linear-gradient(135deg, #ffffff, #f8fbff);
 }
 
 .task-filter-card .ant-card-body {

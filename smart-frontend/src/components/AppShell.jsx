@@ -20,6 +20,22 @@ const roleLabels = {
   ADMIN: "运营管理端",
 };
 
+const GATEWAY_URL = "http://localhost:8070";
+
+const normalizeAvatarSrc = (url) => {
+  const src = (url || "").trim();
+  if (!src) return "";
+  if (
+    src.startsWith("http://")
+    || src.startsWith("https://")
+    || src.startsWith("blob:")
+    || src.startsWith("data:")
+  ) {
+    return src;
+  }
+  return src.startsWith("/") ? `${GATEWAY_URL}${src}` : src;
+};
+
 const AppShell = ({
   role = "STUDENT",
   user,
@@ -36,6 +52,7 @@ const AppShell = ({
 
   const shellMenuItems = useMemo(() => menuItems || [], [menuItems]);
   const displayName = user?.username || user?.nickname || user?.userId || "用户";
+  const avatarSrc = normalizeAvatarSrc(user?.avatarUrl || user?.avatar);
   const roleLabel = roleLabels[role] || "智慧报修平台";
 
   const accountMenu = [
@@ -122,7 +139,12 @@ const AppShell = ({
               placement="bottomRight"
               arrow
             >
-              <Avatar className="app-avatar" size={36} icon={<UserOutlined />} />
+              <Avatar
+                className="app-avatar"
+                size={36}
+                src={avatarSrc || undefined}
+                icon={!avatarSrc && <UserOutlined />}
+              />
             </Dropdown>
           </Space>
         </Header>

@@ -14,6 +14,7 @@ import com.qiyun.repairservice.dto.StaffDashboardDto;
 import com.qiyun.repairservice.dto.TicketDetailDto;
 import com.qiyun.repairservice.dto.request.TicketAssignRequest;
 import com.qiyun.repairservice.dto.request.TicketCreateRequest;
+import com.qiyun.repairservice.dto.request.TicketRatingRequest;
 import com.qiyun.repairservice.dto.request.TicketStatusUpdateRequest;
 import com.qiyun.repairservice.repository.CategoryRepository;
 import com.qiyun.repairservice.repository.TicketRepository;
@@ -145,11 +146,11 @@ class StaffFeatureTests {
             }
         }
 
-        // Paginated query for all tasks
+        // Paginated query for task overview: only unfinished overview statuses are included
         Map<String, Object> result = ticketService.listStaffTasksPage(staffId, null, 0, 10);
 
         assertThat(result.get("list")).isNotNull();
-        assertThat((Long) result.get("total")).isGreaterThanOrEqualTo(5);
+        assertThat((Long) result.get("total")).isGreaterThanOrEqualTo(3);
     }
 
     @Test
@@ -250,13 +251,17 @@ class StaffFeatureTests {
             staffId, TicketStatus.IN_PROGRESS, 0, 10
         );
 
-        // Filter by WAITING_FEEDBACK - ticket1 should be in this status
-        Map<String, Object> feedbackResult = ticketService.listStaffTasksPage(
+        // Default overview scope must not be bypassed by a completed status filter.
+        Map<String, Object> feedbackInOverviewResult = ticketService.listStaffTasksPage(
             staffId, TicketStatus.WAITING_FEEDBACK, 0, 10
+        );
+        Map<String, Object> feedbackInRecordsResult = ticketService.listStaffTasksPage(
+            staffId, TicketStatus.WAITING_FEEDBACK, "records", null, null, null, 0, 10
         );
 
         assertThat((List<?>) inProgressResult.get("list")).isNotEmpty();
-        assertThat((List<?>) feedbackResult.get("list")).isNotEmpty();
+        assertThat((List<?>) feedbackInOverviewResult.get("list")).isEmpty();
+        assertThat((List<?>) feedbackInRecordsResult.get("list")).isNotEmpty();
     }
 
     @Test
@@ -297,6 +302,121 @@ class StaffFeatureTests {
         assertThat(processingAfterReturn).contains(resolved);
     }
 
+    @Test
+    void listStaffTasksPage_shouldEnforceStaffMenuScopesAndTotals() {
+        ZoneId businessZone = ZoneId.of("Asia/Shanghai");
+        LocalDate today = LocalDate.now(businessZone);
+        LocalDateTime todayMorning = today.atTime(9, 0);
+        LocalDateTime yesterdayMorning = today.minusDays(1).atTime(9, 0);
+        LocalDateTime oldEnoughForSlaWarning = today.minusDays(3).atTime(9, 0);
+        String otherStaffId = "staff_scope_other_002";
+        createUserIfNotExists(otherStaffId, "Other staff", UserRole.STAFF, "13800138888");
+
+        Long closedYesterday = createScopedTicket("closed yesterday", staffId, TicketStatus.CLOSED, yesterdayMorning);
+        Long waitingToday = createScopedTicket("waiting today", staffId, TicketStatus.WAITING_ACCEPT, todayMorning);
+        Long processingToday = createScopedTicket("processing today", staffId, TicketStatus.IN_PROGRESS, todayMorning.plusHours(1));
+        Long processingOld = createScopedTicket("processing old", staffId, TicketStatus.IN_PROGRESS, yesterdayMorning.plusHours(1));
+        Long estimatedToday = createScopedTicket("estimated today", staffId, TicketStatus.IN_PROGRESS, yesterdayMorning.plusHours(2));
+        Long resolved = createScopedTicket("resolved", staffId, TicketStatus.RESOLVED, yesterdayMorning.plusHours(2));
+        Long waitingFeedback = createScopedTicket("waiting feedback", staffId, TicketStatus.WAITING_FEEDBACK, yesterdayMorning.plusHours(3));
+        Long feedbacked = createScopedTicket("feedbacked", staffId, TicketStatus.FEEDBACKED, yesterdayMorning.plusHours(4));
+        Long closedToday = createScopedTicket("closed today", staffId, TicketStatus.CLOSED, todayMorning.plusHours(2));
+        Long otherStaffToday = createScopedTicket("other staff today", otherStaffId, TicketStatus.IN_PROGRESS, todayMorning.plusHours(3));
+        Long highWaiting = createScopedTicket("high waiting", staffId, TicketStatus.WAITING_ACCEPT, yesterdayMorning.plusHours(5));
+        Long highResolved = createScopedTicket("high resolved", staffId, TicketStatus.RESOLVED, yesterdayMorning.plusHours(6));
+        Long slaWaiting = createScopedTicket("sla waiting", staffId, TicketStatus.WAITING_ACCEPT, oldEnoughForSlaWarning);
+        Long slaProcessing = createScopedTicket("sla processing", staffId, TicketStatus.IN_PROGRESS, oldEnoughForSlaWarning.plusHours(1));
+        Long slaResolved = createScopedTicket("sla resolved", staffId, TicketStatus.RESOLVED, oldEnoughForSlaWarning.plusHours(2));
+        Long otherStaffSla = createScopedTicket("other staff sla", otherStaffId, TicketStatus.WAITING_ACCEPT, oldEnoughForSlaWarning);
+
+        setEstimatedCompletionTime(estimatedToday, today.atTime(18, 0));
+        setPriority(highWaiting, "high");
+        setPriority(highResolved, "high");
+        setCreatedAt(slaWaiting, oldEnoughForSlaWarning);
+        setCreatedAt(slaProcessing, oldEnoughForSlaWarning);
+        setCreatedAt(slaResolved, oldEnoughForSlaWarning);
+        setCreatedAt(otherStaffSla, oldEnoughForSlaWarning);
+
+        Map<String, Object> overviewResult = ticketService.listStaffTasksPage(staffId, null, "all", null, null, null, 0, 50);
+        List<Long> overviewIds = taskIds(overviewResult);
+        assertThat(overviewIds).contains(waitingToday, processingToday, processingOld, estimatedToday, resolved, highWaiting, highResolved, slaWaiting, slaProcessing, slaResolved);
+        assertThat(overviewIds).doesNotContain(closedYesterday, waitingFeedback, feedbacked, closedToday, otherStaffToday, otherStaffSla);
+        assertThat(overviewResult.get("total")).isEqualTo((long) overviewIds.size());
+
+        List<Long> todayIds = taskIds(ticketService.listStaffTasksPage(staffId, null, "today", null, null, null, 0, 50));
+        assertThat(todayIds).contains(waitingToday, processingToday, estimatedToday);
+        assertThat(todayIds).doesNotContain(closedYesterday, processingOld, resolved, waitingFeedback, feedbacked, closedToday, highResolved, otherStaffToday);
+        assertThat(taskIds(ticketService.listStaffTasksPage(staffId, TicketStatus.RESOLVED, "today", null, null, null, 0, 50))).isEmpty();
+
+        List<Long> processingIds = taskIds(ticketService.listStaffTasksPage(staffId, null, "processing", null, null, null, 0, 50));
+        assertThat(processingIds).contains(processingToday, processingOld, estimatedToday, slaProcessing);
+        assertThat(processingIds).doesNotContain(waitingToday, resolved, waitingFeedback, feedbacked, closedToday, otherStaffToday);
+        assertThat(taskIds(ticketService.listStaffTasksPage(staffId, TicketStatus.WAITING_ACCEPT, "processing", null, null, null, 0, 50))).isEmpty();
+
+        List<Long> highPriorityIds = taskIds(ticketService.listStaffTasksPage(staffId, null, "high-priority", null, null, null, 0, 50));
+        assertThat(highPriorityIds).contains(highWaiting);
+        assertThat(highPriorityIds).doesNotContain(highResolved, waitingFeedback, feedbacked, closedToday, otherStaffToday);
+        assertThat(taskIds(ticketService.listStaffTasksPage(staffId, TicketStatus.RESOLVED, "high-priority", null, null, null, 0, 50))).isEmpty();
+        assertThat(taskIds(ticketService.listStaffTasksPage(staffId, null, "high-priority", null, "medium", null, 0, 50))).isEmpty();
+
+        List<Long> slaIds = taskIds(ticketService.listStaffTasksPage(staffId, null, "overdue", null, null, null, 0, 50));
+        assertThat(slaIds).contains(slaWaiting, slaProcessing);
+        assertThat(slaIds).doesNotContain(slaResolved, highResolved, waitingFeedback, feedbacked, closedToday, otherStaffSla);
+        assertThat(taskIds(ticketService.listStaffTasksPage(staffId, TicketStatus.RESOLVED, "overdue", null, null, null, 0, 50))).isEmpty();
+
+        List<Long> recordIds = taskIds(ticketService.listStaffTasksPage(staffId, null, "records", null, null, null, 0, 50));
+        assertThat(recordIds).contains(closedYesterday, resolved, waitingFeedback, feedbacked, closedToday, highResolved, slaResolved);
+        assertThat(recordIds).doesNotContain(waitingToday, processingToday, processingOld, estimatedToday, highWaiting, slaWaiting, slaProcessing, otherStaffToday);
+        assertThat(taskIds(ticketService.listStaffTasksPage(staffId, TicketStatus.IN_PROGRESS, "records", null, null, null, 0, 50))).isEmpty();
+    }
+
+    @Test
+    void getStaffDashboard_shouldUseUnifiedStaffStatisticsScope() {
+        ZoneId businessZone = ZoneId.of("Asia/Shanghai");
+        LocalDate today = LocalDate.now(businessZone);
+        LocalDateTime todayMorning = today.atTime(9, 0);
+        LocalDateTime yesterdayMorning = today.minusDays(1).atTime(9, 0);
+        LocalDateTime oldEnoughForSlaWarning = today.minusDays(3).atTime(9, 0);
+        String otherStaffId = "staff_stats_other_001";
+        createUserIfNotExists(otherStaffId, "Other stats staff", UserRole.STAFF, "13800138777");
+
+        Long waitingToday = createScopedTicket("stats waiting today", staffId, TicketStatus.WAITING_ACCEPT, todayMorning);
+        Long processingHigh = createScopedTicket("stats high processing", staffId, TicketStatus.IN_PROGRESS, yesterdayMorning);
+        Long estimatedToday = createScopedTicket("stats estimated today", staffId, TicketStatus.IN_PROGRESS, yesterdayMorning.plusHours(1));
+        Long slaProcessing = createScopedTicket("stats sla processing", staffId, TicketStatus.IN_PROGRESS, oldEnoughForSlaWarning);
+        Long resolved = createScopedTicket("stats resolved", staffId, TicketStatus.RESOLVED, yesterdayMorning.plusHours(2));
+        Long waitingFeedback = createScopedTicket("stats waiting feedback", staffId, TicketStatus.WAITING_FEEDBACK, yesterdayMorning.plusHours(3));
+        Long ratedFour = createScopedTicket("stats rated four", staffId, TicketStatus.WAITING_FEEDBACK, yesterdayMorning.plusHours(4));
+        Long ratedTwo = createScopedTicket("stats rated two", staffId, TicketStatus.WAITING_FEEDBACK, yesterdayMorning.plusHours(5));
+        Long closed = createScopedTicket("stats closed", staffId, TicketStatus.CLOSED, yesterdayMorning.plusHours(6));
+        Long rejected = createScopedTicket("stats rejected", staffId, TicketStatus.REJECTED, yesterdayMorning.plusHours(7));
+        Long deleted = createScopedTicket("stats deleted", staffId, TicketStatus.WAITING_ACCEPT, todayMorning.plusHours(1));
+        Long otherStaff = createScopedTicket("stats other staff", otherStaffId, TicketStatus.WAITING_ACCEPT, todayMorning.plusHours(2));
+
+        setPriority(processingHigh, "high");
+        setEstimatedCompletionTime(estimatedToday, today.atTime(18, 0));
+        setCreatedAt(slaProcessing, oldEnoughForSlaWarning);
+        setDeleted(deleted, true);
+        ticketService.rateTicket(ratedFour, new TicketRatingRequest(studentId, 4, "good", 4, 4, 4, true, false));
+        ticketService.rateTicket(ratedTwo, new TicketRatingRequest(studentId, 2, "ok", 2, 2, 2, true, false));
+
+        StaffDashboardDto dashboard = ticketService.getStaffDashboard(staffId);
+
+        assertThat(dashboard.totalTaskCount()).isEqualTo(10L);
+        assertThat(dashboard.pendingCount()).isEqualTo(1L);
+        assertThat(dashboard.inProgressCount()).isEqualTo(3L);
+        assertThat(dashboard.awaitingFeedbackCount()).isEqualTo(2L);
+        assertThat(dashboard.finishedCount()).isEqualTo(3L);
+        assertThat(dashboard.todayTaskCount()).isEqualTo(2L);
+        assertThat(dashboard.highPriorityCount()).isEqualTo(1L);
+        assertThat(dashboard.slaAlertCount()).isEqualTo(2L);
+        assertThat(dashboard.avgRating()).isEqualTo(3.0);
+        assertThat(dashboard.totalRatingCount()).isEqualTo(2L);
+
+        assertThat(taskIds(ticketService.listStaffTasksPage(staffId, null, "overdue", null, null, null, 0, 20))).contains(slaProcessing);
+        assertThat(taskIds(ticketService.listStaffTasksPage(staffId, null, "overdue", null, null, null, 0, 20))).doesNotContain(resolved, waitingFeedback, ratedFour, ratedTwo, closed, rejected, deleted, otherStaff);
+        assertThat(waitingToday).isNotNull();
+    }
     // ==================== Helper Methods ====================
 
     private Long createTestTicket(String description) {
@@ -337,6 +457,29 @@ class StaffFeatureTests {
         ticketRepository.saveAndFlush(ticket);
     }
 
+    private void setPriority(Long ticketId, String priority) {
+        var ticket = ticketRepository.findById(ticketId).orElseThrow();
+        ticket.setPriority(priority);
+        ticketRepository.saveAndFlush(ticket);
+    }
+
+    private void setEstimatedCompletionTime(Long ticketId, LocalDateTime estimatedCompletionTime) {
+        var ticket = ticketRepository.findById(ticketId).orElseThrow();
+        ticket.setEstimatedCompletionTime(estimatedCompletionTime);
+        ticketRepository.saveAndFlush(ticket);
+    }
+
+    private void setCreatedAt(Long ticketId, LocalDateTime createdAt) {
+        var ticket = ticketRepository.findById(ticketId).orElseThrow();
+        ticket.setCreatedAt(createdAt);
+        ticketRepository.saveAndFlush(ticket);
+    }
+
+    private void setDeleted(Long ticketId, boolean deleted) {
+        var ticket = ticketRepository.findById(ticketId).orElseThrow();
+        ticket.setDeleted(deleted);
+        ticketRepository.saveAndFlush(ticket);
+    }
     private List<Long> taskIds(Map<String, Object> result) {
         @SuppressWarnings("unchecked")
         List<com.qiyun.repairservice.dto.TicketSummaryDto> tasks =

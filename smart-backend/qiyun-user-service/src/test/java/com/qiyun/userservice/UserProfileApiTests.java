@@ -203,7 +203,8 @@ class UserProfileApiTests {
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(updateRequest)))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.avatarUrl").value("http://example.com/new-avatar.png"));
     }
 
     @Test

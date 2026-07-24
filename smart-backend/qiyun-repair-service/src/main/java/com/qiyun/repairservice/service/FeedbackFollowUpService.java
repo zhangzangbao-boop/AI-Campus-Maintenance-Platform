@@ -21,7 +21,7 @@ public class FeedbackFollowUpService {
 
     private final RatingRepository ratingRepository;
     private final UserReferenceRepository userReferenceRepository;
-    private final NotificationService notificationService;
+    private final NotificationPushService notificationPushService;
     private final RatingDtoMapper ratingDtoMapper;
 
     @Transactional
@@ -40,9 +40,7 @@ public class FeedbackFollowUpService {
         if (request == null || request.operatorId() == null || request.operatorId().isBlank()) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "operatorId is required");
         }
-        FeedbackFollowUpStatus targetStatus = request.status() == null
-            ? FeedbackFollowUpStatus.PROCESSING
-            : request.status();
+        FeedbackFollowUpStatus targetStatus = normalizeTargetStatus(request.status());
         Rating rating = ratingRepository.findById(ratingId)
             .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "Feedback not found"));
         UserReference operator = userReferenceRepository.findByUserIdAndIsActiveTrue(request.operatorId())
@@ -50,26 +48,58 @@ public class FeedbackFollowUpService {
         if (operator.getRole() != UserRole.ADMIN) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "Only ADMIN can update feedback follow-up");
         }
-        if (rating.getFollowUpStatus() == null && !requiresFollowUp(rating)) {
+        if (!requiresFollowUp(rating)) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Feedback does not require follow-up");
         }
+        if (targetStatus != FeedbackFollowUpStatus.HANDLED) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Follow-up can only be submitted as HANDLED");
+        }
 
-        FeedbackFollowUpStatus previousStatus = rating.getFollowUpStatus();
+        String cleanedNote = cleanNote(request.note());
+        if (cleanedNote.isBlank()) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "follow-up note is required");
+        }
+
+        FeedbackFollowUpStatus previousStatus = normalizeStoredStatus(rating.getFollowUpStatus(), rating);
         rating.setFollowUpStatus(targetStatus);
-        rating.setFollowUpNote(cleanNote(request.note()));
+        rating.setFollowUpNote(cleanedNote);
         rating.setFollowUpOperator(operator);
         rating.setFollowUpUpdatedAt(LocalDateTime.now());
         ratingRepository.save(rating);
 
-        if (targetStatus == FeedbackFollowUpStatus.RESOLVED && previousStatus != FeedbackFollowUpStatus.RESOLVED) {
-            notifyStudentResolved(rating);
+        if (targetStatus == FeedbackFollowUpStatus.HANDLED && previousStatus != FeedbackFollowUpStatus.HANDLED) {
+            notifyStudentHandled(rating);
         }
         return ratingDtoMapper.toDto(rating);
     }
 
-    private boolean requiresFollowUp(Rating rating) {
+    public boolean requiresFollowUp(Rating rating) {
         return (rating.getScore() != null && rating.getScore() <= 2)
-            || "NEGATIVE".equalsIgnoreCase(rating.getSentiment());
+            || "NEGATIVE".equalsIgnoreCase(rating.getSentiment())
+            || !Boolean.TRUE.equals(rating.getResolved());
+    }
+
+    public FeedbackFollowUpStatus normalizeStoredStatus(FeedbackFollowUpStatus status, Rating rating) {
+        if (status == FeedbackFollowUpStatus.HANDLED || status == FeedbackFollowUpStatus.RESOLVED) {
+            return FeedbackFollowUpStatus.HANDLED;
+        }
+        if (status == FeedbackFollowUpStatus.PENDING || status == FeedbackFollowUpStatus.PROCESSING) {
+            return FeedbackFollowUpStatus.PENDING;
+        }
+        if (status == FeedbackFollowUpStatus.NO_NEED) {
+            return FeedbackFollowUpStatus.NO_NEED;
+        }
+        return requiresFollowUp(rating) ? FeedbackFollowUpStatus.PENDING : FeedbackFollowUpStatus.NO_NEED;
+    }
+
+    private FeedbackFollowUpStatus normalizeTargetStatus(FeedbackFollowUpStatus status) {
+        if (status == null || status == FeedbackFollowUpStatus.HANDLED || status == FeedbackFollowUpStatus.RESOLVED) {
+            return FeedbackFollowUpStatus.HANDLED;
+        }
+        if (status == FeedbackFollowUpStatus.PENDING || status == FeedbackFollowUpStatus.PROCESSING) {
+            return FeedbackFollowUpStatus.PENDING;
+        }
+        return status;
     }
 
     private String cleanNote(String note) {
@@ -80,14 +110,14 @@ public class FeedbackFollowUpService {
         return trimmed.length() > 1000 ? trimmed.substring(0, 1000) : trimmed;
     }
 
-    private void notifyStudentResolved(Rating rating) {
+    private void notifyStudentHandled(Rating rating) {
         if (rating.getStudent() == null) {
             return;
         }
-        String content = "Your feedback follow-up has been resolved.";
+        String content = "管理员已处理您对工单的反馈，请进入历史工单详情查看回访说明。";
         if (rating.getFollowUpNote() != null && !rating.getFollowUpNote().isBlank()) {
-            content += " Result: " + rating.getFollowUpNote();
+            content += "处理说明：" + rating.getFollowUpNote();
         }
-        notificationService.notifyUser(rating.getStudent(), "Feedback follow-up resolved", content, rating.getTicket());
+        notificationPushService.notifyAndPush(rating.getStudent(), "反馈回访已处理", content, rating.getTicket());
     }
 }

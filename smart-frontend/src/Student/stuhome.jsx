@@ -44,6 +44,8 @@ const getStoredStudent = () => {
       userId: user.userId,
       email: user.email || "",
       phone: user.contactPhone || "",
+      avatarUrl: user.avatarUrl || user.avatar || "",
+      avatar: user.avatarUrl || user.avatar || "",
       department: "学生",
       position: "学生",
       studentID: user.userId,
@@ -60,21 +62,7 @@ const getStoredStudent = () => {
   };
 };
 
-const StudentDashboard = ({ orders, loading, onNavigate, onRefresh }) => {
-  const stats = useMemo(() => {
-    const source = Array.isArray(orders) ? orders : [];
-    return source.reduce((acc, order) => {
-      const status = order.status;
-      acc.total += 1;
-      if (status === "pending") acc.pending += 1;
-      if (status === "processing") acc.processing += 1;
-      if (status === "awaiting_confirmation") acc.awaitingConfirmation += 1;
-      if (status === "to_be_evaluated") acc.toEvaluate += 1;
-      if (status === "closed" || (status === "completed" && order.rating)) acc.completed += 1;
-      return acc;
-    }, { ...emptyStats });
-  }, [orders]);
-
+const StudentDashboard = ({ orders, stats = emptyStats, loading, onNavigate, onRefresh }) => {
   const activeOrders = useMemo(
     () => (orders || []).filter((item) => ["pending", "processing", "awaiting_confirmation", "to_be_evaluated", "completed"].includes(item.status)).slice(0, 5),
     [orders]
@@ -190,6 +178,7 @@ const StudentDashboard = ({ orders, loading, onNavigate, onRefresh }) => {
 const Home = () => {
   const [currentMenu, setCurrentMenu] = useState("dashboard");
   const [repairOrders, setRepairOrders] = useState([]);
+  const [repairStats, setRepairStats] = useState(emptyStats);
   const [loading, setLoading] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [targetOrderId, setTargetOrderId] = useState(null);
@@ -241,6 +230,7 @@ const Home = () => {
     try {
       const result = await repairService.getMyRepairOrders();
       setRepairOrders(result.data || []);
+      setRepairStats(result.stats || emptyStats);
     } catch (error) {
       console.error("获取报修记录失败:", error);
     } finally {
@@ -256,7 +246,9 @@ const Home = () => {
     const handleOpenRelatedOrder = (event) => {
       const orderId = event.detail?.orderId;
       if (!orderId) return;
-      setCurrentMenu("my-repairs");
+      const notificationText = `${event.detail?.title || ""}${event.detail?.content || ""}`;
+      const isFeedbackFollowUpNotice = notificationText.includes("反馈") || notificationText.includes("回访");
+      setCurrentMenu(isFeedbackFollowUpNotice ? "completed" : "my-repairs");
       setTargetOrderId(orderId);
     };
     window.addEventListener("open-related-order", handleOpenRelatedOrder);
@@ -291,6 +283,7 @@ const Home = () => {
       return (
         <StudentDashboard
           orders={repairOrders}
+          stats={repairStats}
           loading={loading}
           onNavigate={setCurrentMenu}
           onRefresh={handleRefresh}
@@ -318,10 +311,13 @@ const Home = () => {
       return <AnnouncementList />;
     }
 
-    const initialFilters = {
-      "to-evaluate": { status: "to_be_evaluated" },
-      completed: { status: "closed" },
-    }[currentMenu];
+    const viewScope = {
+      "my-repairs": "progress",
+      "to-evaluate": "to_evaluate",
+      completed: "history",
+    }[currentMenu] || "progress";
+
+    const initialFilters = { status: "all" };
 
     return (
       <div>
@@ -337,6 +333,8 @@ const Home = () => {
         )}
         <MyRepairs
           initialFilters={initialFilters}
+          scope={viewScope}
+          onStatsChange={setRepairStats}
           onRefresh={handleRefresh}
           targetOrderId={targetOrderId}
           onTargetOrderHandled={() => setTargetOrderId(null)}

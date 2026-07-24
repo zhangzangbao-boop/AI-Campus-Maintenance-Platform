@@ -41,7 +41,7 @@ public class AiTicketAnalysis {
     private String priority;
 
     @Column(name = "urgency", length = 20)
-    private String urgency;  // 紧急程度：紧急/普通/一般
+    private String urgency;  // 紧急程度：高/中/低
 
     @Column(name = "suggestion", columnDefinition = "TEXT")
     private String suggestion;  // AI 维修建议

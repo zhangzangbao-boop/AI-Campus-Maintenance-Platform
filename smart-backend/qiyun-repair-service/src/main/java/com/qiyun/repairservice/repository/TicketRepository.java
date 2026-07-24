@@ -255,6 +255,14 @@ public interface TicketRepository extends JpaRepository<RepairTicket, Long>, Jpa
     Double findAverageRatingByStaffId(@Param("staffId") String staffId);
 
     @Query(
+        value = "SELECT COUNT(*) " +
+                "FROM repair_feedback " +
+                "WHERE repairman_id = :staffId",
+        nativeQuery = true
+    )
+    Long countRatingsByStaffId(@Param("staffId") String staffId);
+
+    @Query(
         value = "SELECT COALESCE(AVG(TIMESTAMPDIFF(HOUR, created_at, completed_at)), 72) " +
                 "FROM repair_order " +
                 "WHERE repairman_id = :staffId " +

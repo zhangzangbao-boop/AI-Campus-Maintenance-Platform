@@ -6,15 +6,15 @@ import api from '../services/api';
 
 const followUpOptions = [
   { value: 'ALL', label: '全部回访状态' },
+  { value: 'NO_NEED', label: '无需回访' },
   { value: 'PENDING', label: '待处理' },
-  { value: 'PROCESSING', label: '处理中' },
-  { value: 'RESOLVED', label: '已解决' },
+  { value: 'HANDLED', label: '已处理' },
 ];
 
 const followUpMeta = {
+  NO_NEED: { color: 'default', label: '无需回访' },
   PENDING: { color: 'red', label: '待处理' },
-  PROCESSING: { color: 'orange', label: '处理中' },
-  RESOLVED: { color: 'green', label: '已解决' },
+  HANDLED: { color: 'green', label: '已处理' },
 };
 
 const sentimentMeta = {
@@ -29,7 +29,6 @@ const FeedbackManagement = () => {
   const [sentimentFilter, setSentimentFilter] = useState('ALL');
   const [followUpFilter, setFollowUpFilter] = useState('ALL');
   const [editing, setEditing] = useState(null);
-  const [followUpStatus, setFollowUpStatus] = useState('PROCESSING');
   const [followUpNote, setFollowUpNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
@@ -83,7 +82,6 @@ const FeedbackManagement = () => {
 
   const openFollowUp = (feedback) => {
     setEditing(feedback);
-    setFollowUpStatus(feedback.followUpStatus || 'PROCESSING');
     setFollowUpNote(feedback.followUpNote || '');
   };
 
@@ -91,11 +89,16 @@ const FeedbackManagement = () => {
     if (!editing) {
       return;
     }
+    const note = followUpNote.trim();
+    if (!note) {
+      message.warning('请输入回访处理说明');
+      return;
+    }
     setSaving(true);
     try {
       await feedbackService.updateFollowUp(editing.id, {
-        status: followUpStatus,
-        note: followUpNote,
+        status: 'HANDLED',
+        note,
       });
       setEditing(null);
       await loadFeedbacks();
@@ -132,10 +135,12 @@ const FeedbackManagement = () => {
     : String(feedback.sentimentKeywords || '').split(/[,\s]+/).filter(Boolean);
 
   const negativeCount = sentimentCounts.NEGATIVE || 0;
+  const isReadOnlyFollowUp = editing?.followUpStatus === 'HANDLED';
 
   const renderFeedbackCard = (feedback) => {
+    const followUpStatus = feedback.followUpStatus || 'NO_NEED';
     const sentiment = sentimentMeta[feedback.sentiment] || { color: 'default', label: '未分析' };
-    const followUp = followUpMeta[feedback.followUpStatus] || { color: 'default', label: '无需回访' };
+    const followUp = followUpMeta[followUpStatus] || followUpMeta.NO_NEED;
     const keywords = keywordsOf(feedback);
 
     return (
@@ -185,7 +190,7 @@ const FeedbackManagement = () => {
               </div>
             )}
 
-            {feedback.followUpStatus && (
+            {followUpStatus === 'HANDLED' && (
               <div style={{ marginBottom: 8, padding: '8px 12px', backgroundColor: '#fff7e6', borderRadius: 4 }}>
                 <div><strong>回访记录：</strong>{feedback.followUpNote || '-'}</div>
                 <div style={{ color: '#666', fontSize: 12 }}>
@@ -198,9 +203,16 @@ const FeedbackManagement = () => {
             <div style={{ color: '#666', fontSize: 12 }}>创建时间：{feedback.createdAt || '-'}</div>
           </div>
 
-          <Button icon={<EditOutlined />} onClick={() => openFollowUp(feedback)}>
-            处理回访
-          </Button>
+          {followUpStatus === 'PENDING' && (
+            <Button type="primary" icon={<EditOutlined />} onClick={() => openFollowUp(feedback)}>
+              处理回访
+            </Button>
+          )}
+          {followUpStatus === 'HANDLED' && (
+            <Button icon={<MessageOutlined />} onClick={() => openFollowUp(feedback)}>
+              查看回访记录
+            </Button>
+          )}
         </div>
       </Card>
     );
@@ -228,7 +240,7 @@ const FeedbackManagement = () => {
         </Col>
         <Col xs={24} sm={6}>
           <Card size="small">
-            <Statistic title="已回访/处理中" value={followUpCount} />
+            <Statistic title="待处理回访" value={followUpCount} />
           </Card>
         </Col>
       </Row>
@@ -282,25 +294,21 @@ const FeedbackManagement = () => {
       )}
 
       <Modal
-        title={editing ? `处理评价 #${editing.id}` : '处理评价'}
+        title={editing ? `${isReadOnlyFollowUp ? '查看回访记录' : '处理评价'} #${editing.id}` : '处理评价'}
         open={Boolean(editing)}
         onCancel={() => setEditing(null)}
-        onOk={saveFollowUp}
+        onOk={isReadOnlyFollowUp ? undefined : saveFollowUp}
         confirmLoading={saving}
-        okText="保存"
+        okText="保存为已处理"
         cancelText="取消"
+        footer={isReadOnlyFollowUp ? <Button onClick={() => setEditing(null)}>关闭</Button> : undefined}
       >
         <Space direction="vertical" style={{ width: '100%' }}>
-          <Select
-            value={followUpStatus}
-            onChange={setFollowUpStatus}
-            options={followUpOptions.filter(item => item.value !== 'ALL')}
-            style={{ width: '100%' }}
-          />
           <Input.TextArea
             rows={4}
             value={followUpNote}
             onChange={event => setFollowUpNote(event.target.value)}
+            disabled={isReadOnlyFollowUp}
             placeholder="请输入回访处理记录"
             maxLength={1000}
             showCount

@@ -12,6 +12,7 @@ export const REPAIR_STATUS = {
   AWAITING_CONFIRMATION: { value: "awaiting_confirmation", label: "待确认", color: "cyan" },
   COMPLETED: { value: "completed", label: "已完成", color: "green" },
   TO_BE_EVALUATED: {value: "to_be_evaluated",label: "待评价", color: "purple"},
+  FEEDBACKED: { value: "feedbacked", label: "已评价", color: "green" },
   CLOSED: { value: "closed", label: "已关闭", color: "default" },
   REJECTED: { value: "rejected", label: "已驳回", color: "red" },
 };
@@ -49,7 +50,7 @@ const mapStatusToFrontend = (backendStatus, options = {}) => {
     'IN_PROGRESS': 'processing',
     'RESOLVED': resolvedStatus,
     'WAITING_FEEDBACK': 'to_be_evaluated',
-    'FEEDBACKED': 'closed',
+    'FEEDBACKED': 'feedbacked',
     'CLOSED': 'closed',
     'REJECTED': 'rejected',
   };
@@ -60,7 +61,7 @@ const mapStatusToFrontend = (backendStatus, options = {}) => {
   }
   
   // 如果已经是小写格式（前端格式），直接返回
-  if (['pending', 'processing', 'awaiting_confirmation', 'completed', 'to_be_evaluated', 'closed', 'rejected'].includes(backendStatus.toLowerCase())) {
+  if (['pending', 'processing', 'awaiting_confirmation', 'completed', 'to_be_evaluated', 'feedbacked', 'closed', 'rejected'].includes(backendStatus.toLowerCase())) {
     return backendStatus.toLowerCase();
   }
   
@@ -98,6 +99,22 @@ const mapOrderSummary = (order = {}) => {
   };
 };
 
+const normalizeStudentStats = (stats = {}) => {
+  const toBeEvaluated = Number(stats.toBeEvaluated || stats.toEvaluate || 0);
+  return {
+    total: Number(stats.total || 0),
+    pending: Number(stats.pending || 0),
+    processing: Number(stats.processing || 0),
+    awaitingConfirmation: Number(stats.awaitingConfirmation || 0),
+    toBeEvaluated,
+    toEvaluate: toBeEvaluated,
+    completed: Number(stats.completed || 0),
+    feedbacked: Number(stats.feedbacked || 0),
+    closed: Number(stats.closed || 0),
+    rejected: Number(stats.rejected || 0),
+  };
+};
+
 // 数据服务方法 - 全部改为调用API
 export const repairService = {
   // 获取所有工单（管理员端使用）
@@ -128,6 +145,8 @@ export const repairService = {
           total: response.data.total || mappedData.length,
           page: response.data.page || 0,
           pageSize: response.data.pageSize || 10,
+          totalPages: response.data.totalPages || 0,
+          stats: response.data.stats ? normalizeStudentStats(response.data.stats) : null,
         };
       } else {
         throw new Error(response.message || '获取工单失败');
@@ -221,6 +240,8 @@ export const repairService = {
           total: response.data.total || mappedData.length,
           page: response.data.page || 0,
           pageSize: response.data.pageSize || 10,
+          totalPages: response.data.totalPages || 0,
+          stats: response.data.stats ? normalizeStudentStats(response.data.stats) : null,
         };
       } else {
         throw new Error(response.message || '获取我的报修失败');
@@ -242,6 +263,9 @@ export const repairService = {
       if (response.code === 200) {
         const orderDetail = response.data;
         console.log('原始工单详情数据:', orderDetail);
+        const ratingDetail = orderDetail.rating && typeof orderDetail.rating === 'object'
+          ? orderDetail.rating
+          : null;
 
         // 映射后端字段到前端字段，确保数据格式一致
         const mappedDetail = {
@@ -269,9 +293,14 @@ export const repairService = {
             ? orderDetail.title
             : (orderDetail.locationText ? `报修-${orderDetail.locationText}` : '报修单'),
           // 评价信息
-          rating: orderDetail.rating?.score || orderDetail.rating || null,
-          feedback: orderDetail.rating?.comment || orderDetail.feedback || null,
-          ratingTime: orderDetail.rating?.ratedAt || orderDetail.ratingTime || null,
+          rating: ratingDetail?.score || orderDetail.rating || null,
+          feedback: ratingDetail?.comment || orderDetail.feedback || null,
+          ratingTime: ratingDetail?.ratedAt || orderDetail.ratingTime || null,
+          followUpStatus: ratingDetail?.followUpStatus || orderDetail.followUpStatus || null,
+          followUpNote: ratingDetail?.followUpNote || orderDetail.followUpNote || '',
+          followUpOperatorId: ratingDetail?.followUpOperatorId || orderDetail.followUpOperatorId || null,
+          followUpOperatorName: ratingDetail?.followUpOperatorName || orderDetail.followUpOperatorName || null,
+          followUpUpdatedAt: ratingDetail?.followUpUpdatedAt || orderDetail.followUpUpdatedAt || null,
           logs: orderDetail.logs || [],
           completionSummary: orderDetail.completionSummary || null,
           // 维修备注
@@ -537,6 +566,8 @@ export const repairService = {
           total: response.data.total || mappedData.length,
           page: response.data.page || 0,
           pageSize: response.data.pageSize || 10,
+          totalPages: response.data.totalPages || 0,
+          stats: response.data.stats ? normalizeStudentStats(response.data.stats) : null,
         };
       } else {
         throw new Error(response.message || '搜索工单失败');
@@ -655,6 +686,7 @@ export const repairUtils = {
       awaiting_confirmation: { label: "待确认", color: "cyan" },
       completed: { label: "已完成", color: "green" },
       to_be_evaluated: { label: "待评价", color: "purple" },
+      feedbacked: { label: "已评价", color: "green" },
       closed: { label: "已关闭", color: "default" },
       rejected: { label: "已驳回", color: "red" },
     };

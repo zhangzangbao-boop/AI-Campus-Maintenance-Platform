@@ -58,6 +58,25 @@ const aiCategoryToValueMap = {
 
 const normalizeText = (value) => (value || '').replace(/\s+/g, ' ').trim();
 
+const urgencyToPriorityMap = {
+  '高': 'high',
+  '中': 'medium',
+  '低': 'low',
+  '紧急': 'high',
+  '普通': 'medium',
+  '一般': 'low',
+  high: 'high',
+  medium: 'medium',
+  low: 'low',
+};
+
+const urgencyTagColor = (urgency) => {
+  const priority = urgencyToPriorityMap[urgency] || urgencyToPriorityMap[String(urgency || '').toLowerCase()];
+  if (priority === 'high') return 'red';
+  if (priority === 'medium') return 'orange';
+  return 'green';
+};
+
 const extractLocationFallback = (text, currentLocation = '') => {
   const existingLocation = normalizeText(currentLocation);
   if (existingLocation) {
@@ -155,15 +174,7 @@ const CreateRepairPage = ({ currentUser, onSubmitSuccess }) => {
                             'other';
 
       // AI 紧急程度映射到前端优先级
-      const urgencyToPriorityMap = {
-        '紧急': 'high',
-        '普通': 'medium',
-        '一般': 'low',
-        high: 'high',
-        medium: 'medium',
-        low: 'low',
-      };
-      const priorityValue = urgencyToPriorityMap[result.urgency] || urgencyToPriorityMap[String(result.urgency || '').toLowerCase()] || 'low';
+      const priorityValue = urgencyToPriorityMap[result.urgency] || urgencyToPriorityMap[String(result.urgency || '').toLowerCase()] || 'medium';
       const normalizedResult = normalizeAiResult(result, aiText, form.getFieldValue('location') || '');
 
       form.setFieldsValue({
@@ -506,7 +517,7 @@ const CreateRepairPage = ({ currentUser, onSubmitSuccess }) => {
             label={<span style={{ fontSize: "15px", fontWeight: "500", color: "#1f1f1f" }}>紧急程度</span>}
             name="priority"
             rules={[{ required: true, message: '请选择紧急程度!' }]}
-            initialValue="low"
+            initialValue="medium"
           >
             <Select placeholder="请选择紧急程度">
               <Option value="low">低</Option>
@@ -607,11 +618,8 @@ const CreateRepairPage = ({ currentUser, onSubmitSuccess }) => {
               <Tag color="blue">{submittedAiResult.category || '未分类'}</Tag>
             </Descriptions.Item>
             <Descriptions.Item label={<strong>紧急程度</strong>}>
-              <Tag color={
-                submittedAiResult.urgency === '紧急' ? 'red' :
-                submittedAiResult.urgency === '普通' ? 'orange' : 'green'
-              }>
-                {submittedAiResult.urgency || '一般'}
+              <Tag color={urgencyTagColor(submittedAiResult.urgency)}>
+                {submittedAiResult.urgency || '中'}
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label={<strong>维修建议</strong>}>

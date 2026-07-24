@@ -19,6 +19,7 @@ const { Search } = Input;
 const RepairOrderList = ({ onRefresh, targetOrderId, onTargetOrderHandled }) => {
   const [repairOrders, setRepairOrders] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [paginationInfo, setPaginationInfo] = useState({ current: 1, pageSize: 10, total: 0, totalPages: 0 });
   const [filters, setFilters] = useState({
     status: 'all',
     category: 'all',
@@ -174,11 +175,21 @@ const RepairOrderList = ({ onRefresh, targetOrderId, onTargetOrderHandled }) => 
   const loadRepairOrders = async (searchFilters = {}) => {
     setLoading(true);
     try {
+      const mergedFilters = { ...filters, ...searchFilters };
+      const current = Number(mergedFilters.current || paginationInfo.current || 1);
+      const pageSize = Number(mergedFilters.pageSize || paginationInfo.pageSize || 10);
       const result = await repairService.getRepairOrders({
-        ...filters,
-        ...searchFilters,
+        ...mergedFilters,
+        page: current - 1,
+        size: pageSize,
       });
-      setRepairOrders(result.data);
+      setRepairOrders(result.data || []);
+      setPaginationInfo({
+        current: Number(result.page ?? current - 1) + 1,
+        pageSize: Number(result.pageSize || pageSize),
+        total: Number(result.total || 0),
+        totalPages: Number(result.totalPages || 0),
+      });
     } catch (error) {
       console.error('获取工单失败:', error);
       message.error('获取工单失败');
@@ -209,46 +220,24 @@ const RepairOrderList = ({ onRefresh, targetOrderId, onTargetOrderHandled }) => 
   const searchRepairOrders = async (searchFilters = {}) => {
     setLoading(true);
     try {
-      // 将 categoryKey 转换为 categoryName（如果存在）
       const processedFilters = { ...filters, ...searchFilters };
       if (processedFilters.category && processedFilters.category !== 'all' && categoryKeyToNameMap[processedFilters.category]) {
         processedFilters.category = categoryKeyToNameMap[processedFilters.category];
-        console.log('搜索前分类Key转换:', searchFilters.category, '->', processedFilters.category);
       }
-      
-      const result = await repairService.searchRepairOrders(processedFilters);
-      console.log('搜索工单结果:', result);
-      console.log('工单数据（原始）:', result.data);
-      
-      // 如果数据还没有映射（检查是否有 categoryName 但没有 category），则手动映射
-      let mappedData = result.data || [];
-      if (mappedData.length > 0 && mappedData[0].categoryName && !mappedData[0].category) {
-        console.log('⚠️ 检测到数据未映射，执行手动映射...');
-        mappedData = mappedData.map(order => ({
-          ...order,
-          id: order.ticketId || order.id,
-          ticketId: order.ticketId || order.id,
-          category: order.categoryName || order.category || '',
-          location: order.locationText || order.location || '',
-          description: order.description || '',
-          priority: order.priority || 'low',
-          status: order.status === 'WAITING_ACCEPT' ? 'pending' : 
-                  order.status === 'IN_PROGRESS' ? 'processing' :
-                  order.status === 'RESOLVED' ? 'completed' :
-                  order.status === 'WAITING_FEEDBACK' ? 'to_be_evaluated' :
-                  order.status === 'FEEDBACKED' || order.status === 'CLOSED' ? 'closed' :
-                  order.status === 'REJECTED' ? 'rejected' : order.status,
-          studentID: order.studentId || order.studentID || '',
-          repairmanId: order.staffId || order.repairmanId || null,
-          created_at: order.createdAt || order.created_at || '',
-          deleted: order.deleted || false,
-          deletedAt: order.deletedAt || null,
-        }));
-        console.log('✅ 手动映射完成:', mappedData);
-      }
-      
-      console.log('工单数量:', mappedData?.length || 0);
-      setRepairOrders(mappedData);
+      const current = Number(searchFilters.current || processedFilters.current || 1);
+      const pageSize = Number(searchFilters.pageSize || processedFilters.pageSize || paginationInfo.pageSize || 10);
+      const result = await repairService.searchRepairOrders({
+        ...processedFilters,
+        page: current - 1,
+        size: pageSize,
+      });
+      setRepairOrders(result.data || []);
+      setPaginationInfo({
+        current: Number(result.page ?? current - 1) + 1,
+        pageSize: Number(result.pageSize || pageSize),
+        total: Number(result.total || 0),
+        totalPages: Number(result.totalPages || 0),
+      });
     } catch (error) {
       console.error('搜索工单失败:', error);
       message.error('搜索工单失败');
@@ -262,7 +251,7 @@ const RepairOrderList = ({ onRefresh, targetOrderId, onTargetOrderHandled }) => 
   const handleIncludeDeletedChange = (checked) => {
     const newFilters = { ...filters, includeDeleted: checked };
     setFilters(newFilters);
-    searchRepairOrders(newFilters);
+    searchRepairOrders({ ...newFilters, current: 1 });
   };
 
   // 分类Key到分类名称的映射
@@ -288,7 +277,7 @@ const RepairOrderList = ({ onRefresh, targetOrderId, onTargetOrderHandled }) => 
     const newFilters = { ...filters, [key]: filterValue };
     setFilters({ ...filters, [key]: value }); // UI状态保持使用categoryKey
     console.log('筛选条件变化:', key, '=', value, '->', filterValue, '完整筛选条件:', newFilters);
-    searchRepairOrders(newFilters);
+    searchRepairOrders({ ...newFilters, current: 1 });
   };
 
   // 处理关键词搜索
@@ -298,7 +287,7 @@ const RepairOrderList = ({ onRefresh, targetOrderId, onTargetOrderHandled }) => 
     const newFilters = { ...filters, keyword };
     setFilters(newFilters);
     console.log('搜索工单，关键词:', keyword, '完整筛选条件:', newFilters);
-    searchRepairOrders(newFilters);
+    searchRepairOrders({ ...newFilters, current: 1 });
   };
 
   const buildExportFilters = () => {
@@ -734,6 +723,16 @@ const RepairOrderList = ({ onRefresh, targetOrderId, onTargetOrderHandled }) => 
 
   const displayedRepairOrders = getSlaFilteredOrders();
 
+  const handleTableChange = (pagination) => {
+    if (slaFilter !== 'all') {
+      return;
+    }
+    loadRepairOrders({
+      current: pagination.current,
+      pageSize: pagination.pageSize,
+    });
+  };
+
   return (
     <div>
       <h2>工单管理</h2>
@@ -897,12 +896,14 @@ const RepairOrderList = ({ onRefresh, targetOrderId, onTargetOrderHandled }) => 
         rowKey={(record) => record.ticketId || record.id || Math.random()}
         loading={loading}
         pagination={{
-          pageSize: 10,
-          showSizeChanger: true,
-          showQuickJumper: true,
-          showTotal: (total, range) => 
-            `第 ${range[0]}-${range[1]} 条，共 ${total} 条`
+          current: slaFilter === 'all' ? paginationInfo.current : 1,
+          pageSize: slaFilter === 'all' ? paginationInfo.pageSize : Math.max(displayedRepairOrders.length, 1),
+          total: slaFilter === 'all' ? paginationInfo.total : displayedRepairOrders.length,
+          showSizeChanger: slaFilter === 'all',
+          showQuickJumper: slaFilter === 'all',
+          showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
         }}
+        onChange={handleTableChange}
         scroll={{ x: 1200 }}
       />
 
@@ -1137,7 +1138,7 @@ const RepairOrderList = ({ onRefresh, targetOrderId, onTargetOrderHandled }) => 
                     <Col xs={24} md={8}><Form.Item label="修正分类" name="categoryKey"><Input /></Form.Item></Col>
                     <Col xs={24} md={8}>
                       <Form.Item label="修正紧急程度" name="urgency">
-                        <Select allowClear options={[{ value: '紧急' }, { value: '普通' }, { value: '一般' }]} />
+                        <Select allowClear options={[{ value: '高' }, { value: '中' }, { value: '低' }]} />
                       </Form.Item>
                     </Col>
                     <Col xs={24} md={8}>

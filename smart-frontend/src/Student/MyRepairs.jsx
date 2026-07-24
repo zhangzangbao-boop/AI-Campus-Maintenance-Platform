@@ -44,7 +44,7 @@ const mapStatusToFrontend = (backendStatus) => {
     'IN_PROGRESS': 'processing',
     'RESOLVED': 'awaiting_confirmation',
     'WAITING_FEEDBACK': 'to_be_evaluated',
-    'FEEDBACKED': 'closed',
+    'FEEDBACKED': 'feedbacked',
     'CLOSED': 'closed',
     'REJECTED': 'rejected',
   };
@@ -55,23 +55,34 @@ const mapStatusToFrontend = (backendStatus) => {
   }
   
   // 如果已经是小写格式（前端格式），直接返回
-  if (['pending', 'processing', 'awaiting_confirmation', 'completed', 'to_be_evaluated', 'closed', 'rejected'].includes(backendStatus.toLowerCase())) {
+  if (['pending', 'processing', 'awaiting_confirmation', 'completed', 'to_be_evaluated', 'feedbacked', 'closed', 'rejected'].includes(backendStatus.toLowerCase())) {
     return backendStatus.toLowerCase();
   }
   
   return 'pending'; // 默认值
 };
 
+const formatDisplayTime = (value) => {
+  if (!value) return "-";
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString("zh-CN");
+  }
+  return new Date(value).toLocaleString("zh-CN");
+};
+
 const { Option } = Select;
 const { TextArea } = Input;
 
-const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilters }) => {
+const MyRepairs = ({ onRefresh, onStatsChange, targetOrderId, onTargetOrderHandled, initialFilters, scope = "progress" }) => {
   const [repairOrders, setRepairOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [filteredOrders, setFilteredOrders] = useState([]);
+  const [serverStats, setServerStats] = useState(null);
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 10, total: 0 });
   const [filters, setFilters] = useState({
     status: "all",
     category: "all",
@@ -137,109 +148,41 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
     "high": "HIGH",
   };
 
-  // 加载我的报修记录 - 使用 useCallback 包装，避免重复创建
-  const fetchMyRepairs = useCallback(async () => {
+  // 加载我的报修记录：由后端按当前学生、页面范围和筛选条件分页查询
+  const fetchMyRepairs = useCallback(async (options = {}) => {
+    const current = options.page || pagination.current || 1;
+    const pageSize = options.pageSize || pagination.pageSize || 10;
     setLoading(true);
     try {
-      console.log('========================================');
-      console.log('开始获取我的报修订单...');
-      console.log('当前时间:', new Date().toLocaleString());
-      console.log('========================================');
-
-      const result = await repairService.getMyRepairOrders();
-      console.log('获取到的订单结果:', result);
-      console.log('订单数据:', result.data);
-      console.log('订单数量:', result.data?.length || 0);
-
-      // 检查是否有数据
-      if (!result.data || result.data.length === 0) {
-        console.warn('警告：没有获取到任何报修订单数据');
-        console.warn('可能原因：');
-        console.warn('1. 后端数据库中没有该学生的报修单');
-        console.warn('2. Token无效或已过期');
-        console.warn('3. 后端服务未正常运行');
-        setRepairOrders([]);
-        setFilteredOrders([]);
-        message.warning('暂无报修记录');
-        return;
-      }
-
-      // 映射后端字段名到前端字段名：ticketId -> id, categoryName -> category, locationText -> location
-      const mappedData = result.data.map((order, index) => {
-        console.log(`处理订单 ${index + 1}:`, order);
-
-        // 确保title和description正确区分
-        const description = order.description || '';
-        // 如果后端返回的title和description相同，说明后端没有正确存储title，使用位置信息生成标题
-        const rawTitle = order.title || '';
-        const title = (rawTitle && rawTitle !== description)
-          ? rawTitle
-          : (order.locationText ? `报修-${order.locationText}` : '报修单');
-
-        const backendStatus = order.originalStatus || order.status;
-        const mappedStatus = mapStatusToFrontend(backendStatus);
-        console.log(`订单ID ${order.ticketId || order.id}: 后端状态="${backendStatus}" -> 前端状态="${mappedStatus}"`);
-
-        const mappedOrder = {
-          ...order,
-          id: order.ticketId || order.id, // 兼容两种字段名
-          ticketId: order.ticketId || order.id,
-          category: order.categoryName || order.category,
-          location: order.locationText || order.location,
-          description: description, // 确保description字段存在且完整
-          created_at: order.createdAt || order.created_at,
-          assigned_at: order.assignedAt || order.assigned_at,
-          completed_at: order.completedAt || order.completed_at,
-          studentConfirmedAt: order.studentConfirmedAt || order.student_confirmed_at || null,
-          studentRejectionReason: order.studentRejectionReason || order.student_rejection_reason || null,
-          repairmanId: order.staffId || order.repairmanId || null,
-          repairmanName: order.staffName || null, // 添加维修人员名称
-          status: mappedStatus, // 映射状态
-          originalStatus: order.originalStatus || backendStatus, // 保存原始状态
-          title: title, // 确保标题正确生成，与description区分
-          rating: order.ratingScore || order.rating || null, // 映射评价分数
-        };
-
-        console.log(`映射后的订单 ${index + 1}:`, mappedOrder);
-        return mappedOrder;
+      const result = await repairService.getMyRepairOrders({
+        scope,
+        status: filters.status,
+        category: filters.category === "all" ? "all" : (categoryValueMap[filters.category] || filters.category),
+        priority: filters.priority,
+        keyword: filters.keyword,
+        page: current - 1,
+        size: pageSize,
       });
 
-      console.log('========================================');
-      console.log('映射后的报修数据汇总:', mappedData);
-      console.log('总数:', mappedData.length);
-
-      const statusCounts = {
-        pending: mappedData.filter(o => o.status === 'pending').length,
-        processing: mappedData.filter(o => o.status === 'processing').length,
-        awaiting_confirmation: mappedData.filter(o => o.status === 'awaiting_confirmation').length,
-        completed: mappedData.filter(o => o.status === 'completed').length,
-        to_be_evaluated: mappedData.filter(o => o.status === 'to_be_evaluated').length,
-        closed: mappedData.filter(o => o.status === 'closed').length,
-        rejected: mappedData.filter(o => o.status === 'rejected').length,
-      };
-      console.log('各状态数量:', statusCounts);
-      console.log('========================================');
-
+      const mappedData = result.data || [];
       setRepairOrders(mappedData);
       setFilteredOrders(mappedData);
-
-      // 不再每次加载都弹提示，用户可以从表格看到数据
-      console.log(`成功加载 ${mappedData.length} 条报修记录`);
-
+      setServerStats(result.stats || null);
+      if (result.stats && onStatsChange) {
+        onStatsChange(result.stats);
+      }
+      setPagination({ current, pageSize, total: result.total || 0 });
     } catch (error) {
-      console.error('========================================');
       console.error('获取报修记录失败:', error);
-      console.error('错误消息:', error.message);
-      console.error('错误堆栈:', error.stack);
-      console.error('========================================');
-
       message.error(`获取报修记录失败: ${error.message}`);
       setRepairOrders([]);
       setFilteredOrders([]);
+      setServerStats(null);
+      setPagination((prev) => ({ ...prev, total: 0 }));
     } finally {
       setLoading(false);
     }
-  }, []); // useCallback 的依赖数组为空，表示函数不依赖任何外部变量
+  }, [filters, onStatsChange, pagination.current, pagination.pageSize, scope]);
 
   // 搜索我的报修记录
 
@@ -262,48 +205,10 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
     }
   };
 
-  // 应用筛选
+  // 应用筛选：触发后端按当前页面允许状态重新查询
   const applyFilters = () => {
-    let filtered = [...repairOrders];
-
-    // 状态筛选 - 直接匹配前端状态值
-    if (filters.status !== "all") {
-      if (filters.status === "to_be_evaluated") {
-        filtered = filtered.filter(isStudentFeedbackTodo);
-      } else {
-        filtered = filtered.filter((order) => order.status === filters.status);
-      }
-    }
-
-    // 分类筛选 - 前端值映射到后端值
-    if (filters.category !== "all") {
-      const backendCategory = categoryValueMap[filters.category];
-      filtered = filtered.filter(
-        (order) => order.category === backendCategory || order.category === filters.category
-      );
-    }
-
-    // 紧急程度筛选 - 前端值映射到后端值
-    if (filters.priority !== "all") {
-      const backendPriority = priorityValueMap[filters.priority];
-      filtered = filtered.filter(
-        (order) => order.priority === backendPriority || order.priority === filters.priority || order.priority?.toLowerCase() === filters.priority
-      );
-    }
-
-    // 关键字搜索
-    if (filters.keyword && filters.keyword.trim()) {
-      const keyword = filters.keyword.trim().toLowerCase();
-      filtered = filtered.filter((order) => {
-        const title = (order.title || '').toLowerCase();
-        const description = (order.description || '').toLowerCase();
-        const location = (order.location || '').toLowerCase();
-        return title.includes(keyword) || description.includes(keyword) || location.includes(keyword);
-      });
-    }
-
-    console.log('筛选结果:', { filters, total: repairOrders.length, filtered: filtered.length });
-    setFilteredOrders(filtered);
+    setPagination((prev) => ({ ...prev, current: 1 }));
+    fetchMyRepairs({ page: 1 });
   };
 
   useEffect(() => {
@@ -329,9 +234,6 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
     };
   }, [fetchMyRepairs]); // 依赖 fetchMyRepairs
 
-  useEffect(() => {
-    applyFilters();
-  }, [filters, repairOrders]);
 
   useEffect(() => {
     if (!initialFilters) return;
@@ -351,6 +253,7 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
 
   // 处理筛选条件变化
   const handleFilterChange = (key, value) => {
+    setPagination((prev) => ({ ...prev, current: 1 }));
     setFilters((prev) => ({
       ...prev,
       [key]: value,
@@ -359,6 +262,7 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
 
   // 重置筛选
   const handleResetFilters = () => {
+    setPagination((prev) => ({ ...prev, current: 1 }));
     setFilters({
       status: "all",
       category: "all",
@@ -735,8 +639,24 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
     return stats;
   };
 
-  const stats = getStats();
+  const stats = serverStats || getStats();
 
+  const statusOptionsByScope = {
+    progress: [
+      { value: "pending", label: "待受理" },
+      { value: "processing", label: "处理中" },
+      { value: "awaiting_confirmation", label: "待确认" },
+    ],
+    to_evaluate: [
+      { value: "to_be_evaluated", label: "待评价" },
+    ],
+    history: [
+      { value: "feedbacked", label: "已评价" },
+      { value: "closed", label: "已关闭" },
+      { value: "rejected", label: "已驳回" },
+    ],
+  };
+  const statusOptions = statusOptionsByScope[scope] || statusOptionsByScope.progress;
   // 表格列定义
   const columns = [
     {
@@ -966,7 +886,7 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
         <Col span={4}>
           <Card style={{ borderRadius: "8px", border: "none", boxShadow: "0 2px 8px rgba(15, 82, 186, 0.06)", background: "#FFFFFF" }}>
             <Statistic
-              title={<span style={{ fontSize: "13px", color: "#8c8c8c", fontWeight: "400" }}>已完成</span>}
+              title={<span style={{ fontSize: "13px", color: "#8c8c8c", fontWeight: "400" }}>已评价</span>}
               value={stats.completed}
               prefix={<CheckCircleOutlined style={{ color: "#86c8bc" }} />}
               valueStyle={{ color: "#1f1f1f", fontSize: "28px", fontWeight: "600" }}
@@ -989,13 +909,11 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
               onChange={(value) => handleFilterChange("status", value)}
             >
               <Option value="all">全部状态</Option>
-              <Option value="pending">待受理</Option>
-              <Option value="processing">处理中</Option>
-              <Option value="awaiting_confirmation">待确认</Option>
-              <Option value="to_be_evaluated">待评价</Option>
-              <Option value="completed">已完成</Option>
-              <Option value="closed">已关闭</Option>
-              <Option value="rejected">已驳回</Option>
+              {statusOptions.map((option) => (
+                <Option key={option.value} value={option.value}>
+                  {option.label}
+                </Option>
+              ))}
             </Select>
           </div>
 
@@ -1067,11 +985,19 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
           rowKey={(record) => record.ticketId || record.id || record.key || Math.random()}
           loading={loading}
           pagination={{
-            pageSize: 10,
+            current: pagination.current,
+            pageSize: pagination.pageSize,
+            total: pagination.total,
             showSizeChanger: true,
             showQuickJumper: true,
             showTotal: (total, range) =>
-              `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
+              total === 0 ? "共 0 条" : `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
+          }}
+          onChange={(nextPagination) => {
+            fetchMyRepairs({
+              page: nextPagination.current,
+              pageSize: nextPagination.pageSize,
+            });
           }}
           scroll={{ x: 1000 }}
           locale={{ emptyText: "暂无报修记录" }}
@@ -1303,6 +1229,16 @@ const MyRepairs = ({ onRefresh, targetOrderId, onTargetOrderHandled, initialFilt
                   <Descriptions.Item label="评价内容">
                     {selectedOrder.feedback}
                   </Descriptions.Item>
+                )}
+                {selectedOrder.followUpStatus === "HANDLED" && (
+                  <>
+                    <Descriptions.Item label="管理员回访说明">
+                      {selectedOrder.followUpNote || "-"}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="回访处理时间">
+                      {formatDisplayTime(selectedOrder.followUpUpdatedAt)}
+                    </Descriptions.Item>
+                  </>
                 )}
               </Descriptions>
             ) : (
